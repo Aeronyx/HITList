@@ -1,6 +1,6 @@
 # Brief 65: the editor's title understands quick add; every Mac card works (session `editor-quick-add`, effort xhigh)
 
-George, 2026-11-08, on 0.8.1 (screenshot `~/Desktop/HITList/build.noindex/round-15/george-3-mac-editor.png`:
+George, 2026-11-08, on 0.8.1 (screenshot `<repo>/build.noindex/round-15/george-3-mac-editor.png`:
 the Mac editor with "test today" typed in the title and the date still "No date"):
 
 > Trying to click "No date" to add a date while editing a task on Mac does nothing. It also doesn't respect quickadd

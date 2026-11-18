@@ -293,7 +293,7 @@ enum ProfileAvatar {
         return (width, height)
     }
 
-    /// "GT" for "George": the first letters of the first and last words, uppercased. Nil for a
+    /// "GT" for "George Thornton": the first letters of the first and last words, uppercased. Nil for a
     /// blank name (the avatar then shows a person symbol).
     static func initials(for name: String) -> String? {
         let words = name.split(whereSeparator: \.isWhitespace)

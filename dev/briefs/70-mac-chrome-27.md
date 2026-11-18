@@ -13,8 +13,8 @@ Read `dev/briefs/COMMON.md` (Round 16 block first), `dev/briefs/ROUND-16.md` ("T
 (the toolbar and sidebar search you are hardening) and `dev/briefs/HIG-NOTES.md`.
 
 The two pictures, the same build (0.9.0 (20), built with the Xcode 27.2 SDK):
-- his, macOS 27.2: `~/Desktop/HITList/build.noindex/round-16/friend-mac-today-0.9.0.png`
-- ours, macOS 26.7.1: `~/Desktop/HITList/build.noindex/round-15/mac/02-today.png`
+- his, macOS 27.2: `<repo>/build.noindex/round-16/friend-mac-today-0.9.0.png`
+- ours, macOS 26.7.1: `<repo>/build.noindex/round-15/mac/02-today.png`
 
 **Nobody here has macOS 27.** George's Mac and this machine are 26.7.1, GitHub has no macOS 27 runner, and there is no
 VM. So this brief cannot be done by tuning until 27 looks right. It is done by taking each thing the system decides

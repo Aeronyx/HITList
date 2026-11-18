@@ -782,7 +782,7 @@ names its region. New facts:
   with `-ApplePersistenceIgnoreState YES` beside `-disableCloudKit YES`, e.g. `open -g -n --env HITLIST_STORE_SUFFIX=sNN
   build.noindex/mac-NN/Build/Products/Debug/HITList.app --args -disableCloudKit YES -hideTips YES -ApplePersistenceIgnoreState YES`
   (add `-seedDemoData YES` the first time for a believable week).
-- George's screenshots for this round: `~/Desktop/HITList/build.noindex/round-15/` (outside git; read by
+- George's screenshots for this round: `<repo>/build.noindex/round-15/` (outside git; read by
   that absolute path).
 - Your report includes screenshots of every screen you changed, on both platforms where it exists, and names anything
   that looks alike or that you could not check (SUPERVISOR §4 step 8 applies to sessions too).
@@ -847,7 +847,7 @@ they make sense; where they differ from this block, this block is right.
 - **Notes folder** (outside git; write your findings and anything long there):
   `~/Library/Application Support/Claude/side-session-notes/local_8995b93d-4779-400a-855f-77db7b4e0b1d/round-32/<your brief's file name without .md>/`.
 - **Reviewers (briefs marked read-only)** change no file in the repository, build nothing and run nothing in
-  `~/Desktop/HITList` (the supervisor is editing and building there: `HITList/Services/SyncEngine/
+  `<repo>` (the supervisor is editing and building there: `HITList/Services/SyncEngine/
   SyncEngine*.swift`, `HITList/Views/Settings/`, `scripts/release.sh` may be mid-edit; `git show HEAD:<path>` is the
   committed text). Reading Apple's documentation on the web is welcome; nothing of the project's or of George's goes
   into a request.
@@ -1677,7 +1677,7 @@ Still 0.7.0 (17), unreleased: add to its notes, never a new version. No schema c
 guidelines require their prior approval).
 
 ## Round 12 record (2026-11-05; sessions 53–56 merged into 0.7.0 (17), the Friends build)
-53 `profile-feedback` (profile menu: What's New popout, Send Beta Feedback mail to feedback@example.com with a
+53 `profile-feedback` (profile menu: What's New popout, Send Beta Feedback mail to George with a
 version/device footer, version line), 54 `bolt-strike` (bolt 12.65 pt, `BoltStrikeGate` + strike motion, Debug
 `-boltStrikeDemo YES`), 55 `claude-hinge-polish` ("Only tasks with @claude" default/left, audio audit test, wooden creak
 at ≤ −18 dBFS, "Creaky hinge"), 56 `release-polish` (tips wait for `HITTip.settled`, inline quick-add tips, board meta

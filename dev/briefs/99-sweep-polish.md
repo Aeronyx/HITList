@@ -1,7 +1,7 @@
 # Brief 99: the Mac's "…" becomes Settings, and the sweep's findings (session `sweep-polish`, effort xhigh)
 
 George, 2026-11-11, after 0.9.3, on last night's findings (`build.noindex/round-19/qa-sweep/FINDINGS.md` in the
-main checkout, `~/Desktop/HITList/`; its pictures are beside it) and on the Mac's toolbar:
+main checkout, `<repo>/`; its pictures are beside it) and on the Mac's toolbar:
 
 > * Mac settings: I agree with your recommendation.
 > * Mac data: three columns of two is good, whatever fits best.

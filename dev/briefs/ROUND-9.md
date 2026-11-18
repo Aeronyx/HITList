@@ -30,7 +30,7 @@ Settle with George in one message before writing the brief; the answers change t
 - Privacy policy: needs a public URL in App Store Connect (App Information and the TestFlight Test
   Information). Draft `PRIVACY.md` (data stays in the user's iCloud; no servers of ours; no analytics;
   notifications local; what diagnostics "Copy diagnostics" contains) and ask George where to host it
-  (GitHub Pages on the repo, or example.com).
+  (GitHub Pages on the repo, or his own domain).
 - "App review" here means Beta App Review for external TestFlight testers: Test Information (what to
   test, feedback email, privacy URL), "Sign-in required" only if the build has a login, demo account
   if so. List the App Store Connect click path for George; a session cannot do it.

@@ -22,7 +22,7 @@ its id, its theme and its rose cap with pale spots. Everything else is yours to 
 
 ## What is wrong today (the supervisor's look at real size; look yourself before you draw)
 `build.noindex/round-20/handover/09-button-the-mushroom.png` in the main checkout
-(`~/Desktop/HITList/`), and 102's own pictures in the shared notes folder
+(`<repo>/`), and 102's own pictures in the shared notes folder
 (`102-rose-and-graphite/`).
 - **Creepy:** a bone-white face, two large black diamonds for eyes and one black dot under them is a skull. The
   glints do not save it at 1x.

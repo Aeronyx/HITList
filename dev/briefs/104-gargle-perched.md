@@ -21,7 +21,7 @@ new one.
 
 ## What is wrong today (the supervisor's look at real size; look yourself before you draw)
 `build.noindex/round-20/handover/10-gargle-the-gargoyle-pup.png` in the main checkout
-(`~/Desktop/HITList/`), and 102's pictures in the shared notes folder (`102-rose-and-graphite/`).
+(`<repo>/`), and 102's pictures in the shared notes folder (`102-rose-and-graphite/`).
 - **A grey blob:** head and body are one flat mid-grey shape with no neck, no muzzle, no shading; the wings are
   two dark triangles at the sides that read as arms; the white horn tips are the only detail. From a step back it
   is a grey cat, or a bat ("the new bat-looking creature"). Nothing says stone, nothing says gargoyle.

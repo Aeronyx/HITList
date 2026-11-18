@@ -1,7 +1,7 @@
 # Round 15: George's notes on 0.8.1 (2026-11-08)
 
 Rounds 13 and 14 ran in Fable's chat; 0.8.1 is out as build 19 and several friends use it. George's notes on it are
-quoted in each brief. The screenshots he sent are in `~/Desktop/HITList/build.noindex/round-15/` (outside
+quoted in each brief. The screenshots he sent are in `<repo>/build.noindex/round-15/` (outside
 git; read them by that absolute path):
 - `george-1-mac-toolbar.png`: a saved filter's toolbar on the Mac: the query in a capsule with no inner padding, the
   bolt, the view-options pill, and the "+" drawn as two ovals, one inside the other.

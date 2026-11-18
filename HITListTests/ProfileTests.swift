@@ -70,9 +70,9 @@ final class ProfileTests: XCTestCase {
     }
 
     func testSettingTheNameTrimsSavesStampsAndLogsWithoutTheName() throws {
-        try store.setName("  George \n")
+        try store.setName("  George Thornton \n")
         let profile = try XCTUnwrap(try store.current())
-        XCTAssertEqual(profile.displayName, "George")
+        XCTAssertEqual(profile.displayName, "George Thornton")
         XCTAssertEqual(profile.nameUpdatedAt, now)
         XCTAssertEqual(profile.updatedAt, now)
         XCTAssertFalse(context.hasChanges, "saved")
@@ -375,7 +375,7 @@ final class ProfileTests: XCTestCase {
     }
 
     func testInitials() {
-        XCTAssertEqual(ProfileAvatar.initials(for: "George"), "GT")
+        XCTAssertEqual(ProfileAvatar.initials(for: "George Thornton"), "GT")
         XCTAssertEqual(ProfileAvatar.initials(for: "  george  "), "G")
         XCTAssertEqual(ProfileAvatar.initials(for: "Mary Jane van Dyke"), "MD")
         XCTAssertEqual(ProfileAvatar.initials(for: "Émile Zola"), "ÉZ")
@@ -441,7 +441,7 @@ final class ProfileTests: XCTestCase {
 
     func testDiagnosticsProfileLineNeverHoldsTheNameOrPicture() throws {
         XCTAssertEqual(Diagnostics.profileLine(for: [], lastExport: now), "none on this device")
-        try store.setName("George")
+        try store.setName("George Thornton")
         try store.setAvatar(imageData: try Self.png(width: 64, height: 64))
         let line = Diagnostics.profileLine(for: try profiles(), lastExport: now.addingTimeInterval(5))
         XCTAssertTrue(line.hasPrefix("1 record, changed "), line)
@@ -473,7 +473,7 @@ final class ProfileTests: XCTestCase {
 
     func testAccountViewsRenderWithAndWithoutAProfile() throws {
         render(VStack { AccountSettingsSection() }, "account, no profile")
-        try store.setName("George")
+        try store.setName("George Thornton")
         render(VStack { AccountSettingsSection() }, "account, name only")
         try store.setAvatar(imageData: try Self.png(width: 300, height: 300))
         render(VStack { AccountSettingsSection() }, "account, name and picture")

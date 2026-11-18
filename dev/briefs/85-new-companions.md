@@ -42,7 +42,7 @@ and every mention; Rosé maps to the new one.
 
 ## The plushy
 An interim sketch from round 18 that never shipped (ours; George's crop of it is at
-`~/Desktop/HITList/build.noindex/round-19/reference/plushy-sketch-8x.png`, outside the repository:
+`<repo>/build.noindex/round-19/reference/plushy-sketch-8x.png`, outside the repository:
 read it, do not copy the file into the repository). As pixels, in Nord's inks (`.` clear, `d` dark, `m` mid,
 `L` light, `a` accent, `k` the eyes):
 

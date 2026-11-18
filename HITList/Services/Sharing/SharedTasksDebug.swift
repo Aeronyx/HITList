@@ -65,7 +65,7 @@ enum SharedTasksDebug {
                               systemFields: nil, listID: groceries, scope: .joined, ownerName: sam)
         store.applyShare(SharedShareInfo(participants: [
             SharedParticipant(userID: sam, name: "Sam Rivera", contact: nil, role: .owner, status: .accepted, canWrite: true, isCurrentUser: false),
-            SharedParticipant(userID: me, name: "George", contact: nil, role: .participant, status: .accepted, canWrite: true, isCurrentUser: true),
+            SharedParticipant(userID: me, name: "George Thornton", contact: nil, role: .participant, status: .accepted, canWrite: true, isCurrentUser: true),
             SharedParticipant(userID: alex, name: "Alex Kim", contact: nil, role: .participant, status: .accepted, canWrite: true, isCurrentUser: false),
         ], url: nil, archive: nil), listID: groceries, scope: .joined, ownerName: sam)
         for (id, name, hex) in [(sam, "Sam", "#8FD694"), (alex, "Alex", "#B07CF5")] {

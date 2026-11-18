@@ -1,6 +1,6 @@
 # Brief 67: the type, on iPhone and Mac (session `type-scale`, effort xhigh)
 
-George, 2026-11-08, on 0.8.1 (screenshot `~/Desktop/HITList/build.noindex/round-15/george-2-type-ours-top-target-bottom.png`:
+George, 2026-11-08, on 0.8.1 (screenshot `<repo>/build.noindex/round-15/george-2-type-ours-top-target-bottom.png`:
 our Mac Inbox row on top, "call mom" with "Friday" under it; the target below, "check backlog/longterm" with "Nov 5";
 both captured on the same Mac at the same scale):
 
