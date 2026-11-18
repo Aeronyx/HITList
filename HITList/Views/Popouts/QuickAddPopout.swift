@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import TipKit
 import HITListCore
 
 /// The quick-add card, the same everywhere: on iPhone a detached oval floating just above the keyboard
@@ -14,7 +15,7 @@ import HITListCore
 /// a tap on the dimmed backdrop closes it.
 struct QuickAddPopout: View {
     /// `compact`: the Upcoming board's card inside a 270 pt day column (`CompactQuickAddCard`, brief 39):
-    /// less padding, the chips wrapping instead of scrolling, and a × on the day chip.
+    /// less padding and a × on the day chip; the chips scroll sideways as everywhere.
     enum Style { case floating, inline, compact }
 
     /// The iPhone oval's corner radius.
@@ -104,6 +105,8 @@ struct QuickAddPopout: View {
             TokenHighlightField(placeholder: "Task Name", text: $draft.text, tokens: parsed.tokens,
                                 priority: parsed.priority, focus: $titleFocused, bordered: false,
                                 onDisable: { token in
+                                    // The keep-as-text tip has been used: it goes for good (brief 162).
+                                    HITTip(.keepAsText).invalidate(reason: .actionPerformed)
                                     withAnimation(HITMotion.quick(reduceMotion: reduceMotion)) { draft.disable(token) }
                                 },
                                 onEnable: { token in
@@ -219,28 +222,47 @@ struct QuickAddPopout: View {
         titleFocused = true
     }
 
-    /// The chips under the title, wrapping onto as many lines as the card needs, each chip whole and inside the card's
-    /// padding (brief 114: the sideways row ran to the card's border and cut its last chip through its words, "11:00 AM
-    /// · 15"). One line while they fit, as on the Mac's wide panel most of the time.
+    /// The chips under the title in one row that scrolls sideways (George, 2026-11-18: "a horizontally scrolling bar,
+    /// not one that wraps"), so the card is as tall with every chip as with none. The row sits inside the card's padding,
+    /// its first chip in line with the title and its last, scrolled to the end, ending at the padding (brief 114: a row
+    /// running to the card's border cut its last chip through its words). Where chips go on past an edge, that edge
+    /// fades over `QuickAddChipRow.fade`, so a chip leaves softly instead of ending in a cut; a chip that changes or
+    /// appears scrolls itself into view.
     private func optionBar(_ chips: QuickAddChips, parser: QuickAddParser) -> some View {
-        HITFlowLayout(spacing: 6) { optionChips(chips, parser: parser) }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            // A container of its own, as the scrolling row was: an identifier on a plain layout passes down to its
-            // chips and replaces theirs ("quickAddDateChip").
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("quickAddOptionBar")
+        QuickAddChipRow(signature: chipSignature(chips)) {
+            optionChips(chips, parser: parser)
+        }
+        // A container of its own: an identifier on the row passes down to its chips and replaces theirs.
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("quickAddOptionBar")
+    }
+
+    /// What each chip shows, by chip, so the row can tell which one changed or appeared and bring it into view.
+    private func chipSignature(_ chips: QuickAddChips) -> [Chip: String] {
+        var signature: [Chip: String] = [
+            .date: "\(chips.dueDate?.timeIntervalSinceReferenceDate ?? -1)|\(chips.recurrence?.rowText ?? "")",
+            .priority: chips.priority.shortName,
+            .reminder: "\(chips.hasDueTime)|\(chips.reminderOffsetMinutes ?? -1)|\(chips.reminderDate?.timeIntervalSinceReferenceDate ?? -1)",
+            .project: chips.projectName ?? "",
+        ]
+        if !chips.labelNames.isEmpty || draft.shows(.labels) { signature[.labels] = chips.labelNames.joined(separator: " ") }
+        if chips.deadline != nil || draft.shows(.deadline) {
+            signature[.deadline] = "\(chips.deadline?.timeIntervalSinceReferenceDate ?? -1)"
+        }
+        if chips.recurrence != nil || draft.shows(.repeating) { signature[.repeating] = chips.recurrence?.rowText ?? "" }
+        return signature
     }
 
     @ViewBuilder
     private func optionChips(_ chips: QuickAddChips, parser: QuickAddParser) -> some View {
         plusMenu
-        dateChip(chips, parser: parser)
-        priorityChip(chips, parser: parser)
-        reminderChip(chips, parser: parser)
-        groupChip(chips, parser: parser)
-        if !chips.labelNames.isEmpty || draft.shows(.labels) { labelsChip(chips, parser: parser) }
-        if chips.deadline != nil || draft.shows(.deadline) { deadlineChip(chips) }
-        if chips.recurrence != nil || draft.shows(.repeating) { repeatChip(chips, parser: parser) }
+        dateChip(chips, parser: parser).id(Chip.date)
+        priorityChip(chips, parser: parser).id(Chip.priority)
+        reminderChip(chips, parser: parser).id(Chip.reminder)
+        groupChip(chips, parser: parser).id(Chip.project)
+        if !chips.labelNames.isEmpty || draft.shows(.labels) { labelsChip(chips, parser: parser).id(Chip.labels) }
+        if chips.deadline != nil || draft.shows(.deadline) { deadlineChip(chips).id(Chip.deadline) }
+        if chips.recurrence != nil || draft.shows(.repeating) { repeatChip(chips, parser: parser).id(Chip.repeating) }
     }
 
     /// "+": the options that have no chip until you ask for them.
@@ -576,6 +598,8 @@ struct QuickAddPopout: View {
                 try TaskActions.addSubtasks(draft.subtaskTitles, to: task, in: modelContext)
             }
             errorMessage = nil
+            // A task added from the card: the syntax tip has done its work (brief 162).
+            HITTip(.quickAddSyntax).invalidate(reason: .actionPerformed)
             if closesAfterSave { hasSavedForClose = true }
             if let cardID, let popouts { QuickAddDraftStore.clear(card: cardID, from: popouts.draftDefaults) }
             if !closesAfterSave {
@@ -597,6 +621,69 @@ struct QuickAddPopout: View {
             Task { await NotificationScheduler.reschedule(context: modelContext) }
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+}
+
+/// Quick add's chips in one line that scrolls sideways, with no indicator (George, 2026-11-18), inside the card's
+/// padding: the first chip starts in line with the title and the last, scrolled to the end, ends where the title
+/// does, so no chip is ever cut by the card's border (brief 114). While there is more to one side, that side fades
+/// over `fade`, so a chip that goes on past it leaves softly. When a chip's words change or a chip appears
+/// (`signature`), the row scrolls it into view.
+struct QuickAddChipRow<Chips: View, ID: Hashable>: View {
+    /// How far an edge with more beyond it fades.
+    static var fade: CGFloat { 16 }
+
+    let signature: [ID: String]
+    @ViewBuilder var chips: () -> Chips
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Whether there is more to the leading side and to the trailing side.
+    @State private var more = Edges(leading: false, trailing: false)
+
+    struct Edges: Equatable {
+        var leading: Bool
+        var trailing: Bool
+    }
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) { chips() }
+                    // A point above and below, so a chip's border is never shaved by the row's clip.
+                    .padding(.vertical, 1)
+            }
+            // The row's height is its chips' own, whatever is in it: the card never grows a line.
+            .fixedSize(horizontal: false, vertical: true)
+            .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+            .onScrollGeometryChange(for: Edges.self) { geometry in
+                let x = geometry.contentOffset.x + geometry.contentInsets.leading
+                let hidden = geometry.contentSize.width - geometry.containerSize.width
+                return Edges(leading: x > 0.5, trailing: x < hidden - 0.5)
+            } action: { _, edges in
+                withAnimation(.easeOut(duration: reduceMotion ? 0 : 0.15)) { more = edges }
+            }
+            .mask { mask }
+            .onChange(of: signature) { old, new in
+                // The chip that is new or whose words changed; the last such, as a typed token lights its own chip.
+                guard let changed = new.keys.filter({ old[$0] != new[$0] }).first else { return }
+                withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) {
+                    // Centred, as near as the row allows: at either end the row stops at its own content, so the
+                    // first and last chips land whole against the padding.
+                    proxy.scrollTo(changed, anchor: .center)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var mask: some View {
+        HStack(spacing: 0) {
+            LinearGradient(colors: [.black.opacity(more.leading ? 0 : 1), .black], startPoint: .leading, endPoint: .trailing)
+                .frame(width: Self.fade)
+            Rectangle().fill(.black)
+            LinearGradient(colors: [.black, .black.opacity(more.trailing ? 0 : 1)], startPoint: .leading, endPoint: .trailing)
+                .frame(width: Self.fade)
         }
     }
 }

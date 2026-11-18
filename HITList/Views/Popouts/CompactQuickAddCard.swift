@@ -4,7 +4,7 @@ import SwiftUI
 /// popout centered only on that day"). A day column's "+ Add task" turns into this card at the column's foot,
 /// as wide as the column, in place of the row. It is the quick add itself (`QuickAddPopout` in its `.compact`
 /// style: the same draft, parser, highlights, chips and sticky draft), laid out for 270 pt: the title, the
-/// chips wrapping onto as many lines as they need, then × and the Confirm pill.
+/// chips in their one sideways-scrolling row, then × and the Confirm pill.
 ///
 /// Confirm adds the task on the column's day and leaves the card open and empty for the next one. Escape, ×
 /// or a click elsewhere on the board closes an empty card; with something typed, the card first asks inside

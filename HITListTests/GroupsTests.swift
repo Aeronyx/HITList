@@ -124,10 +124,10 @@ final class GroupsTests: XCTestCase {
     func testTheGuidanceSaysWhatAGroupAndALabelAre() {
         XCTAssertEqual(GroupGuidance.group, "A task lives in one Group: Work, Home, a project.")
         XCTAssertEqual(GroupGuidance.label, "A label is a tag any task can carry: @waiting, @errands.")
-        let tip = HITTipKind.quickAddSyntax.message
-        XCTAssertTrue(tip.contains("# picks its one Group") && tip.contains("@ adds any labels"), tip)
+        // Brief 162: the tips no longer teach # and @ (no symbols a friend has to decode); Browse's names where
+        // Groups, labels and filters are.
         let browse = HITTipKind.browse.message
-        XCTAssertTrue(browse.contains("search that understands #Work"), "the Browse tip teaches filters in the search: \(browse)")
+        XCTAssertTrue(browse.contains("Group, label or filter"), browse)
     }
 
     // MARK: - Reordering Groups
