@@ -3,9 +3,9 @@ import SwiftData
 import HITListCore
 @testable import HITList
 
-/// Brief 167: the move to the new sync made by the app itself (`SyncEngineAutoMove`), one test per rule, and the proof
-/// that with `SyncEngineSwitch.movesByItself` false a launch is today's. Nothing here talks to iCloud: the look for the
-/// engine's zone is a stand-in.
+/// Brief 167 and round 34: the move to the new sync made by the app itself (`SyncEngineAutoMove`), one test per rule,
+/// and the proof that with the move off a launch makes nothing. Nothing here talks to iCloud: George's word and the
+/// look for the engine's zone are stand-ins.
 @MainActor
 final class SyncEngineAutoMoveTests: XCTestCase {
     private var defaults: UserDefaults!
@@ -22,10 +22,10 @@ final class SyncEngineAutoMoveTests: XCTestCase {
         defaults = nil
     }
 
-    /// A launch on the mirror that may move: signed in, the mirror running, the look made (nothing there), the bolt
-    /// filled. Each test changes the one fact its rule is about.
+    /// A launch on the mirror that may move: signed in, the mirror running and caught up, George's word given, the
+    /// look made (nothing there). Each test changes the one fact its rule is about.
     private func ready(_ change: (inout SyncEngineAutoMove.Facts) -> Void = { _ in }) -> SyncEngineAutoMove.Facts {
-        var facts = SyncEngineAutoMove.Facts(isOn: true, engine: .mirror, preferred: .mirror, boltFilled: true,
+        var facts = SyncEngineAutoMove.Facts(isOn: true, engine: .mirror, preferred: .mirror, caughtUp: true, word: .go,
                                              zone: .absent, ownership: .unknown)
         change(&facts)
         return facts
@@ -43,23 +43,44 @@ final class SyncEngineAutoMoveTests: XCTestCase {
 
     private struct Offline: Error {}
 
+    private final class Asker: SyncEngineWordAsking, @unchecked Sendable {
+        var answer: SyncEngineAutoMove.Word
+        private(set) var asked = 0
+        init(_ answer: SyncEngineAutoMove.Word) { self.answer = answer }
+        func ask() async -> SyncEngineAutoMove.Word {
+            asked += 1
+            return answer
+        }
+    }
+
+    /// The tests' clock: `clock.now` moves when a test moves it.
+    private final class Clock { var now = Date(timeIntervalSince1970: 1_800_000_000) }
+
+    /// `word`: George's word already known to the runner (most rules are about what follows it); nil leaves the
+    /// runner to ask its `asker`.
     private func runner(look: Look = Look(.success(false)), bolt: Bool = true, signedIn: Bool = true,
+                        word: SyncEngineAutoMove.Word? = .go, asker: Asker = Asker(.go), clock: Clock = Clock(),
                         rows: @escaping @MainActor () -> [SyncEngineAutoMove.Row] = { [] },
                         logged: @escaping @MainActor (String) -> Void = { _ in },
                         move: @escaping @MainActor (Bool) async throws -> Void) -> SyncEngineAutoMove.Runner {
         let live = SyncEngineAutoMove.Live(engine: { .mirror }, byArgument: { false }, inMemory: { false },
-                                           mirrorRunning: { true }, signedIn: { signedIn }, boltFilled: { bolt },
-                                           log: logged, move: move)
-        return SyncEngineAutoMove.Runner(storeName: store, defaults: defaults, live: live, look: look, rows: rows)
+                                           mirrorRunning: { true }, signedIn: { signedIn }, caughtUp: { bolt },
+                                           now: { clock.now }, log: logged, move: move)
+        let run = SyncEngineAutoMove.Runner(storeName: store, defaults: defaults, live: live, look: look, asker: asker, rows: rows)
+        if let word { run.wordAnswered(word) }
+        return run
     }
 
-    // MARK: - Off: George's week comes first
+    // MARK: - On, and waiting for George's word
 
-    func testGeorgesWeekComesFirst_movesByItselfIsFalse() {
-        XCTAssertFalse(SyncEngineSwitch.movesByItself, "0.9.15 ships the move made by the app itself switched off")
-        XCTAssertFalse(SyncEngineAutoMove.isOn(constant: SyncEngineSwitch.movesByItself, storeName: "HITList.store",
-                                               isDebug: false, arguments: ["HITList"]))
-        XCTAssertFalse(SyncEngineAutoMove.isOn(constant: SyncEngineSwitch.movesByItself, storeName: "HITList.store",
+    /// 0.9.16: the move is in every build (George, 2026-11-18: "I also want it to force everyone to move over to the new
+    /// sync engine"), and a build with it still moves nobody until he has said so (R0, below).
+    func testTheMoveIsOnAndWaitsForGeorgesWord() {
+        XCTAssertTrue(SyncEngineSwitch.movesByItself, "0.9.16 ships the move made by the app itself")
+        XCTAssertTrue(SyncEngineAutoMove.isOn(constant: SyncEngineSwitch.movesByItself, storeName: "HITList.store",
+                                              isDebug: false, arguments: ["HITList"]))
+        XCTAssertEqual(SyncEngineAutoMove.decide(ready { $0.word = .notAsked }), .wait(.wordNotAsked))
+        XCTAssertFalse(SyncEngineAutoMove.isOn(constant: false, storeName: "HITList.store",
                                                isDebug: true, arguments: ["HITList", "-syncEngineAutoMove", "YES"]),
                        "the Debug argument never reaches the real store")
         XCTAssertFalse(SyncEngineAutoMove.isOn(constant: false, storeName: store, isDebug: false,
@@ -70,17 +91,18 @@ final class SyncEngineAutoMoveTests: XCTestCase {
                       "the rehearsal's way: a Debug side store that asks")
     }
 
-    /// With the constant false a launch is today's: nothing is decided, looked for, made, read or written, and which
-    /// engine a store opens on does not change, whatever the move's keys say.
+    /// With the move off a launch makes nothing: nothing is decided, asked, looked for, made, read or written, and
+    /// which engine a store opens on does not change, whatever the move's keys say.
     func testOff_aLaunchDecidesExactlyAsToday() {
         for engine in [SyncEngineBoard.Engine.mirror, .own] {
             for zone in [SyncEngineAutoMove.ZoneLook.notYet, .found, .absent, .unknown] {
                 for bolt in [false, true] {
                     for ownership in [SyncEngineAutoMove.Ownership.nothingOfItsOwn, .holdsItsOwn, .unknown] {
-                        let facts = SyncEngineAutoMove.Facts(isOn: false, engine: engine, preferred: engine, boltFilled: bolt,
-                                                             zone: zone, ownership: ownership)
+                        let facts = SyncEngineAutoMove.Facts(isOn: false, engine: engine, preferred: engine, caughtUp: bolt,
+                                                             word: .go, zone: zone, ownership: ownership)
                         XCTAssertEqual(SyncEngineAutoMove.decide(facts), .never(.off))
                         XCTAssertFalse(SyncEngineAutoMove.shouldLook(facts))
+                        XCTAssertFalse(SyncEngineAutoMove.shouldAsk(facts, sinceLastAsk: nil))
                     }
                 }
             }
@@ -106,11 +128,119 @@ final class SyncEngineAutoMoveTests: XCTestCase {
         XCTAssertEqual(decided(), .own)
     }
 
+    // MARK: - R0 George's word
+
+    /// Nothing moves, and nothing is looked for, before George's word: no record, a paused one and no answer are all
+    /// a no.
+    func testR0_nothingMovesWithoutGeorgesWord() {
+        XCTAssertEqual(SyncEngineAutoMove.decide(ready { $0.word = .notAsked }), .wait(.wordNotAsked))
+        XCTAssertEqual(SyncEngineAutoMove.decide(ready { $0.word = .notYet }), .wait(.notReleased))
+        XCTAssertEqual(SyncEngineAutoMove.decide(ready { $0.word = .paused }), .wait(.paused))
+        XCTAssertEqual(SyncEngineAutoMove.decide(ready { $0.word = .unknown }), .wait(.wordUnknown))
+        XCTAssertEqual(SyncEngineAutoMove.decide(ready { $0.word = .go }), .move(freshCopy: false))
+        for word in [SyncEngineAutoMove.Word.notAsked, .notYet, .paused, .unknown] {
+            XCTAssertFalse(SyncEngineAutoMove.shouldLook(ready { $0.word = word; $0.zone = .notYet }), "no look before the word")
+        }
+        // Never asked where nothing could move anyway.
+        XCTAssertFalse(SyncEngineAutoMove.shouldAsk(ready { $0.word = .notAsked; $0.signedIn = false }, sinceLastAsk: nil))
+        XCTAssertFalse(SyncEngineAutoMove.shouldAsk(ready { $0.word = .notAsked; $0.engine = .own; $0.preferred = .own }, sinceLastAsk: nil))
+        XCTAssertFalse(SyncEngineAutoMove.shouldAsk(ready { $0.word = .notAsked; $0.inMemory = true }, sinceLastAsk: nil))
+        XCTAssertFalse(SyncEngineAutoMove.shouldAsk(ready { $0.word = .notAsked; $0.movedBefore = true }, sinceLastAsk: nil))
+    }
+
+    /// Asked once per launch, and again no sooner than half an hour while the answer was not yes (a Mac stays open
+    /// for weeks): when the app comes forward or the mirror's state changes, never by a timer. Once it is yes the
+    /// device looks for the zone and moves.
+    func testR0_theWordIsAskedOnceThenAgainNoSoonerThanHalfAnHour() async {
+        let asker = Asker(.notYet)
+        let look = Look(.success(false))
+        let clock = Clock()
+        var moves = 0
+        let run = runner(look: look, word: nil, asker: asker, clock: clock) { _ in moves += 1 }
+        XCTAssertEqual(run.evaluate(), .wait(.wordNotAsked))
+        await run.asking?.value
+        XCTAssertEqual(asker.asked, 1)
+        XCTAssertEqual(run.word, .notYet)
+        for _ in 0..<5 { XCTAssertEqual(run.evaluate(), .wait(.notReleased)) }
+        run.cameForward()
+        await run.asking?.value
+        XCTAssertEqual(asker.asked, 1, "not again within half an hour")
+        XCTAssertEqual(look.asked, 0, "and no look for the zone before the word")
+        clock.now.addTimeInterval(SyncEngineAutoMove.askAgainAfter + 1)
+        asker.answer = .go
+        run.cameForward()
+        await run.asking?.value
+        XCTAssertEqual(asker.asked, 2)
+        XCTAssertEqual(run.word, .go)
+        await run.looking?.value
+        await run.moving?.value
+        XCTAssertEqual(look.asked, 1)
+        XCTAssertEqual(moves, 1, "the word given: the device moves")
+        clock.now.addTimeInterval(SyncEngineAutoMove.askAgainAfter + 1)
+        run.cameForward()
+        XCTAssertEqual(asker.asked, 2, "a yes is not asked again")
+    }
+
+    /// A pause after the word stops the devices that have not moved yet.
+    func testR0_aPauseStopsADeviceThatHasNotMovedYet() async {
+        let asker = Asker(.paused)
+        var moves = 0
+        let run = runner(word: nil, asker: asker) { _ in moves += 1 }
+        run.evaluate()
+        await run.asking?.value
+        XCTAssertEqual(run.evaluate(), .wait(.paused))
+        XCTAssertEqual(moves, 0)
+    }
+
     // MARK: - R1 When
 
-    func testR1_movesOnTheMirrorOnlyOnceTheBoltIsFilled() {
-        XCTAssertEqual(SyncEngineAutoMove.decide(ready { $0.boltFilled = false }), .wait(.boltNotFilled))
+    func testR1_movesOnTheMirrorOnlyOnceTheMirrorHasCaughtUp() {
+        XCTAssertEqual(SyncEngineAutoMove.decide(ready { $0.caughtUp = false }), .wait(.mirrorBehind))
         XCTAssertEqual(SyncEngineAutoMove.decide(ready()), .move(freshCopy: false))
+        // Caught up: the bolt filled, or a comparison that ran and found differences (the mirror has fetched; what
+        // differs is its own trouble). Not while it is still syncing, retrying, offline or in error.
+        XCTAssertTrue(SyncEngineAutoMove.caughtUp(.synced(Date())))
+        XCTAssertTrue(SyncEngineAutoMove.caughtUp(.differs("3 records differ", stuck: true)))
+        XCTAssertTrue(SyncEngineAutoMove.caughtUp(.differs("1 record differs", stuck: false)))
+        XCTAssertFalse(SyncEngineAutoMove.caughtUp(.syncing))
+        XCTAssertFalse(SyncEngineAutoMove.caughtUp(.offline))
+        XCTAssertFalse(SyncEngineAutoMove.caughtUp(.error("x", Date())))
+    }
+
+    /// A device whose mirror never catches up is not left on it alone: seven days and three launches after it was
+    /// first ready, it moves with what it holds.
+    func testR1_aDeviceWhoseMirrorNeverCatchesUpMovesAfterSevenDaysAndThreeLaunches() async {
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let week = SyncEngineAutoMove.patience
+        XCTAssertFalse(SyncEngineAutoMove.waitedLongEnough(readySince: nil, launches: 9, now: start))
+        XCTAssertFalse(SyncEngineAutoMove.waitedLongEnough(readySince: start, launches: 3, now: start.addingTimeInterval(week - 1)))
+        XCTAssertFalse(SyncEngineAutoMove.waitedLongEnough(readySince: start, launches: 2, now: start.addingTimeInterval(week + 1)))
+        XCTAssertTrue(SyncEngineAutoMove.waitedLongEnough(readySince: start, launches: 3, now: start.addingTimeInterval(week)))
+        XCTAssertEqual(SyncEngineAutoMove.decide(ready { $0.caughtUp = false; $0.waitedLongEnough = true }), .move(freshCopy: false))
+
+        // Three launches over eight days, the mirror behind each time: the third moves, and says why.
+        let clock = Clock()
+        var moves = 0
+        var lines: [String] = []
+        func launch() async -> SyncEngineAutoMove.Runner {
+            let run = runner(bolt: false, clock: clock, logged: { lines.append($0) }) { _ in moves += 1 }
+            run.evaluate()
+            await run.looking?.value
+            for _ in 0..<3 { run.evaluate() } // the mirror's state changing: counted once per launch
+            await run.moving?.value
+            return run
+        }
+        _ = await launch()
+        XCTAssertEqual(defaults.integer(forKey: SyncEngineAutoMove.readyLaunchesKey(store)), 1)
+        XCTAssertNotNil(defaults.object(forKey: SyncEngineAutoMove.readySinceKey(store)))
+        clock.now.addTimeInterval(4 * 86_400)
+        _ = await launch()
+        XCTAssertEqual(moves, 0)
+        clock.now.addTimeInterval(4 * 86_400)
+        _ = await launch()
+        XCTAssertEqual(moves, 1, "the third launch, eight days on: it moves at the mirror's next change")
+        XCTAssertTrue(lines.contains { $0.contains("has not caught up") }, "\(lines)")
+        XCTAssertNil(defaults.object(forKey: SyncEngineAutoMove.readySinceKey(store)), "the count is put away with the move")
     }
 
     func testR1_neverOnTheEngineNorWhileAMoveWaitsNorByArgument() {
@@ -207,7 +337,7 @@ final class SyncEngineAutoMoveTests: XCTestCase {
 
     func testR2_oneLookPerLaunchOnlyOnTheMirrorAndWaitedFor() async {
         XCTAssertEqual(SyncEngineAutoMove.decide(ready { $0.zone = .notYet }), .wait(.zoneNotLooked))
-        XCTAssertTrue(SyncEngineAutoMove.shouldLook(ready { $0.zone = .notYet; $0.boltFilled = false }))
+        XCTAssertTrue(SyncEngineAutoMove.shouldLook(ready { $0.zone = .notYet; $0.caughtUp = false }))
         XCTAssertFalse(SyncEngineAutoMove.shouldLook(ready { $0.zone = .notYet; $0.engine = .own; $0.preferred = .own }))
         let look = Look(.success(false))
         var moves = 0
@@ -218,7 +348,7 @@ final class SyncEngineAutoMoveTests: XCTestCase {
         for _ in 0..<3 { run.evaluate() }
         XCTAssertEqual(look.asked, 1, "one CloudKit call per launch")
         XCTAssertEqual(run.zone, .absent)
-        XCTAssertEqual(moves, 0, "the bolt isn't filled")
+        XCTAssertEqual(moves, 0, "the mirror has not caught up")
     }
 
     func testR2_theZoneFoundSaysThisDeviceIsWaitingToJoin() async {

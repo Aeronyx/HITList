@@ -76,6 +76,9 @@ extension SyncEngine {
         //    would want one, and a failed backup is a reason to stop.
         let backup = try backUp(context)
         moveLog.notice("move to \(engine.rawValue, privacy: .public): backup \(backup?.lastPathComponent ?? "not needed (empty store)", privacy: .public)")
+        // 1b. Moving to the engine, that backup is also kept under a name the daily rotation never removes: the
+        //     person's tasks as they were on this device before the new sync touched anything.
+        if engine == .own, let backup { LocalBackup.keepBeforeTheNewSync(backup) }
         // 2. Rows that share an id, merged.
         if engine == .own {
             let merged = try Deduplicator.mergeSharedIDs(in: context)
@@ -111,12 +114,15 @@ extension SyncEngine {
     #if os(macOS)
     /// As Reset local cache relaunches: a new instance, which waits for this one to exit before it opens the store
     /// (`SyncRecovery.waitForPreviousInstance`, through the App Group's defaults), then this one quits.
-    private static func relaunchMac(defaults: UserDefaults) {
+    /// `activates: false` (the move the app finishes by itself, `SyncEngineMoveFinish`): the new instance opens behind
+    /// whatever the person is working in.
+    static func relaunchMac(defaults: UserDefaults, activates: Bool = true) {
         let me = ProcessInfo.processInfo.processIdentifier
         defaults.set(Int(me), forKey: SyncRecovery.pidKey)
         defaults.set(Date(), forKey: SyncRecovery.atKey)
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.createsNewApplicationInstance = true
+        configuration.activates = activates
         NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: configuration) { _, error in
             if let error { moveLog.error("move: relaunch failed: \(error.localizedDescription, privacy: .public)") }
         }

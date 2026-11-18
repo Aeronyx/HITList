@@ -51,6 +51,28 @@ enum LocalBackup {
         return url
     }
 
+    /// `HITList before the new sync 2026-11-20.json`, beside the daily backups and never rotated away (the name does
+    /// not match theirs): the copy made as a store moves to HITList's own sync (round 34). Import JSON reads it.
+    static func beforeTheNewSyncName(for backup: URL) -> String {
+        let day = backup.deletingPathExtension().lastPathComponent.replacingOccurrences(of: "HITList-", with: "")
+        return "HITList before the new sync \(day).json"
+    }
+
+    /// Copies `backup` to its kept name in the same folder, replacing one of the same day. A failure is logged and
+    /// stops nothing: the backup itself was written.
+    @discardableResult
+    static func keepBeforeTheNewSync(_ backup: URL) -> URL? {
+        let kept = backup.deletingLastPathComponent().appending(path: beforeTheNewSyncName(for: backup))
+        do {
+            if FileManager.default.fileExists(atPath: kept.path) { try FileManager.default.removeItem(at: kept) }
+            try FileManager.default.copyItem(at: backup, to: kept)
+            return kept
+        } catch {
+            log.error("backup: the copy kept before the new sync was not written: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
     /// The words of the last backup that failed, until one succeeds (Settings → Backups says them).
     static let lastFailureKey = "backup.lastFailure"
 

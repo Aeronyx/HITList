@@ -72,9 +72,10 @@ struct HITListApp: App {
         #if DEBUG
         SyncEngineRehearsal.runIfAsked(container: container) // round 32: the move rehearsed from a terminal, side stores only
         #endif
-        // Brief 167: the move to the new sync made by the app itself. Off in 0.9.15 (`SyncEngineSwitch.movesByItself`):
-        // it returns at once and makes nothing.
+        // The move to the new sync made by the app itself (round 33, brief 167; on from 0.9.16, and waiting for
+        // George's word: `SyncEngineAutoMove` R0), and the quiet finish of any move that waits for the next start.
         SyncEngineAutoMove.Runner.start(container: container)
+        SyncEngineMoveFinish.install(container: container)
     }
 
     var body: some Scene {
@@ -93,6 +94,7 @@ struct HITListApp: App {
                     if !isTesting { CloudSyncMonitor.shared.sceneChanged(to: phase) }
                     guard phase == .active else { return }
                     SyncEngine.shared?.cameForward() // brief 143: everything compared, then a sync (nil on the mirror)
+                    SyncEngineAutoMove.Runner.shared?.cameForward() // George's word may have come meanwhile
                     let context = container.mainContext
                     Task { await NotificationScheduler.reschedule(context: context) }
                     if !isTesting { LocalBackup.runIfDue(context: context) }

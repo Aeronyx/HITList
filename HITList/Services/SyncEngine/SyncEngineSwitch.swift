@@ -51,10 +51,11 @@ enum SyncEngineSwitch {
     static func isAvailable(isDebug: Bool) -> Bool { true }
 
     /// Whether a store on the mirror moves to the engine by itself (`SyncEngineAutoMove`; `dev/SYNC-ENGINE.md` section
-    /// 14, stage 6). **False in 0.9.15**: George's own week on the engine comes first, and while it is false nothing a
-    /// build does differs from 0.9.14 (`SyncEngineAutoMoveTests.testGeorgesWeekComesFirst_movesByItselfIsFalse`).
-    /// Flipped only after the rehearsal of each rule on two devices.
-    static let movesByItself = false
+    /// 14, stage 6). **True from 0.9.16** (George, 2026-11-18: "I also want it to force everyone to move over to the
+    /// new sync engine so we can settle this once and for all"), and still nothing moves until he has said so: the
+    /// move waits for his word, a record in iCloud's public database (`SyncEngineAutoMove` R0). 0.9.15 held it false
+    /// and was not released.
+    static let movesByItself = true
 
     // MARK: - The hidden switch
 

@@ -128,6 +128,14 @@ final class PopoutController {
     /// The quick-add cards open in this process, in any window, so a second Mac window does not open
     /// the same stored card again.
     private static var liveCards: Set<UUID> = []
+    /// Every controller alive in this process (one per window), held weakly: `isAnyCardOpen`.
+    private static let controllers = NSHashTable<PopoutController>.weakObjects()
+
+    /// Whether any window has a quick-add card or a task's card open: the app does not end or relaunch itself under
+    /// something a person is typing in (`SyncEngineMoveFinish`).
+    static var isAnyCardOpen: Bool {
+        controllers.allObjects.contains { !$0.state.showsAddButton }
+    }
 
     /// The shared tasks (brief 64): completing and undoing one from its editor; tests pass their own.
     @ObservationIgnored let sharedRows: SharedRows
@@ -135,6 +143,7 @@ final class PopoutController {
     init(draftDefaults: UserDefaults = AppGroup.defaults, center: NotificationCenter = .default, sharedRows: SharedRows = .shared) {
         self.draftDefaults = draftDefaults
         self.sharedRows = sharedRows
+        Self.controllers.add(self)
         // Another Apple account took over this device (`AccountSwitch`): nothing the previous person typed
         // or completed stays on screen for the next one.
         accountObserver = center.addObserver(forName: .accountDidSwitch, object: nil, queue: .main) { [weak self] _ in

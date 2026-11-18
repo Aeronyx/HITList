@@ -8,17 +8,28 @@ import HITListCore
 /// George, 2026-11-18: "I'd even rather the update just automatically move their tasks after we've confirmed the new
 /// engine is working. The less technical stuff my friends have to deal with, the better."
 ///
-/// **Off** while `SyncEngineSwitch.movesByItself` is false (0.9.15): `Runner.start` then returns before it reads,
-/// looks for or arms anything, and the launch is today's (`SyncEngineAutoMoveTests` proves it). The rules, each with
-/// a test of its name:
+/// **On from 0.9.16** (`SyncEngineSwitch.movesByItself`; George, 2026-11-18: "I also want it to force everyone to move
+/// over to the new sync engine so we can settle this once and for all"), and it moves nobody until George has said
+/// so (R0). With the constant false `Runner.start` returns before it reads, looks for or arms anything
+/// (`SyncEngineAutoMoveTests` proves it). The rules, each with a test of its name:
 ///
+/// - **R0 George's word.** One record in the public database of the engine's container (`SyncEngineRollout`, brief
+///   170), asked once per launch and again, at most every half hour, when the app comes forward or the mirror's
+///   state changes while the answer was not yes. No record, a paused one, or no answer: nothing moves. This is how
+///   one build reaches everyone and still lets George see the engine on his own devices first (he moves those by
+///   hand, from the hidden group), and how he can stop the rest if a friend reports trouble.
 /// - **R1 When.** Only on a launch on the mirror, with the mirror running on the store's own file, signed in, no move
 ///   waiting, no store reset waiting, never moved by itself before and never moved back by hand, and only once the
-///   mirror's bolt is filled (the condition the hand move's warning reads): what a device has not yet received would
-///   be missing from what it sends. Then the hand move's own steps (`SyncEngine.move`): a backup that succeeded, the
-///   rows that share an `id` merged, the preference written. It takes effect at the next launch, on every platform:
-///   no relaunch nobody asked for, the Mac included. At most one try per launch; a try that failed is written in the
-///   sync log and tried again at a later launch, never in a loop.
+///   mirror has caught up in this launch: its bolt is filled, or its comparison ran and found differences (it has
+///   fetched; what differs is the mirror's own trouble, the very thing the engine replaces). What a device has not
+///   yet received would be missing from what it sends. **A device whose mirror never catches up is not left
+///   behind**: seven days and three launches after it was first ready, it moves with what it holds (nothing is
+///   deleted by that: an item it lacks arrives when a device that has it moves). Then the hand move's own steps
+///   (`SyncEngine.move`): a backup that succeeded, the rows that share an `id` merged, the preference written. It
+///   takes effect at the next launch, and the app sees to that launch itself at the first quiet moment
+///   (`SyncEngineMoveFinish`): a device on one sync while the person's other devices are on the other must not last.
+///   At most one try per launch; a try that failed is written in the sync log and tried again at a later launch,
+///   never in a loop.
 /// - **R2 Another device moved.** One look per launch on the mirror for the engine's zone in the engine's container
 ///   (one CloudKit call, no record read). Found: this device moves as soon as R1 allows, and until it has, the line
 ///   says it is waiting to join the new sync. A device on a build before this one cannot look, so the moved device
@@ -54,6 +65,18 @@ enum SyncEngineAutoMove {
         case unknown
     }
 
+    /// George's word that every device may move (R0), as this launch knows it.
+    enum Word: Equatable, Sendable {
+        case notAsked
+        /// The record is there and allows this build.
+        case go
+        /// No record, or one for a later build.
+        case notYet
+        case paused
+        /// iCloud could not be asked (offline, busy, the type not yet deployed): known as no.
+        case unknown
+    }
+
     struct Facts: Equatable, Sendable {
         /// `SyncEngineSwitch.movesByItself`, or a Debug side store's `-syncEngineAutoMove YES`.
         var isOn: Bool
@@ -66,8 +89,11 @@ enum SyncEngineAutoMove {
         /// SwiftData's mirror runs on this launch (`ModelContainerFactory.isCloudKitEnabled`).
         var mirrorRunning = true
         var signedIn = true
-        /// The mirror's bolt is filled (`CloudSyncMonitor.state.isSynced`).
-        var boltFilled = false
+        /// The mirror has caught up in this launch: its bolt is filled, or its comparison ran and found differences.
+        var caughtUp = false
+        /// Seven days and three launches since this store was first ready to move and the mirror had not caught up.
+        var waitedLongEnough = false
+        var word: Word = .notAsked
         /// Settings → Reset local cache, or a fresh copy, waits for the next launch.
         var resetWaiting = false
         /// This store was moved by itself before, or moved back by hand: never again by itself.
@@ -79,7 +105,7 @@ enum SyncEngineAutoMove {
 
     enum Why: String, Equatable, Sendable {
         case off, onEngine, moveWaiting, argument, inMemory, mirrorOff, movedBefore, triedThisLaunch
-        case signedOut, resetWaiting, boltNotFilled, zoneNotLooked
+        case signedOut, resetWaiting, wordNotAsked, notReleased, paused, wordUnknown, zoneNotLooked, mirrorBehind
     }
 
     enum Decision: Equatable, Sendable {
@@ -105,20 +131,49 @@ enum SyncEngineAutoMove {
         if f.triedThisLaunch { return .never(.triedThisLaunch) }
         if !f.signedIn { return .wait(.signedOut) }
         if f.resetWaiting { return .wait(.resetWaiting) }
+        // R0: nothing moves, and nothing is looked for, before George's word.
+        switch f.word {
+        case .notAsked: return .wait(.wordNotAsked)
+        case .notYet: return .wait(.notReleased)
+        case .paused: return .wait(.paused)
+        case .unknown: return .wait(.wordUnknown)
+        case .go: break
+        }
         // The look decides between a merge and the engine's copy: it is waited for, once.
         if f.zone == .notYet { return .wait(.zoneNotLooked) }
-        if !f.boltFilled { return .wait(.boltNotFilled) }
+        if !f.caughtUp, !f.waitedLongEnough { return .wait(.mirrorBehind) }
         return .move(freshCopy: f.zone == .found && f.ownership == .nothingOfItsOwn)
+    }
+
+    /// R0: whether this launch asks for George's word now. Once when nothing is known; again, no sooner than
+    /// `askAgainAfter`, while the answer was not yes (the caller passes how long ago it asked).
+    static func shouldAsk(_ f: Facts, sinceLastAsk: TimeInterval?) -> Bool {
+        switch decide(f) {
+        case .wait(.wordNotAsked): return true
+        case .wait(.notReleased), .wait(.paused), .wait(.wordUnknown):
+            guard let sinceLastAsk else { return true }
+            return sinceLastAsk >= askAgainAfter
+        default: return false
+        }
+    }
+
+    /// How long before a "not yet" is asked again in one launch (a Mac stays open for weeks): events ask, never a timer.
+    static let askAgainAfter: TimeInterval = 30 * 60
+
+    /// R1's patience: how long, and over how many launches, a device waits for a mirror that does not catch up.
+    static let patience: TimeInterval = 7 * 86_400
+    static let patientLaunches = 3
+
+    static var patientDays: Int { Int(patience / 86_400) }
+
+    static func waitedLongEnough(readySince: Date?, launches: Int, now: Date) -> Bool {
+        guard let readySince else { return false }
+        return now.timeIntervalSince(readySince) >= patience && launches >= patientLaunches
     }
 
     /// R2: whether this launch looks for the engine's zone (once; the caller keeps "once").
     static func shouldLook(_ f: Facts) -> Bool {
-        guard f.zone == .notYet else { return false }
-        switch decide(f) {
-        case .never: return false
-        case .wait(let why): return why != .signedOut
-        case .move: return false
-        }
+        f.zone == .notYet && decide(f) == .wait(.zoneNotLooked)
     }
 
     /// One row of the store, for R3.
@@ -169,6 +224,9 @@ enum SyncEngineAutoMove {
     static func stayKey(_ store: String) -> String { "syncEngine.autoMove.stay.\(store)" }
     static func freshSinceKey(_ store: String) -> String { "syncEngine.autoMove.freshSince.\(store)" }
     static func failureKey(_ store: String) -> String { "syncEngine.autoMove.lastFailure.\(store)" }
+    /// When this store was first ready to move but for a mirror that had not caught up, and how many launches since.
+    static func readySinceKey(_ store: String) -> String { "syncEngine.autoMove.readySince.\(store)" }
+    static func readyLaunchesKey(_ store: String) -> String { "syncEngine.autoMove.readyLaunches.\(store)" }
 
     static func movedBefore(store: String, defaults: UserDefaults) -> Bool {
         defaults.object(forKey: movedAtKey(store)) != nil || defaults.bool(forKey: stayKey(store))
@@ -236,6 +294,24 @@ struct CloudKitZoneLook: SyncEngineZoneLooking {
     }
 }
 
+// MARK: - George's word
+
+/// One question to iCloud: has George said that every device may move? (`SyncEngineRollout`, brief 170.) A stand-in
+/// answers it in the tests. It never throws: what cannot be asked is `.unknown`, which is a no.
+protocol SyncEngineWordAsking: Sendable {
+    func ask() async -> SyncEngineAutoMove.Word
+}
+
+/// Until `SyncEngineRollout` (brief 170) is wired in: nobody has George's word, so nothing moves.
+struct NoWordYet: SyncEngineWordAsking {
+    func ask() async -> SyncEngineAutoMove.Word { .notYet }
+}
+
+extension SyncEngineAutoMove {
+    /// The asker a launch uses.
+    static func liveAsker() -> SyncEngineWordAsking { NoWordYet() }
+}
+
 // MARK: - The launch's side
 
 extension SyncEngineAutoMove {
@@ -246,13 +322,22 @@ extension SyncEngineAutoMove {
         var inMemory: @MainActor () -> Bool = { ModelContainerFactory.isRunningInMemory }
         var mirrorRunning: @MainActor () -> Bool = { ModelContainerFactory.isCloudKitEnabled }
         var signedIn: @MainActor () -> Bool = { CloudSyncMonitor.shared.accountStatus == .available }
-        var boltFilled: @MainActor () -> Bool = { CloudSyncMonitor.shared.state.isSynced }
+        var caughtUp: @MainActor () -> Bool = { SyncEngineAutoMove.caughtUp(CloudSyncMonitor.shared.state) }
+        var now: @MainActor () -> Date = { Date() }
         var log: @MainActor (String) -> Void = { CloudSyncMonitor.shared.write(.note, $0) }
         /// The hand move's steps, without a relaunch.
         var move: @MainActor (_ freshCopy: Bool) async throws -> Void
     }
 
-    /// Runs the rules for this launch: one look, then a decision each time the mirror's state changes.
+    /// R1: the mirror has caught up when its bolt is filled, or when its comparison ran and found differences: either
+    /// way it has fetched what iCloud holds, which is all the move needs of it.
+    static func caughtUp(_ state: SyncState) -> Bool {
+        if state.isSynced { return true }
+        if case .differs = state { return true }
+        return false
+    }
+
+    /// Runs the rules for this launch: George's word, one look, then a decision each time the mirror's state changes.
     @MainActor
     @Observable
     final class Runner {
@@ -266,9 +351,17 @@ extension SyncEngineAutoMove {
         @ObservationIgnored let defaults: UserDefaults
         @ObservationIgnored private let live: Live
         @ObservationIgnored private let look: SyncEngineZoneLooking
+        @ObservationIgnored private let asker: SyncEngineWordAsking
         @ObservationIgnored private let rows: @MainActor () -> [Row]
         @ObservationIgnored private(set) var zone: ZoneLook = .notYet
         @ObservationIgnored private(set) var looks = 0
+        /// George's word as this launch knows it, how often it was asked for, and when last.
+        private(set) var word: Word = .notAsked
+        @ObservationIgnored private(set) var asks = 0
+        @ObservationIgnored private var lastAsked: Date?
+        @ObservationIgnored private var isAsking = false
+        @ObservationIgnored private var countedThisLaunch = false
+        @ObservationIgnored private(set) var asking: Task<Void, Never>?
         @ObservationIgnored private(set) var tried = false
         @ObservationIgnored private(set) var movedWithFreshCopy: Bool?
         @ObservationIgnored private var watching = false
@@ -278,11 +371,12 @@ extension SyncEngineAutoMove {
         @ObservationIgnored private var saveObserver: NSObjectProtocol?
 
         init(storeName: String, defaults: UserDefaults, live: Live, look: SyncEngineZoneLooking,
-             rows: @escaping @MainActor () -> [Row]) {
+             asker: SyncEngineWordAsking, rows: @escaping @MainActor () -> [Row]) {
             self.storeName = storeName
             self.defaults = defaults
             self.live = live
             self.look = look
+            self.asker = asker
             self.rows = rows
         }
 
@@ -299,6 +393,7 @@ extension SyncEngineAutoMove {
             })
             let runner = Runner(storeName: storeName, defaults: AppGroup.defaults, live: live,
                                 look: CloudKitZoneLook(containerID: SyncEngineSwitch.containerID, zoneName: zone),
+                                asker: SyncEngineAutoMove.liveAsker(),
                                 rows: { SyncEngineAutoMove.rows(in: container.mainContext) })
             shared = runner
             runner.begin(context: container.mainContext)
@@ -315,9 +410,12 @@ extension SyncEngineAutoMove {
         func facts() -> Facts {
             let freshSince = defaults.object(forKey: SyncEngineAutoMove.freshSinceKey(storeName)) as? Date
             let preferred = SyncEngineSwitch.nextEngine(storeName: storeName, defaults: defaults)
+            let waited = SyncEngineAutoMove.waitedLongEnough(
+                readySince: defaults.object(forKey: SyncEngineAutoMove.readySinceKey(storeName)) as? Date,
+                launches: defaults.integer(forKey: SyncEngineAutoMove.readyLaunchesKey(storeName)), now: live.now())
             return Facts(isOn: true, engine: live.engine(), preferred: preferred, byArgument: live.byArgument(),
                          inMemory: live.inMemory(), mirrorRunning: live.mirrorRunning(), signedIn: live.signedIn(),
-                         boltFilled: live.boltFilled(),
+                         caughtUp: live.caughtUp(), waitedLongEnough: waited, word: word,
                          resetWaiting: ModelContainerFactory.requestedReset(in: defaults) == storeName,
                          movedBefore: SyncEngineAutoMove.movedBefore(store: storeName, defaults: defaults),
                          triedThisLaunch: tried, zone: zone,
@@ -328,14 +426,69 @@ extension SyncEngineAutoMove {
         @discardableResult
         func evaluate() -> Decision {
             let now = facts()
+            if !isAsking, SyncEngineAutoMove.shouldAsk(now, sinceLastAsk: lastAsked.map { live.now().timeIntervalSince($0) }) {
+                askForWord()
+            }
             if looks == 0, SyncEngineAutoMove.shouldLook(now) { lookForZone() }
             let decision = SyncEngineAutoMove.decide(now)
-            if case .move(let fresh) = decision {
+            switch decision {
+            case .move(let fresh):
                 tried = true
+                if !now.caughtUp {
+                    live.log("The earlier sync has not caught up since \(SyncEngineAutoMove.patientDays) days: moving with what this device holds")
+                }
                 moving = Task { await self.move(freshCopy: fresh) }
+            case .wait(.mirrorBehind):
+                countReadyLaunch()
+            default:
+                break
             }
             refreshLine()
             return decision
+        }
+
+        /// The app came forward: a "not yet" may have become a yes (R0).
+        func cameForward() {
+            guard !tried else { return }
+            evaluate()
+        }
+
+        /// R1's patience is counted from the first launch that was ready but for the mirror, once per launch.
+        private func countReadyLaunch() {
+            guard !countedThisLaunch else { return }
+            countedThisLaunch = true
+            if defaults.object(forKey: SyncEngineAutoMove.readySinceKey(storeName)) == nil {
+                defaults.set(live.now(), forKey: SyncEngineAutoMove.readySinceKey(storeName))
+            }
+            defaults.set(defaults.integer(forKey: SyncEngineAutoMove.readyLaunchesKey(storeName)) + 1,
+                         forKey: SyncEngineAutoMove.readyLaunchesKey(storeName))
+        }
+
+        private func askForWord() {
+            asks += 1
+            isAsking = true
+            lastAsked = live.now()
+            let asker = self.asker
+            asking = Task {
+                let answer = await asker.ask()
+                self.wordAnswered(answer)
+            }
+        }
+
+        func wordAnswered(_ answer: Word) {
+            isAsking = false
+            let changed = answer != word
+            word = answer
+            if changed {
+                switch answer {
+                case .go: live.log("George's word for the new sync: every device may move")
+                case .notYet: live.log("George's word for the new sync: not yet")
+                case .paused: live.log("George's word for the new sync: paused")
+                case .unknown: live.log("George's word for the new sync: iCloud couldn't be asked")
+                case .notAsked: break
+                }
+            }
+            evaluate()
         }
 
         /// The move, once: the hand move's steps, then the store remembers it was moved by itself.
@@ -346,10 +499,13 @@ extension SyncEngineAutoMove {
                 try await live.move(freshCopy)
                 defaults.set(Date(), forKey: SyncEngineAutoMove.movedAtKey(storeName))
                 defaults.removeObject(forKey: SyncEngineAutoMove.failureKey(storeName))
+                defaults.removeObject(forKey: SyncEngineAutoMove.readySinceKey(storeName))
+                defaults.removeObject(forKey: SyncEngineAutoMove.readyLaunchesKey(storeName))
                 movedWithFreshCopy = freshCopy
                 live.log(freshCopy
                     ? "Moved to the new sync by itself, taking its copy (nothing of this device's own); finishes at the next launch"
                     : "Moved to the new sync by itself, after a backup; finishes at the next launch")
+                SyncEngineMoveFinish.moveWritten()
             } catch {
                 let words = SyncEngineWords.error(error)
                 defaults.set("\(ISO8601DateFormatter().string(from: Date())) \(words)", forKey: SyncEngineAutoMove.failureKey(storeName))
