@@ -14,15 +14,19 @@ final class CalendarSettingsTests: XCTestCase {
         XCTAssertFalse(CalendarEvents(source: FakeCalendarSource(access: .fullAccess, grants: true), defaults: defaults).isOn)
     }
 
-    func testSubtitleSaysWhyItCannotRead() {
-        let reads = CalendarSettingsPage.subtitle(for: .notDetermined)
-        XCTAssertEqual(reads, CalendarSettingsPage.subtitle(for: .fullAccess))
-        XCTAssertTrue(reads.contains("Read-only"))
-        XCTAssertTrue(CalendarSettingsPage.subtitle(for: .denied).contains("isn't allowed"))
-        XCTAssertTrue(CalendarSettingsPage.subtitle(for: .writeOnly).contains("not read them"),
-                      "Add to Calendar's write-only access: switching on asks for more")
+    func testAccessSaysWhereItStandsAndHowToFixIt() {
+        XCTAssertNil(CalendarSettingsPage.subtitle(for: .notDetermined), "fine: no fix to offer")
+        XCTAssertNil(CalendarSettingsPage.subtitle(for: .fullAccess))
+        XCTAssertEqual(CalendarSettingsPage.accessWord(.notDetermined), "Not asked yet")
+        XCTAssertEqual(CalendarSettingsPage.accessWord(.fullAccess), "Allowed")
+        XCTAssertEqual(CalendarSettingsPage.accessWord(.denied), "Not allowed")
+        XCTAssertTrue(CalendarSettingsPage.subtitle(for: .denied)?.contains("Tap to allow") == true)
+        XCTAssertTrue(CalendarSettingsPage.subtitle(for: .writeOnly)?.contains("can't read them") == true,
+                      "Add to Calendar's write-only access: the row asks for full access")
         XCTAssertTrue(CalendarSettingsPage.settingsPath.hasSuffix("Calendars → HITList"))
-        XCTAssertTrue(CalendarSettingsPage.subtitle(for: .restricted).contains("restricted"))
+        XCTAssertEqual(CalendarSettingsPage.accessWord(.restricted), "Restricted")
+        XCTAssertTrue(CalendarSettingsPage.subtitle(for: .restricted)?.contains("Screen Time") == true)
+        XCTAssertTrue(CalendarSettingsPage.switchFooter.contains("asks for access when you switch this on"))
     }
 
     func testRefusedStatesOfferTheSystemsSettings() {
@@ -64,13 +68,13 @@ final class CalendarSettingsTests: XCTestCase {
                        "Settings → Apps → Calendar → Add Account…, then your Google address (or choose from a list → Google)")
         XCTAssertEqual(CalendarSettingsDevice.iPad.googlePath(systemMajor: 18),
                        "Settings → Apps → Calendar → Calendar Accounts → Add Account → Google")
-        XCTAssertTrue(phone.contains("never signs in to Google"))
+        XCTAssertTrue(phone.hasPrefix("Add your Google account to this iPhone"), phone)
         XCTAssertEqual(CalendarSettingsPage.googleWords(connected: nil, device: .iPhone), phone, "unknown reads as not there")
         let mac = CalendarSettingsPage.googleWords(connected: false, device: .mac)
         XCTAssertTrue(mac.contains("System Settings → Internet Accounts → Add Account… → Google, with Calendars switched on"), mac)
         XCTAssertTrue(CalendarSettingsPage.googleWords(connected: false, device: .iPad).contains("iPad"))
         XCTAssertEqual(CalendarSettingsPage.googleWords(connected: true, device: .mac),
-                       "Google Calendar is connected through this Mac's accounts.")
+                       "Connected through this Mac's accounts")
     }
 
     func testTheAddTargetIsKeptAndFallsBackToTheDefault() async {

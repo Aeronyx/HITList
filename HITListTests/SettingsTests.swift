@@ -357,9 +357,9 @@ final class SettingsTidyTests: XCTestCase {
             // Rows and the groups that hold them, by the names the pages show.
             "Account": ["Your name", "Delete profile", "iCloud account", "Sign out"],
             "Appearance": ["Reduce effects", "Compact rows", "Themes"],
-            "General": ["Start screen", "Week starts on", "Show task count on the app icon", "Confirm before deleting",
+            "General": ["Start screen", "Week starts on", "App icon badge", "Confirm before deleting",
                         "Keyboard shortcuts", "Quick add guide"],
-            "Calendar": ["Calendar events", "Add tasks to", "Add to Calendar", "Google Calendar"],
+            "Calendar": ["Show calendar events", "Access", "Add tasks to", "Add to Calendar", "Google Calendar"],
             "Reminders": ["Notify at due time", "Default reminder", "Morning summary", "If reminders don't arrive",
                           "Send a test notification"],
             "Extras": ["Completion sound", "Haptics", "Companions", "Show companions", "Weather", "Sync bolt",

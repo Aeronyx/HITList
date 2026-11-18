@@ -60,6 +60,62 @@ final class SettingsTidyUITests: XCTestCase {
         XCTAssertTrue(element("settings-profile").isHittable, "back on the first screen")
     }
 
+    /// The Calendar page in its three states (round 33, brief 163): off, on with the demo calendars, access refused.
+    /// The demo's calendars and access, so no system dialog.
+    func testCalendarPageStates() {
+        app.launchArguments += ["-seedDemoEvents", "YES"]
+        app.launch()
+        openFromBrowseGear()
+        open("settings-page-calendar")
+        XCTAssertTrue(element("settings-calendar-events").waitForExistence(timeout: 5))
+        XCTAssertTrue(element("settings-calendar-account-iCloud").waitForExistence(timeout: 5), "on: the calendars")
+        shotDown("20 calendar, on")
+        app.terminate()
+
+        app.launchArguments += ["-demoCalendarAccess", "denied"]
+        app.launch()
+        openFromBrowseGear()
+        open("settings-page-calendar")
+        XCTAssertTrue(element("settings-calendar-open-settings").waitForExistence(timeout: 5), "refused: the fix")
+        XCTAssertFalse(element("settings-calendar-account-iCloud").exists, "refused: no calendars")
+        shotDown("21 calendar, refused")
+    }
+
+    /// Every page's picture, the Calendar page off (a fresh install) among them.
+    func testPicturesOfEveryPage() {
+        app.launch()
+        openFromBrowseGear()
+        shot("01 First screen")
+        open("settings-profile")
+        shotDown("02 Account")
+        back()
+        var number = 3
+        for page in ["general", "calendar", "reminders", "extras", "iCloud", "claude", "about"] {
+            open("settings-page-\(page)")
+            shotDown(String(format: "%02d %@", number, page))
+            number += 1
+            if page == "general" {
+                tapScrolling(to: "settings-quick-add-guide")
+                shotDown(String(format: "%02d %@", number, "general, quick add guide"))
+                number += 1
+                back()
+            }
+            if page == "iCloud" {
+                tapScrolling(to: "settings-sync-log-row")
+                shot(String(format: "%02d %@", number, "iCloud, Sync log"))
+                number += 1
+                back()
+            }
+            if page == "about" {
+                tapScrolling(to: "settings-whats-new")
+                shot(String(format: "%02d %@", number, "About, What's New"))
+                number += 1
+                back()
+            }
+            back()
+        }
+    }
+
     // MARK: Moving between pages
 
     func testBackAndTheEdgeSwipeReturnToTheFirstScreen() {
@@ -251,11 +307,17 @@ final class SettingsTidyUITests: XCTestCase {
         RunLoop.current.run(until: Date().addingTimeInterval(seconds))
     }
 
+    /// Attaches the screen to the result and, with `HITLIST_SHOTS_DIR` set (a folder on the Mac), saves it there as
+    /// `<name>.png` for the hand-over pictures.
     private func shot(_ name: String) {
-        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        let screenshot = XCUIScreen.main.screenshot()
+        let attachment = XCTAttachment(screenshot: screenshot)
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
+        guard let dir = ProcessInfo.processInfo.environment["HITLIST_SHOTS_DIR"] else { return }
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        try? screenshot.pngRepresentation.write(to: URL(fileURLWithPath: dir).appendingPathComponent("iphone \(name).png"))
     }
 }
 

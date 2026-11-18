@@ -10,7 +10,7 @@ struct ICloudSyncGroup: View {
     @Environment(\.hitPages) private var pages
 
     static let title = "Sync"
-    static let footer = "Tasks sync through your private iCloud database at no cost. Sign in to iCloud on each device and the data follows. "
+    static let footer = "Your tasks sync through your own iCloud to every device signed in to it. "
         + boltSentence
     /// What the bolt at the top of every list means, in one sentence (round 32: nothing said it anywhere).
     static let boltSentence = "The bolt at the top of each list is filled when everything on this device is in iCloud."

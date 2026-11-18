@@ -168,7 +168,7 @@ final class CalendarEventsUITests: XCTestCase {
         XCTAssertEqual(app.buttons["Home"].firstMatch.value as? String, "Hidden")
         let google = element("settings-calendar-google")
         for _ in 0..<6 where !(google.exists && google.isHittable) { app.swipeUp() }
-        XCTAssertTrue(google.label.contains("connected through this iPhone"), google.label)
+        XCTAssertTrue(google.label.contains("Connected through this iPhone"), google.label)
         XCTAssertTrue(element("settings-calendar-add-target").exists)
         snapshot("5 Settings → Calendar, Add to Calendar and Google connected")
 
@@ -203,7 +203,8 @@ final class CalendarEventsUITests: XCTestCase {
         app.launch()
         openSettings()
         XCTAssertTrue(element("settings-calendar-open-settings").waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "isn't allowed")).firstMatch.exists)
+        XCTAssertTrue(element("settings-calendar-open-settings").label.contains("Not allowed"),
+                      element("settings-calendar-open-settings").label)
         XCTAssertFalse(element("settings-calendar-account-iCloud").exists)
         snapshot("7b Settings → Calendar, access refused")
     }
@@ -231,7 +232,7 @@ final class CalendarEventsUITests: XCTestCase {
         let openSettingsRow = app.descendants(matching: .any)["settings-calendar-open-settings"].firstMatch
         XCTAssertTrue(openSettingsRow.waitForExistence(timeout: 5), "refused: a way to the system's settings")
         XCTAssertFalse(element("settings-calendar-account-iCloud").exists)
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "isn't allowed")).firstMatch.exists)
+        XCTAssertTrue(openSettingsRow.label.contains("Not allowed"), openSettingsRow.label)
         snapshot("10 Settings, calendar access refused")
     }
 

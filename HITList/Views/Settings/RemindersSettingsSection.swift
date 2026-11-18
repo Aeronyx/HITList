@@ -114,7 +114,7 @@ struct RemindersSettingsSection: View {
         }
 
         HITGroup(Self.troubleTitle) {
-            HITMenuRow("Permission", systemImage: "hand.raised",
+            HITMenuRow("Notifications", systemImage: "hand.raised",
                        value: NotificationStatus.authorizationText(authorization))
                 .accessibilityIdentifier("settings-notification-authorization")
             HITMenuRow("Open system settings", systemImage: "gearshape", accessory: .chevron) { openSystemSettings() }
@@ -139,7 +139,7 @@ struct RemindersSettingsSection: View {
         }
     }
 
-    private let footer = "Reminders are scheduled on each device from the tasks it has synced. The summary skips a day with nothing due."
+    private let footer = "Each device reminds you of the tasks it has synced. The summary skips a day with nothing due."
     static let troubleTitle = "If reminders don't arrive"
 
     private func refresh() async {

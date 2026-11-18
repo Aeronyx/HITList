@@ -116,9 +116,9 @@ struct BackupsGroup: View {
     /// Backups hold tasks, Groups, labels, filters and boards; the profile is not in them (round 32, review 151 C12).
     static let profileLine = "Your name and picture are not in backups."
     #if os(macOS)
-    static let footer = "A copy of your data is saved once a day; the newest \(LocalBackup.keep) are kept. Restore one with Import JSON. \(profileLine)"
+    static let footer = "Saved once a day, the newest \(LocalBackup.keep) kept; Import JSON restores one. \(profileLine)"
     #else
-    static let footer = "Saved once a day in Files → On My iPhone → HITList; the newest \(LocalBackup.keep) are kept. Restore one with Import JSON. \(profileLine)"
+    static let footer = "Saved once a day in Files → On My iPhone → HITList, the newest \(LocalBackup.keep) kept; Import JSON restores one. \(profileLine)"
     #endif
     /// The last daily backup's failure, until one succeeds (`LocalBackup.lastFailureKey`).
     @AppStorage(LocalBackup.lastFailureKey, store: AppGroup.defaults) private var lastFailure: String?
