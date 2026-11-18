@@ -72,7 +72,19 @@ final class UpcomingWeekUITests: XCTestCase {
         let a = chip("Dentist forms"), b = chip("Water filter")
         XCTAssertTrue(a.waitForExistence(timeout: 5) && b.exists)
         #if os(iOS)
-        for _ in 0..<3 { app.swipeDown() }
+        // Nine o'clock brought into view by a finger in the hours themselves. (XCUITest's own `swipeDown()` on the
+        // app begins above the grid on this screen and moved nothing: round 33.)
+        let screen = app.frame
+        for _ in 0..<8 {
+            let y = a.frame.midY
+            if y > screen.height * 0.5, y < screen.height * 0.75 { break }
+            let pullsDown = y < screen.height * 0.5
+            let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: pullsDown ? 0.55 : 0.75))
+            let to = app.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: pullsDown ? 0.75 : 0.55))
+            from.press(forDuration: 0.05, thenDragTo: to, withVelocity: .default, thenHoldForDuration: 0.3)
+            pause(0.4)
+        }
+        XCTAssertTrue(a.isHittable && b.isHittable, "nine o'clock is on screen")
         #endif
         XCTAssertEqual(a.frame.minY, b.frame.minY, accuracy: 1, "at one time")
         XCTAssertTrue(a.frame.maxX <= b.frame.minX + 1 || b.frame.maxX <= a.frame.minX + 1, "side by side")
@@ -82,6 +94,51 @@ final class UpcomingWeekUITests: XCTestCase {
         hit(overdue)
         XCTAssertTrue(app.staticTexts["Pay the plumber"].waitForExistence(timeout: 5), "the overdue task in the list's row")
         shot("week-overdue")
+    }
+
+    /// The hours scroll under a finger (round 33: the sideways swipe is a gesture on the same view, and the first
+    /// pictures showed the grid where it had opened after three swipes).
+    func testTheHoursScrollAndASidewaysSwipeMovesTheDays() throws {
+        app.launchArguments += ["-upcomingLayout", "week"]
+        try launch()
+        openUpcoming()
+        let week = element("upcomingWeek")
+        XCTAssertTrue(week.waitForExistence(timeout: 5))
+        let chip = app.descendants(matching: .any).matching(NSPredicate(format: "identifier == 'weekChip' AND label == %@",
+                                                                        "Buy groceries")).firstMatch
+        XCTAssertTrue(chip.waitForExistence(timeout: 5), "today's demo task as a chip")
+        let before = chip.frame.minY
+        // In the morning the grid opens near its top, so the finger goes up (later hours); later in the day, down.
+        let up = Calendar.current.component(.hour, from: Date()) < 12
+        // The screen's own coordinates: the Week layout's identifier is on each of its parts, so "the first match"
+        // is its header, not the grid.
+        let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: up ? 0.75 : 0.55))
+        let to = app.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: up ? 0.55 : 0.75))
+        shot("week-before-scroll")
+        from.press(forDuration: 0.05, thenDragTo: to)
+        pause()
+        let moved = chip.frame.minY - before
+        shot("week-scrolled")
+        XCTAssertGreaterThan(abs(moved), 60, "the hours moved with the finger (moved \(moved) pt)")
+        XCTAssertEqual(moved > 0, !up, "and the way the finger went")
+        // A quick flick the other way moves them back the other way.
+        let afterDrag = chip.frame.minY
+        if up { app.swipeDown() } else { app.swipeUp() }
+        pause()
+        let flicked = chip.frame.minY - afterDrag
+        shot("week-flicked")
+        XCTAssertGreaterThan(abs(flicked), 60, "a flick moves the hours too (moved \(flicked) pt)")
+        // And a sideways swipe still moves the days: the layout's own Today button (not the tab's) sleeps while the
+        // days start today and wakes once they have moved on.
+        func sleepingTodayButtons() -> Int {
+            app.buttons.matching(NSPredicate(format: "label == 'Today'")).allElementsBoundByIndex.filter { !$0.isEnabled }.count
+        }
+        XCTAssertEqual(sleepingTodayButtons(), 1, "the days start today")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.65))
+            .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.65)))
+        pause()
+        XCTAssertEqual(sleepingTodayButtons(), 0, "the days moved with a sideways swipe")
+        shot("week-swiped")
     }
 
     /// The largest ordinary text size, and another theme.

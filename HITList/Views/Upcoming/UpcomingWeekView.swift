@@ -1,5 +1,8 @@
 import SwiftUI
 import HITListCore
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// Upcoming's Week layout (brief 161): the week's tasks on a calendar. A header with the month and the week's number,
 /// a red "Overdue" while anything is, and ‹ Today ›; the day headers; a band of all-day tasks (two rows, then "N more"
@@ -69,7 +72,7 @@ struct UpcomingWeekView: View {
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { gridWidth = $0 }
         .background(Theme.background)
-        .simultaneousGesture(swipe, including: wholeWeek ? .subviews : .all)
+        .modifier(SidewaysSwipe(isOn: !wholeWeek) { swiped(by: $0) })
         .onChange(of: todayRequest) { _, _ in goToToday() }
         .accessibilityIdentifier("upcomingWeek")
     }
@@ -83,14 +86,11 @@ struct UpcomingWeekView: View {
     }
 
     /// iPhone: a sideways swipe moves the days by as many whole days as it travelled (at least one) and settles there.
-    private var swipe: some Gesture {
-        DragGesture(minimumDistance: 24).onEnded { value in
-            let dx = value.translation.width, dy = value.translation.height
-            guard abs(dx) > 40, abs(dx) > abs(dy) * 1.5 else { return }
-            let width = max(columnWidth, 1)
-            let days = max(1, Int((abs(dx) / width).rounded()))
-            move(by: dx < 0 ? days : -days)
-        }
+    private func swiped(by dx: CGFloat) {
+        guard abs(dx) > 40 else { return }
+        let width = max(columnWidth, 1)
+        let days = max(1, Int((abs(dx) / width).rounded()))
+        move(by: dx < 0 ? days : -days)
     }
 
     // MARK: - Header
@@ -322,6 +322,7 @@ struct UpcomingWeekView: View {
             ForEach(day.timed, id: \.item.id) { timed in
                 let width = columnWidth / CGFloat(timed.columns)
                 WeekChip(entry: timed.item, now: now, height: hourHeight / 2, phase: phase(timed.item.id),
+                         narrow: width - 4 < WeekChip.narrowBelow,
                          onToggle: { onToggleCompletion(timed.item) }, onOpen: { onOpen(timed.item) })
                     .frame(width: max(0, width - 4), alignment: .leading)
                     .offset(x: CGFloat(timed.column) * width + 2,
@@ -345,7 +346,23 @@ private struct NowLine: View {
         TimelineView(.everyMinute) { context in
             let minutes = context.date.timeIntervalSince(start) / 60
             let y = CGFloat(max(0, min(minutes, 24 * 60))) / 60 * hourHeight
+            // The hour whose name the present time stands on or touches (within about a third of an hour's height):
+            // that name is covered whole, as a calendar does, so the two never draw over each other in part.
+            let hours = minutes / 60
+            let nearest = hours.rounded()
+            let coversName = abs(hours - nearest) < 0.38 && nearest >= 1 && nearest <= 23
             ZStack(alignment: .topLeading) {
+                if coversName {
+                    Text("12 PM")
+                        .font(HITType.caption2)
+                        .lineLimit(1)
+                        .hidden()
+                        .padding(.vertical, 2)
+                        .frame(width: gutter, alignment: .trailing)
+                        .background(Theme.background)
+                        .alignmentGuide(.top) { $0[VerticalAlignment.center] }
+                        .offset(y: CGFloat(nearest) * hourHeight)
+                }
                 Text(context.date.formatted(Date.FormatStyle(calendar: calendar, timeZone: calendar.timeZone)
                     .hour().minute()))
                     .font(HITType.caption2Semibold)
@@ -355,9 +372,6 @@ private struct NowLine: View {
                     .padding(.horizontal, HITSpacing.xs)
                     .background(HITColor.dueOverdue, in: Capsule())
                     .frame(width: gutter - HITSpacing.xs, alignment: .trailing)
-                    // Covers an hour's name the present time stands on (the two drew over each other near the hour).
-                    .padding(.vertical, HITSpacing.xs)
-                    .background(Theme.background)
                     .alignmentGuide(.top) { $0[VerticalAlignment.center] }
                     .offset(y: y)
                 Rectangle()
@@ -380,8 +394,14 @@ struct WeekChip: View {
     /// At least 28 pt: half an hour of the grid, which grows with the text.
     let height: CGFloat
     var phase: CompletionPhase?
+    /// A chip too narrow for both its ring and its words (tasks at one time share an iPhone's column): the words
+    /// win, and the ring goes. It still opens with a tap, and its card completes it.
+    var narrow = false
     var onToggle: () -> Void
     var onOpen: () -> Void
+
+    /// Below this width a chip is drawn narrow: the ring, its gap and the padding would leave no room for a word.
+    static let narrowBelow: CGFloat = 72
 
     private var priority: Priority { Priority(clamping: entry.filterPriority) }
     private var isChecked: Bool { entry.filterIsCompleted || phase != nil }
@@ -390,23 +410,27 @@ struct WeekChip: View {
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: HITRadius.chip, style: .continuous)
-        HStack(spacing: 6) {
-            Button(action: onToggle) {
-                Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
-                    .font(HITType.captionBold)
-                    .foregroundStyle(priority == .p4 ? Theme.secondaryText : priority.color)
-                    .contentShape(Rectangle())
+        HStack(spacing: narrow ? 0 : 6) {
+            if !narrow {
+                Button(action: onToggle) {
+                    Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
+                        .font(HITType.captionBold)
+                        .foregroundStyle(priority == .p4 ? Theme.secondaryText : priority.color)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(!canToggle)
             }
-            .buttonStyle(.plain)
-            .disabled(!canToggle)
             Text(entry.filterTitle)
                 .font(HITType.caption)
                 .foregroundStyle(HITColor.text)
                 .strikethrough(isChecked, color: Theme.secondaryText)
                 .lineLimit(1)
-            Spacer(minLength: 0)
+                .allowsTightening(narrow)
+            if !narrow { Spacer(minLength: 0) }
         }
-        .padding(.horizontal, HITSpacing.s)
+        .padding(.leading, narrow ? 7 : HITSpacing.s)
+        .padding(.trailing, narrow ? 2 : HITSpacing.s)
         .frame(maxWidth: .infinity, minHeight: max(28, height), maxHeight: max(28, height), alignment: .leading)
         .background(Theme.surface, in: shape)
         .overlay(shape.fill(tint.opacity(phase == .pending ? 0.28 : 0.14)).allowsHitTesting(false))
@@ -527,3 +551,61 @@ private struct OverdueList: ViewModifier {
         }
     }
 }
+
+
+// MARK: - The sideways swipe
+
+/// The iPhone's sideways swipe across the Week layout. A UIKit pan and not a SwiftUI `DragGesture`: a drag gesture
+/// on a view that holds a scroll view, even a simultaneous one, has stopped that scroll view scrolling on some
+/// versions of iOS, and nothing here may ever take the hours' own scrolling away. This one begins only for a mostly
+/// sideways move and recognises beside the scroll view's pan, so a finger going up or down never reaches it
+/// (`UpcomingWeekUITests.testTheHoursScrollAndASidewaysSwipeMovesTheDays`: a drag, a flick, then a swipe across).
+private struct SidewaysSwipe: ViewModifier {
+    let isOn: Bool
+    /// The swipe's travel across, in points: negative to the left.
+    let onEnded: (CGFloat) -> Void
+
+    func body(content: Content) -> some View {
+        #if os(iOS)
+        if isOn {
+            content.gesture(SidewaysPan(onEnded: onEnded))
+        } else {
+            content
+        }
+        #else
+        content
+        #endif
+    }
+}
+
+#if os(iOS)
+private struct SidewaysPan: UIGestureRecognizerRepresentable {
+    let onEnded: (CGFloat) -> Void
+
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
+
+    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
+        let pan = UIPanGestureRecognizer()
+        pan.delegate = context.coordinator
+        return pan
+    }
+
+    func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
+        guard recognizer.state == .ended else { return }
+        onEnded(recognizer.translation(in: recognizer.view).x)
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = recognizer as? UIPanGestureRecognizer else { return false }
+            let velocity = pan.velocity(in: pan.view)
+            return abs(velocity.x) > abs(velocity.y) * 1.5
+        }
+
+        func gestureRecognizer(_ recognizer: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+            true
+        }
+    }
+}
+#endif
