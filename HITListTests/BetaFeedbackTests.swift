@@ -1,6 +1,7 @@
 import XCTest
 import SwiftUI
 import SwiftData
+import ImageIO
 @testable import HITList
 
 /// Send Beta Feedback (brief 53): the mailto URL's address, subject and body, its encoding, the footer's
@@ -58,6 +59,28 @@ final class BetaFeedbackTests: XCTestCase {
         XCTAssertFalse(BetaFeedback.cardMessageWithoutAddress.contains("@"))
         let view = BetaFeedbackCard(onDone: {}, address: nil).frame(width: 320).preferredColorScheme(.dark)
         XCTAssertNotNil(ImageRenderer(content: view).cgImage)
+    }
+
+    /// The card with an address and without one, at 2x, kept as attachments (and in the temporary folder, its path
+    /// printed after BETA_FEEDBACK_PNG) for the pictures George judges a build by.
+    func testTheCardsPictures() throws {
+        for (address, name) in [(Self.sample, "feedback-card-address"), (nil, "feedback-card-no-address")] as [(String?, String)] {
+            let renderer = ImageRenderer(content: BetaFeedbackCard(onDone: {}, address: address)
+                .frame(width: 340).preferredColorScheme(.dark))
+            renderer.scale = 2
+            let image = try XCTUnwrap(renderer.cgImage)
+            let data = NSMutableData()
+            let destination = try XCTUnwrap(CGImageDestinationCreateWithData(data, "public.png" as CFString, 1, nil))
+            CGImageDestinationAddImage(destination, image, nil)
+            XCTAssertTrue(CGImageDestinationFinalize(destination))
+            let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("\(name).png")
+            try (data as Data).write(to: url)
+            print("BETA_FEEDBACK_PNG \(url.path)")
+            let attachment = XCTAttachment(data: data as Data, uniformTypeIdentifier: "public.png")
+            attachment.name = name
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
     }
 
     #if os(macOS)
