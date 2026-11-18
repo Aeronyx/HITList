@@ -119,9 +119,10 @@ How George works with you:
 - Never add `com.apple.developer.icloud-container-development-container-identifiers` to any entitlements.
   Never open the real store under the Development environment. Never call `ModelContainer.deleteAllData()`
   or delete objects as a "reset": deletions mirror to CloudKit and wipe every device.
-- Secrets: the App Store Connect key `AuthKey_<key-id>.p8` lives in `~/.appstoreconnect/private_keys/`;
-  the Key ID `<key-id>` and Issuer ID `<issuer-id>` may be written, the key's
-  contents never. `~/.config/hitlist/api.env` holds an API key that must never be printed or pasted (the
+- Secrets: the App Store Connect key (`AuthKey_<key id>.p8`) lives in `~/.appstoreconnect/private_keys/`; its
+  Key ID and Issuer ID are in the untracked `Config/Local.xcconfig` (`ASC_KEY_ID`, `ASC_ISSUER_ID`, beside the
+  feedback address; `scripts/release.sh` reads all three there and stops without them) and are written nowhere
+  in the repository (round 33: it is public); the key's contents never, anywhere. `~/.config/hitlist/api.env` holds an API key that must never be printed or pasted (the
   $200 promotional credit behind it expires 2026-11-05 and is not used any more).
 - HITList's own sync engine: **a store syncs on it only when it was moved** (from 0.9.14: every build may run it,
   `SyncEngineSwitch.isAvailable`; the store's own preference decides, only the move writes it, and the group that

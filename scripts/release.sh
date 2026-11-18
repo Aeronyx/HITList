@@ -55,8 +55,11 @@ TEAM_ID=UC8N98H3RT
 CONTAINER_ID=iCloud.com.trammells.hitlist
 SHARED_CONTAINER_ID=iCloud.com.trammells.hitlist.shared
 SYNC_CONTAINER_ID=iCloud.com.trammells.hitlist.sync
-KEY_ID="${ASC_KEY_ID:-<key-id>}"
-ISSUER_ID="${ASC_ISSUER_ID:-<issuer-id>}"
+# The App Store Connect key's ids are not in the public repository (brief 166): from the environment, or from the
+# untracked Config/Local.xcconfig ("ASC_KEY_ID = …", "ASC_ISSUER_ID = …"), checked below with the feedback address.
+local_setting() { sed -nE "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*([^[:space:]]+).*/\\1/p" Config/Local.xcconfig 2>/dev/null | tail -1 || true; }
+KEY_ID="${ASC_KEY_ID:-$(local_setting ASC_KEY_ID)}"
+ISSUER_ID="${ASC_ISSUER_ID:-$(local_setting ASC_ISSUER_ID)}"
 
 PLATFORMS=(ios macos)
 UPLOAD=1; BUMP=1; TESTS=1; QUICK=0; SCHEMA_CHECK=1; NEW_VERSION=""
@@ -91,8 +94,9 @@ if [[ -n "$(git status --porcelain)" ]]; then
 fi
 
 # ---- the feedback address (brief 166: a build setting, never in the public source) -------------------
-FEEDBACK_ADDRESS=$(sed -nE 's/^[[:space:]]*HIT_FEEDBACK_ADDRESS[[:space:]]*=[[:space:]]*([^[:space:]]+).*/\1/p' Config/Local.xcconfig 2>/dev/null | tail -1 || true)
+FEEDBACK_ADDRESS=$(local_setting HIT_FEEDBACK_ADDRESS)
 [[ "$FEEDBACK_ADDRESS" == ?*@?* ]] || fail "no feedback address: create Config/Local.xcconfig with the line 'HIT_FEEDBACK_ADDRESS = <address>' (untracked; see Config/HITList.xcconfig)"
+[[ -n "$KEY_ID" && -n "$ISSUER_ID" ]] || fail "no App Store Connect key ids: add 'ASC_KEY_ID = …' and 'ASC_ISSUER_ID = …' to Config/Local.xcconfig, or set them in the environment"
 
 # ---- notes for a build-only release (before anything slow or changed) -----------------------------
 # "## 0.9.0 (21)": the section for the build this run is about to make. Empty for a --version run (its
