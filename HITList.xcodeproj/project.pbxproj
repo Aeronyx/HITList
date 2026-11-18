@@ -83,6 +83,7 @@
 		21A306D0DC2302061DC2205C /* ListRulesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCEA3CCC681372C04E433275 /* ListRulesTests.swift */; };
 		21CBD03D08375E7B4925C256 /* RepeatPickerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BD967EB28FC0C3906824AF5 /* RepeatPickerTests.swift */; };
 		21F111FB7D65C1D8A959118B /* GeocoderZoneSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4299F6AC9EE42F44E5EE3546 /* GeocoderZoneSource.swift */; };
+		21FB69D326B399ED34850C87 /* UpcomingWeekUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DB6F9D36A2600BAFAB2B582 /* UpcomingWeekUITests.swift */; };
 		220983279DFC5A2C6EE2691B /* FlipboardGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0CDA94242E336C8805AF0BF /* FlipboardGrid.swift */; };
 		22D93F0119F5F5869060BA2B /* SyncHealth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31EED87BAB4D02BA4465BA09 /* SyncHealth.swift */; };
 		233658D322415C6CB9EC8B8A /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA7DFDB7F08CAF6DE9B96FA3 /* SidebarView.swift */; };
@@ -833,6 +834,7 @@
 		4C16A74F5E02178CD99C092C /* SyncReplay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncReplay.swift; sourceTree = "<group>"; };
 		4D15C3C5BD9ADB239A1C839E /* NotificationActionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationActionTests.swift; sourceTree = "<group>"; };
 		4D30F06A15BE4AC421570D5F /* CalendarSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarSettingsTests.swift; sourceTree = "<group>"; };
+		4DB6F9D36A2600BAFAB2B582 /* UpcomingWeekUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpcomingWeekUITests.swift; sourceTree = "<group>"; };
 		4DD387014332B38314461584 /* InboxText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxText.swift; sourceTree = "<group>"; };
 		4DF96EABAFDE73C7753F296E /* Diagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Diagnostics.swift; sourceTree = "<group>"; };
 		4E15C0CED187F50576BBD250 /* WeatherUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherUITests.swift; sourceTree = "<group>"; };
@@ -1714,6 +1716,7 @@
 				497ECACB37FF5F427681EA06 /* SwitchboardUITests.swift */,
 				BAA2E310A182159BE60C7D9E /* SyncEngineStatusUITests.swift */,
 				1A3473EE8FE0512E58CD2A86 /* TodoistImportUITests.swift */,
+				4DB6F9D36A2600BAFAB2B582 /* UpcomingWeekUITests.swift */,
 				4E15C0CED187F50576BBD250 /* WeatherUITests.swift */,
 				B66D4679C9375FA020237031 /* WidgetsUITests.swift */,
 			);
@@ -2592,6 +2595,7 @@
 				56F5F4059BE7A1AC100FD66B /* SwitchboardUITests.swift in Sources */,
 				DA4D52ED3F73D56CDE79F34A /* SyncEngineStatusUITests.swift in Sources */,
 				B09C1EA7E774D09EF6682495 /* TodoistImportUITests.swift in Sources */,
+				21FB69D326B399ED34850C87 /* UpcomingWeekUITests.swift in Sources */,
 				ACEC42234258B3C2205FDDB8 /* WeatherUITests.swift in Sources */,
 				04D6BE7E882A7F3C9A23DCB1 /* WidgetsUITests.swift in Sources */,
 			);

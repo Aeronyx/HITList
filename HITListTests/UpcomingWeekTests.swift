@@ -83,8 +83,8 @@ final class UpcomingWeekTests: XCTestCase {
         XCTAssertFalse(shown.contains { $0.filterIsCompleted || $0.filterIsSubtask })
     }
 
-    /// Two tasks at one time share the column; a third half an hour later takes the first free column; one an hour on
-    /// stands alone at full width.
+    /// Two tasks at one time share the column; one a quarter of an hour later overlaps both and takes a third column; one
+    /// half an hour after them starts where their chips end and stands alone at full width, as does one at 11.
     func testTasksAtTheSameTimeShareTheColumn() throws {
         let now = Date()
         let calendar = Calendar.current
@@ -98,7 +98,7 @@ final class UpcomingWeekTests: XCTestCase {
             context.insert(task)
             return task
         }
-        let a = at(9, 0, "A"), b = at(9, 0, "B"), c = at(9, 30, "C"), d = at(11, 0, "D")
+        let a = at(9, 0, "A"), b = at(9, 0, "B"), q = at(9, 15, "Q"), c = at(9, 45, "C"), d = at(11, 0, "D")
         let allDay = TaskItem(title: "All day", dueDate: tomorrow)
         context.insert(allDay)
         try context.save()
@@ -108,11 +108,13 @@ final class UpcomingWeekTests: XCTestCase {
         XCTAssertEqual(day.allDay.map(\.id), [allDay.id])
         let byID = Dictionary(uniqueKeysWithValues: day.timed.map { ($0.item.id, $0) })
         XCTAssertEqual(byID[a.id]?.minute, 9 * 60)
-        XCTAssertEqual(byID[a.id]?.columns, 2)
-        XCTAssertEqual(byID[b.id]?.columns, 2)
+        XCTAssertEqual(byID[b.id]?.columns, 3)
         XCTAssertNotEqual(byID[a.id]?.column, byID[b.id]?.column)
-        XCTAssertEqual(byID[c.id]?.minute, 9 * 60 + 30)
-        XCTAssertEqual(byID[c.id]?.columns, 2, "C chains to A and B's group")
+        XCTAssertEqual(byID[q.id]?.column, 2)
+        XCTAssertEqual(byID[q.id]?.columns, 3, "Q overlaps A and B")
+        XCTAssertEqual(byID[a.id]?.columns, 3, "so the three share the width")
+        XCTAssertEqual(byID[c.id]?.minute, 9 * 60 + 45)
+        XCTAssertEqual(byID[c.id]?.columns, 1, "C starts as Q's chip ends")
         XCTAssertEqual(byID[d.id]?.column, 0)
         XCTAssertEqual(byID[d.id]?.columns, 1, "D stands alone")
     }
