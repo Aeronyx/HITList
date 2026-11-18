@@ -1025,7 +1025,8 @@ private final class RecordingIndex: SpotlightIndexing {
 final class FlipboardWordsTests: XCTestCase {
     /// Brief 72: the tip says a switch is a routine, in one sentence.
     func testTheTipSaysASwitchIsARoutine() {
-        XCTAssertTrue(HITTipKind.flipboard.message.contains("A switch is a routine"), HITTipKind.flipboard.message)
+        // Brief 162: says what to do rather than how it works.
+        XCTAssertTrue(HITTipKind.flipboard.message.hasPrefix("Flip a switch once you’ve done it"), HITTipKind.flipboard.message)
         XCTAssertEqual(HITTipKind.flipboard.message.filter { $0 == "." }.count, 1, "one sentence")
     }
 
