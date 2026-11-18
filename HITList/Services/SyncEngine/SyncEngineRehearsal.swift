@@ -19,6 +19,13 @@ import HITListCore
 /// - `-rehearsalEdits <seed>`: on the engine, after the first check, a handful of ordinary edits made the way a
 ///   person makes them (`TaskActions`): two tasks completed, one renamed, one moved to another Group, one made, one
 ///   deleted, chosen by `seed` so that two devices choose differently; then another check once they have gone.
+/// - `-rehearsalRollout go|pause|clear [-rehearsalRolloutMinBuild <n>]` (round 34, brief 170): writes, pauses or
+///   deletes the word that lets every device move (`SyncEngineRollout`, `HLRollout/everyone` in the engine's
+///   container's public database: Development for a Debug build). `go` writes `paused` 0 and `minBuild` as given
+///   (none: every build); `pause` writes `paused` 1 and keeps `minBuild`. Only an account holding the role
+///   `HLRolloutAdmin` may: anyone else gets a permission failure.
+/// - `-rehearsalRolloutAsk YES`: asks the question as a release build asks it (`CloudKitRollout`) and prints the
+///   answer, the sync log's line, and this account's user record name in this environment (where the role is given).
 @MainActor
 enum SyncEngineRehearsal {
     static func runIfAsked(container: ModelContainer, arguments: [String] = ProcessInfo.processInfo.arguments) {
@@ -93,6 +100,22 @@ enum SyncEngineRehearsal {
                 }
             }
         }
+        if let word = value("-rehearsalRollout", arguments) {
+            let minBuild = value("-rehearsalRolloutMinBuild", arguments).flatMap(Int64.init)
+            Task { @MainActor in say(await rollout(word, minBuild: minBuild)) }
+        }
+        if value("-rehearsalRolloutAsk", arguments) == "YES" {
+            Task { @MainActor in
+                let answer = await CloudKitRollout(log: { say("rollout log: \($0)") }).answer()
+                say("rollout ask: \(answer.rawValue)")
+                do {
+                    let me = try await CKContainer(identifier: SyncEngineSwitch.containerID).userRecordID()
+                    say("rollout: this account's user record here is \(me.recordName)")
+                } catch {
+                    say("rollout: this account's user record failed: \(SyncState.shortReason(for: error))")
+                }
+            }
+        }
         let edits = value("-rehearsalEdits", arguments).flatMap(Int.init)
         if arguments.contains("-syncEngineCheck") || edits != nil {
             Task { @MainActor in
@@ -105,6 +128,43 @@ enum SyncEngineRehearsal {
                 await quiet()
                 await check("after the edits")
             }
+        }
+    }
+
+    /// The word written, paused or deleted in the engine's container's public database: one line back.
+    private static func rollout(_ word: String, minBuild: Int64?) async -> String {
+        let database = CKContainer(identifier: SyncEngineSwitch.containerID).publicCloudDatabase
+        let id = SyncEngineRollout.recordID
+        do {
+            switch word {
+            case "go", "pause":
+                // The record as it is (to change it in place), or a new one.
+                let record: CKRecord
+                do {
+                    record = try await database.record(for: id)
+                } catch let error where SyncEngineRollout.isUnknownItem(error) {
+                    record = CKRecord(recordType: SyncEngineRollout.recordType, recordID: id)
+                }
+                record[SyncEngineRollout.pausedField] = (word == "pause" ? 1 : 0) as Int64
+                if word == "go" { record[SyncEngineRollout.minBuildField] = minBuild.map { $0 as NSNumber } }
+                let saved = try await database.save(record)
+                let fields = SyncEngineRollout.Fields(record: saved)
+                return "rollout \(word): saved, paused \(fields.paused.map { "\($0)" } ?? "none"), "
+                    + "minBuild \(fields.minBuild.map { "\($0)" } ?? "none")"
+            case "clear":
+                do {
+                    _ = try await database.deleteRecord(withID: id)
+                    return "rollout clear: deleted"
+                } catch let error where SyncEngineRollout.isUnknownItem(error) {
+                    return "rollout clear: there was no record"
+                }
+            default:
+                return "rollout: unknown word \(word) (go, pause or clear)"
+            }
+        } catch {
+            let permission = (error as? CKError)?.code == .permissionFailure
+            return "rollout \(word) failed: \(SyncState.shortReason(for: error))"
+                + (permission ? " (this account lacks the role \(SyncEngineRollout.adminRole); -rehearsalRolloutAsk YES prints its user record)" : "")
         }
     }
 
