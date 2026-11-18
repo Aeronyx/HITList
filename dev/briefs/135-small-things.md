@@ -21,7 +21,7 @@ the picture before the words). On an **iPhone 16** simulator of your own (`xcrun
   clock forced to night;
 - beside the Mac's grid (your Debug Mac app), where he did not complain.
 What the supervisor sees in round 25's own picture (`build.noindex/round-25/handover/04-…png` in the main checkout,
-`~/Desktop/HITList`): Quill lies above the box's top right corner with 7 pt of him past the edge,
+`<repo>`): Quill lies above the box's top right corner with 7 pt of him past the edge,
 and because the corner is a continuous curve his body is over the curve's empty air: he reads as hovering beside
 the box, not draped on it. That may be all of it, or the iPhone may also place him differently from the Mac (a
 different side length through `.rounded()`, the ring, the grid's clipping). Report what you found with a picture

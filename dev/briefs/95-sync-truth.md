@@ -56,7 +56,7 @@ Nobody may open George's stores or sign any device in or out of iCloud. Work fro
 from two Debug instances with side stores (`HITLIST_STORE_SUFFIX=s95a`, `s95b`: read how a side store syncs before
 relying on it; Debug builds use the Development environment), and from the logs: the supervisor has asked George
 for both devices' whole sync logs and will put them in `build.noindex/logs/` in the main checkout
-(`~/Desktop/HITList/build.noindex/logs/`) and tell you when they arrive. Leads, none of them a
+(`<repo>/build.noindex/logs/`) and tell you when they arrive. Leads, none of them a
 conclusion:
 - What Core Data does to the store at a sign-out and at the sign-in after it, on a device that was running, and on
   one that was not. What happens to a row written while signed out, or between the purge and the first import

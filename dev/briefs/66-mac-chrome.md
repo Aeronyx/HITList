@@ -1,6 +1,6 @@
 # Brief 66: the Mac's toolbar and the sidebar's search (session `mac-chrome`, effort high)
 
-George, 2026-11-08, on 0.8.1 (screenshot `~/Desktop/HITList/build.noindex/round-15/george-1-mac-toolbar.png`):
+George, 2026-11-08, on 0.8.1 (screenshot `<repo>/build.noindex/round-15/george-1-mac-toolbar.png`):
 
 > The top right baron Mac is a bit of a mess again; the "Add task" button has duplicate ovals with one being slightly
 > smaller, and the Filters tabs have poorly spaced text within their bubbles (first screenshot). And while I do like

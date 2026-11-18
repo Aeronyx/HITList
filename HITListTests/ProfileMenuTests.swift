@@ -33,7 +33,7 @@ final class ProfileMenuTests: XCTestCase {
     // MARK: Words
 
     func testButtonShowsTheNameOrAddYourName() {
-        XCTAssertEqual(ProfileMenuModel.title(forName: "George"), "George")
+        XCTAssertEqual(ProfileMenuModel.title(forName: "George Thornton"), "George Thornton")
         XCTAssertEqual(ProfileMenuModel.title(forName: "  George  "), "George", "trimmed")
         XCTAssertEqual(ProfileMenuModel.title(forName: nil), "Add your name", "no profile yet")
         XCTAssertEqual(ProfileMenuModel.title(forName: ""), "Add your name")
@@ -161,7 +161,7 @@ final class ProfileMenuTests: XCTestCase {
     }
 
     func testButtonLabelRendersWithAndWithoutAName() {
-        for name in [nil, "George"] as [String?] {
+        for name in [nil, "George Thornton"] as [String?] {
             let view = ProfileButtonLabel(imageData: nil, name: name).preferredColorScheme(.dark)
             XCTAssertNotNil(ImageRenderer(content: view).cgImage)
         }
@@ -225,7 +225,7 @@ final class ProfileMenuTests: XCTestCase {
     }
 
     func testSidebarTopRendersWithAndWithoutAName() throws {
-        for (name, file) in [("George", "sidebar-top-named"), (nil, "sidebar-top-unnamed")] as [(String?, String)] {
+        for (name, file) in [("George Thornton", "sidebar-top-named"), (nil, "sidebar-top-unnamed")] as [(String?, String)] {
             let (window, host) = sidebarWindow(container: try makeContainer(name: name),
                                                router: SettingsRouter(defaults: defaults), menuOpen: false)
             defer { window.close() }
@@ -234,7 +234,7 @@ final class ProfileMenuTests: XCTestCase {
     }
 
     func testSidebarTopRendersWithTheMenuOpen() throws {
-        let (window, host) = sidebarWindow(container: try makeContainer(name: "George"),
+        let (window, host) = sidebarWindow(container: try makeContainer(name: "George Thornton"),
                                            router: SettingsRouter(defaults: defaults), menuOpen: true)
         defer { window.close() }
         let rep = try writePNG(host, named: "sidebar-menu-open")

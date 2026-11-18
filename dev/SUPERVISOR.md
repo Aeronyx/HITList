@@ -6,7 +6,7 @@ iPhone simulator, writes the release notes and hands George the release command.
 rounds 1–8 (2026-10-26 to 2026-11-04), an Opus 5.5 session for rounds 9–12 and 15, Fable for 13–14; from round 16
 (2026-11-10) a Fable 5.2 chat does it. Read this file first, then `dev/briefs/COMMON.md` (the facts every delegated
 session reads), then the newest round, `dev/briefs/ROUND-29.md` (and `ROUND-28.md` before it), and for anything about sync `dev/SYNC-ENGINE.md`.
-The memory folder under `~/.claude/projects/-Users-user-Desktop-HITList/memory/` is loaded into every
+The memory folder under `~/.claude/projects/<the repo path, each / as ->/memory/` is loaded into every
 session in this folder and holds the same rules in shorter form; keep both in step when something changes.
 
 ## 1. The app and the person
@@ -62,11 +62,11 @@ How George works with you:
   `108-duo-inner/unfold.sh` in the notes folder). Until then `-duoStandIn YES -duoStandInSize inner` on an iPad mini
   draws the app at the inner display's size. Brief 93's walk (`QASweepUITests`, `TEST_RUNNER_HITLIST_QA=1`) photographs
   every screen of whatever it runs on.
-- Simulator: iPhone 17, UDID `03F99117-3466-4810-A711-AF52514F6514`. Build with
+- Simulator: iPhone 17, its UDID from `xcrun simctl list devices`. Build with
   `xcodebuild build -project HITList.xcodeproj -scheme HITList -configuration Debug -destination
-  'platform=iOS Simulator,id=03F99117-3466-4810-A711-AF52514F6514' -derivedDataPath build.noindex/sim
+  'platform=iOS Simulator,id=<its UDID>' -derivedDataPath build.noindex/sim
   -allowProvisioningUpdates -quiet` (about two minutes; run it in the background), then launch
-  `~/Desktop/HITList/build.noindex/sim/Build/Products/Debug-iphonesimulator/HITList.app`
+  `<repo>/build.noindex/sim/Build/Products/Debug-iphonesimulator/HITList.app`
   (bundle id `com.trammells.hitlist`) with the iOS Simulator tool. Its screenshots lag one or two calls
   behind the screen: take two, trust the second. Typing lands before SwiftUI moves focus, so tap the field
   you mean, take a screenshot (as a delay), then type. The simulator's Debug store is throwaway test data.
@@ -1237,7 +1237,7 @@ Commit subjects on this repo say what changed and why in one line; no session or
 
 Round 12 (briefs 53–56) finished the Friends build, released as **0.7.1 (17)**: 0.7.0's release stopped at the Shared
 Tasks container's schema check (only the task container had been deployed), so nothing shipped and its notes ship as
-0.7.1 with George's last fixes. The Mac's Send Beta Feedback copies feedback@example.com and shows the card, never
+0.7.1 with George's last fixes. The Mac's Send Beta Feedback copies the feedback address and shows the card, never
 Mail (iPhone and iPad still start a mail). The bolt strikes only as a "you're good to go": the first good sync after
 launch, after a minute or more away, or after a minute or more of sync trouble (`BoltStrikeGate`; on the Mac an import
 follows activation within about a second, so the strike on return is prompt). The 26 merged session worktrees were

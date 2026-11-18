@@ -22,7 +22,7 @@ lines at the top of `HITList/Support/Companions/CompanionCharacter.swift`, a fin
 Nod (Slate): a small person in a nightcap whose legs dangle. Quill (Midnight): a cat-like thing lying along the
 edge, its tail in the accent. Hush (Nord): ears longer than itself. Posy (Rosé, being finished tonight): a round
 piglet with wings far too small. Mallow (Mocha, being finished tonight): a fat soft toy in a knitted band. All
-five at real size, in both places: `~/Desktop/HITList/build.noindex/round-19/reference/cast-so-far.png`
+five at real size, in both places: `<repo>/build.noindex/round-19/reference/cast-so-far.png`
 (Quill is in `round-18-all-four-in-place.png` beside it).
 
 ## Your theme and where to start
@@ -63,7 +63,7 @@ meets it, or the field, there is no row of background between them and nothing s
 ## How to work tonight
 - **Tools.** Brief 85's drawing workshop (frames as text, sheets at 8x and real size, mock-ups of the "+" at 3x
   and the field at 2x with the perch's geometry, a validator, a Swift generator) is snapshotted at
-  `~/Desktop/HITList/build.noindex/round-19/workshop/`: copy it into your scratchpad (never edit it
+  `<repo>/build.noindex/round-19/workshop/`: copy it into your scratchpad (never edit it
   in place, never copy it into the repository), point `REPO` at your worktree, and draw with it.
 - **The Mac is saturated** (eight sessions; swap is full). Draw first, with the scripts. Do not run a baseline
   suite. Build once, late: the Mac suite alone (`scripts/test.sh macos`; it holds every companion test), then one

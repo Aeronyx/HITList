@@ -90,6 +90,10 @@ if [[ -n "$(git status --porcelain)" ]]; then
   fail "working tree is dirty; commit or stash first so the release tag matches what was built"
 fi
 
+# ---- the feedback address (brief 166: a build setting, never in the public source) -------------------
+FEEDBACK_ADDRESS=$(sed -nE 's/^[[:space:]]*HIT_FEEDBACK_ADDRESS[[:space:]]*=[[:space:]]*([^[:space:]]+).*/\1/p' Config/Local.xcconfig 2>/dev/null | tail -1 || true)
+[[ "$FEEDBACK_ADDRESS" == ?*@?* ]] || fail "no feedback address: create Config/Local.xcconfig with the line 'HIT_FEEDBACK_ADDRESS = <address>' (untracked; see Config/HITList.xcconfig)"
+
 # ---- notes for a build-only release (before anything slow or changed) -----------------------------
 # "## 0.9.0 (21)": the section for the build this run is about to make. Empty for a --version run (its
 # "## X.Y.Z" section was checked above) and for --no-bump (a rebuild of a build that has its notes).

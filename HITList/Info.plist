@@ -41,6 +41,8 @@
 	<string>30</string>
 	<key>CKSharingSupported</key>
 	<true/>
+	<key>HITFeedbackAddress</key>
+	<string>$(HIT_FEEDBACK_ADDRESS)</string>
 	<key>HITListWidgetSuffix</key>
 	<string>$(HITLIST_WIDGET_SUFFIX)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>

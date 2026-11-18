@@ -7,9 +7,9 @@ release with `scripts/release.sh --quick`, no `--version`; §6 of the handbook s
 
 This round's supervisor is a new chat on Fable 5.2; the Opus 5.5 supervisor wrote this file and handed over. No briefs
 are written yet: the next brief number is **70**. The friend's screenshot is
-`~/Desktop/HITList/build.noindex/round-16/friend-mac-today-0.9.0.png` (outside git; read it by that
+`<repo>/build.noindex/round-16/friend-mac-today-0.9.0.png` (outside git; read it by that
 path). Ours for comparison, the same build on George's Mac (macOS 26.7.1) with demo data:
-`~/Desktop/HITList/build.noindex/round-15/mac/02-today.png`.
+`<repo>/build.noindex/round-15/mac/02-today.png`.
 
 ## George's notes, verbatim
 

@@ -56,18 +56,23 @@ final class ProfileMenuUITests: XCTestCase {
         done.tap()
         XCTAssertTrue(done.waitForNonExistence(timeout: 5), "Done closes it")
 
-        // Send Beta Feedback…: the simulator has no Mail app, so the card shows the address and Copy.
+        // Send Beta Feedback…: the simulator has no Mail app, so the card shows the address and Copy. A build made
+        // without an address (Config/Local.xcconfig absent, brief 166) shows the card with TestFlight's way only.
         openMenu()
         element("profile-menu-feedback").tap()
-        let address = element("betaFeedbackAddress")
-        XCTAssertTrue(address.waitForExistence(timeout: 8), "the no-mail-app card")
-        XCTAssertEqual(address.label, "feedback@example.com")
-        let copy = element("betaFeedbackCopy")
-        XCTAssertTrue(copy.exists)
-        copy.tap()
-        XCTAssertTrue(app.buttons["Copied"].waitForExistence(timeout: 3) || copy.label.contains("Copied"))
-        snapshot("4 Feedback card")
         let feedbackDone = element("betaFeedbackDone")
+        XCTAssertTrue(feedbackDone.waitForExistence(timeout: 8), "the no-mail-app card")
+        let address = element("betaFeedbackAddress")
+        let copy = element("betaFeedbackCopy")
+        if address.exists {
+            XCTAssertTrue(address.label.contains("@"), address.label)
+            XCTAssertTrue(copy.exists)
+            copy.tap()
+            XCTAssertTrue(app.buttons["Copied"].waitForExistence(timeout: 3) || copy.label.contains("Copied"))
+        } else {
+            XCTAssertFalse(copy.exists, "no address, nothing to copy")
+        }
+        snapshot("4 Feedback card")
         feedbackDone.tap()
         XCTAssertTrue(feedbackDone.waitForNonExistence(timeout: 5))
 

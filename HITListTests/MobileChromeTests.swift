@@ -338,8 +338,8 @@ final class MobileChromeTests: XCTestCase {
             BrowseProfileButton.fit(name: name, maxWidth: width, width: tenPerCharacter)
         }
         XCTAssertEqual(fit("George"), .name("George"))
-        XCTAssertEqual(fit("George"), .name("George"), "too long: the first name")
-        XCTAssertEqual(fit("George", 150), .name("George"), "15 characters: fits exactly")
+        XCTAssertEqual(fit("George Thornton"), .name("George"), "too long: the first name")
+        XCTAssertEqual(fit("George Thornton", 150), .name("George Thornton"), "15 characters: fits exactly")
         XCTAssertEqual(fit("Bartholomew Fitzgerald"), .avatarOnly, "not even the first name fits")
         XCTAssertEqual(fit("  George  "), .name("George"), "trimmed")
         XCTAssertEqual(fit(nil, 130), .prompt("Add your name"), "no profile yet")
@@ -354,14 +354,14 @@ final class MobileChromeTests: XCTestCase {
         let long = BrowseProfileButton.textWidth("Alexandria")
         XCTAssertGreaterThan(short, 0)
         XCTAssertGreaterThan(long, short)
-        // Measured on an iPhone 17 (2026-11-04): "George Tra" (80 pt) kept Browse's New and gear, "George
-        // Tram" (94 pt) pushed the gear into a "…" overflow. The room leaves a margin for an iPhone 16.
+        // Measured on an iPhone 17 (2026-11-04): the name's first ten characters (80 pt) kept Browse's New and gear, its
+        // first eleven (94 pt) pushed the gear into a "…" overflow. The room leaves a margin for an iPhone 16.
         func real(_ name: String?) -> BrowseProfileButton.Fit {
             BrowseProfileButton.fit(name: name, maxWidth: BrowseProfileButton.maxNameWidth, width: BrowseProfileButton.textWidth)
         }
         XCTAssertLessThan(BrowseProfileButton.maxNameWidth, 80)
         XCTAssertEqual(real("George"), .name("George"))
-        XCTAssertEqual(real("George"), .name("George"))
+        XCTAssertEqual(real("George Thornton"), .name("George"))
         XCTAssertEqual(real(nil), .prompt("Add name"))
     }
     #endif

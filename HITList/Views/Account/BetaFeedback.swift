@@ -7,10 +7,27 @@ import UIKit
 // and a short footer (version and build, device model, system, platform). The footer never carries anything
 // from the store: no task, name or id. Where no mail app can open it (an iPhone without Mail), a small card
 // shows the address with a Copy button, and one line about TestFlight's own screenshot feedback.
+//
+// The address is not in the source (brief 166: the repository is public). It is the build setting
+// HIT_FEEDBACK_ADDRESS (Config/HITList.xcconfig, set on the release Mac by the untracked Config/Local.xcconfig),
+// read from the Info.plist's HITFeedbackAddress. A build without it (CI, anyone else's clone) has no address: the
+// row opens the card at once, and the card offers TestFlight's own feedback only.
 
-/// The feedback mail. Pure, so tests pin the address, the words and the encoding.
+/// The feedback mail. Pure, so tests pin the address's reading, the words and the encoding.
 enum BetaFeedback {
-    static let address = "feedback@example.com"
+    /// The Info.plist key the build setting reaches the app by.
+    static let infoKey = "HITFeedbackAddress"
+
+    /// This build's address, or nil when it was built without one.
+    static var address: String? { address(in: Bundle.main.infoDictionary) }
+
+    /// The address an Info.plist holds: nil when the key is missing, empty, an unexpanded `$(…)`, or not an address.
+    static func address(in info: [String: Any]?) -> String? {
+        guard let raw = info?[infoKey] as? String else { return nil }
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty, !value.hasPrefix("$("), value.contains("@") else { return nil }
+        return value
+    }
 
     /// What the mail says about this build and device, and nothing else.
     struct Footer: Equatable {
@@ -55,9 +72,9 @@ enum BetaFeedback {
         "\n\n\n-- \n" + footer.lines.joined(separator: "\n")
     }
 
-    /// `mailto:feedback@example.com?subject=…&body=…`, everything outside RFC 3986's unreserved characters
+    /// `mailto:<address>?subject=…&body=…`, everything outside RFC 3986's unreserved characters
     /// percent-encoded (spaces as %20: Mail shows a "+" as a plus).
-    static func mailURL(_ footer: Footer) -> URL {
+    static func mailURL(_ footer: Footer, to address: String) -> URL {
         let query = "subject=\(encode(subject(footer)))&body=\(encode(body(footer)))"
         // Every piece is ASCII once encoded, so the URL always parses.
         return URL(string: "mailto:\(address)?\(query)")!
@@ -77,7 +94,16 @@ enum BetaFeedback {
     static let testFlightLine = "Or take a screenshot in HITList and tap Share Beta Feedback to send it through TestFlight."
     #endif
 
+    /// The card's TestFlight line: beside an address, "Or …"; without one it is the only way, so no "Or".
+    static func testFlightLine(hasAddress: Bool) -> String {
+        guard !hasAddress, testFlightLine.hasPrefix("Or ") else { return testFlightLine }
+        let line = testFlightLine.dropFirst("Or ".count)
+        return line.prefix(1).uppercased() + line.dropFirst()
+    }
+
     static let cardTitle = "Send Beta Feedback"
+    /// The card's words in a build made without an address.
+    static let cardMessageWithoutAddress = "This build sends its feedback through TestFlight."
     #if os(macOS)
     /// The Mac never opens Mail for this (George, 2026-11-05: "I hate when clicking a button sends you to mail"):
     /// the address goes to the clipboard and this card says so.
@@ -98,12 +124,17 @@ struct SendBetaFeedbackAction {
 
     @MainActor
     func callAsFunction() {
-        if BetaFeedback.copiesInsteadOfMail {
-            Diagnostics.copy(BetaFeedback.address)
+        // A build made without an address: the card at once, which then offers TestFlight's own feedback only.
+        guard let address = BetaFeedback.address else {
             onNoMailApp()
             return
         }
-        openURL(BetaFeedback.mailURL(.current)) { accepted in
+        if BetaFeedback.copiesInsteadOfMail {
+            Diagnostics.copy(address)
+            onNoMailApp()
+            return
+        }
+        openURL(BetaFeedback.mailURL(.current, to: address)) { accepted in
             if !accepted { onNoMailApp() }
         }
     }
@@ -113,6 +144,8 @@ struct SendBetaFeedbackAction {
 /// and iPad, a small sheet on iPhone (`betaFeedbackCard(isPresented:)`).
 struct BetaFeedbackCard: View {
     var onDone: () -> Void
+    /// This build's address; nil in a build made without one, and the card then shows TestFlight's way only.
+    var address: String? = BetaFeedback.address
     /// On the Mac the address was copied as the card opened.
     @State private var copied = BetaFeedback.copiesInsteadOfMail
 
@@ -129,36 +162,38 @@ struct BetaFeedbackCard: View {
                     .keyboardShortcut(.cancelAction)
                     .accessibilityIdentifier("betaFeedbackDone")
             }
-            Text(BetaFeedback.cardMessage)
+            Text(address == nil ? BetaFeedback.cardMessageWithoutAddress : BetaFeedback.cardMessage)
                 .font(HITType.callout)
                 .foregroundStyle(Theme.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: HITSpacing.s) {
-                Text(BetaFeedback.address)
-                    .font(HITType.body.weight(.semibold))
-                    .foregroundStyle(HITColor.text)
-                    .textSelection(.enabled)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                    .accessibilityIdentifier("betaFeedbackAddress")
-                Spacer(minLength: HITSpacing.s)
-                Button {
-                    Diagnostics.copy(BetaFeedback.address)
-                    copied = true
-                } label: {
-                    Label(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc")
+            if let address {
+                HStack(spacing: HITSpacing.s) {
+                    Text(address)
+                        .font(HITType.body.weight(.semibold))
+                        .foregroundStyle(HITColor.text)
+                        .textSelection(.enabled)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .accessibilityIdentifier("betaFeedbackAddress")
+                    Spacer(minLength: HITSpacing.s)
+                    Button {
+                        Diagnostics.copy(address)
+                        copied = true
+                    } label: {
+                        Label(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc")
+                    }
+                    .buttonStyle(HITButtonStyle(.secondary, size: .small))
+                    .accessibilityIdentifier("betaFeedbackCopy")
                 }
-                .buttonStyle(HITButtonStyle(.secondary, size: .small))
-                .accessibilityIdentifier("betaFeedbackCopy")
+                .padding(.horizontal, HITSpacing.m)
+                .padding(.vertical, HITSpacing.s)
+                .background(RoundedRectangle(cornerRadius: HITRadius.field, style: .continuous).fill(Theme.surface))
             }
-            .padding(.horizontal, HITSpacing.m)
-            .padding(.vertical, HITSpacing.s)
-            .background(RoundedRectangle(cornerRadius: HITRadius.field, style: .continuous).fill(Theme.surface))
             HStack(alignment: .firstTextBaseline, spacing: HITSpacing.s) {
                 Image(systemName: "camera.viewfinder")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Theme.secondaryText)
-                Text(BetaFeedback.testFlightLine)
+                Text(BetaFeedback.testFlightLine(hasAddress: address != nil))
                     .font(HITType.caption)
                     .foregroundStyle(Theme.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
@@ -190,7 +225,13 @@ extension View {
 }
 
 #Preview("Beta feedback card") {
-    BetaFeedbackCard(onDone: {})
+    BetaFeedbackCard(onDone: {}, address: "you@example.com")
+        .frame(width: 340)
+        .preferredColorScheme(.dark)
+}
+
+#Preview("Beta feedback card, no address") {
+    BetaFeedbackCard(onDone: {}, address: nil)
         .frame(width: 340)
         .preferredColorScheme(.dark)
 }
