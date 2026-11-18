@@ -217,7 +217,7 @@ final class SyncCoreFaultTests: XCTestCase {
     func testABackupThatFailsSaysSoPlainly() async {
         let device = await synced([task("A", "Milk")])
         device.host.backupError = BackupBroke()
-        await device.transport.deliver(.account(.signedOut(previous: "me")))
+        await device.transport.deliver(.account(.switched(previous: "me", current: "other")))
         let status = await device.status()
         let note = status.lastError ?? ""
         XCTAssertEqual(note, "Nothing was removed from this device: the backup failed.")
@@ -328,38 +328,42 @@ final class SyncCoreFaultTests: XCTestCase {
         XCTAssertEqual(status.hold, .noAccount)
     }
 
-    /// A sign-out stays as it is built: what iCloud held leaves after a backup; what it never held stays.
-    func testASignOutStillKeepsWhatICloudNeverHeld() async {
+    /// Brief 165: a sign-out keeps everything, what iCloud held and what it never held, and asks for no backup.
+    func testASignOutKeepsEverything() async {
         let device = await onAccount()
         await device.transport.deliver(.account(.signedOut(previous: "me")))
         let a = await device.item(taskKey("A"))
         let b = await device.item(taskKey("B"))
-        XCTAssertNil(a)
+        XCTAssertNotNil(a)
         XCTAssertNotNil(b)
-        XCTAssertEqual(device.host.backups, [.signedOut])
+        XCTAssertEqual(device.host.backups, [])
     }
 
-    /// A sign-out, then a sign-in to another account: what the sign-out left stays (the sign-out is as it was
-    /// built), and the switch's backup names both accounts, so the previous account's backups are set aside.
-    func testASignInToAnotherAccountAfterASignOutKeepsWhatTheSignOutLeftAndSetsTheBackupsAside() async {
+    /// A sign-out, then a sign-in to another account: the switch. Every item leaves after the backup, which names
+    /// both accounts, so the previous account's backups are set aside.
+    func testASignInToAnotherAccountAfterASignOutIsTheSwitch() async {
         let device = await onAccount()
         await device.transport.deliver(.account(.signedOut(previous: "me")))
         await device.transport.deliver(.account(.signedIn(current: "other")))
+        let a = await device.item(taskKey("A"))
         let b = await device.item(taskKey("B"))
-        XCTAssertNotNil(b)
-        XCTAssertEqual(device.host.switches.last, "accountSwitched me → other")
+        XCTAssertNil(a)
+        XCTAssertNil(b, "an item iCloud never held is the first account's too: it leaves with the backup")
+        XCTAssertEqual(device.host.switches, ["accountSwitched me → other"])
         let status = await device.status()
         XCTAssertNil(status.hold)
     }
 
-    /// A sign-out, then a sign-in to the same account: joined, nothing removed, no switch.
+    /// A sign-out, then a sign-in to the same account: joined, nothing removed, no backup.
     func testASignInToTheSameAccountAfterASignOutIsAJoin() async {
         let device = await onAccount()
         await device.transport.deliver(.account(.signedOut(previous: "me")))
         await device.transport.deliver(.account(.signedIn(current: "me")))
+        let a = await device.item(taskKey("A"))
         let b = await device.item(taskKey("B"))
+        XCTAssertNotNil(a)
         XCTAssertNotNil(b)
-        XCTAssertEqual(device.host.switches, ["signedOut me → -"])
+        XCTAssertEqual(device.host.switches, [])
         let status = await device.status()
         XCTAssertNil(status.hold)
     }

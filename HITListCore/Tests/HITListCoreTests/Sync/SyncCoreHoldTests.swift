@@ -18,18 +18,18 @@ final class SyncCoreHoldTests: XCTestCase {
 
     // MARK: noAccount (T12)
 
-    func testSignOutWritesABackupThenRemovesWhatWasSyncedAndHolds() async {
+    /// Brief 165: a sign-out removes nothing and forgets nothing (`SyncCoreSignOutTests` has the rest).
+    func testSignOutKeepsEverythingAndHolds() async {
         let device = await synced([task("A", "Milk"), task("B", "Bread")])
         await device.store.put(task("N", "Never synced"))
-        device.host.backupError = nil
         await device.transport.deliver(.account(.signedOut(previous: "alice")))
-        XCTAssertEqual(device.host.backups, [.signedOut])
-        let a = await device.item(taskKey("A"))
-        XCTAssertNil(a)
-        let n = await device.item(taskKey("N"))
-        XCTAssertNotNil(n, "an item iCloud never held is the person's only copy: kept")
+        XCTAssertEqual(device.host.backups, [])
+        for name in ["A", "B", "N"] {
+            let item = await device.item(taskKey(name))
+            XCTAssertNotNil(item, name)
+        }
         let entries = try? await device.ledger.entries()
-        XCTAssertEqual(entries?.count, 0, "the account's memory is forgotten")
+        XCTAssertEqual(entries?.filter { $0.base != nil }.count, 3, "A, B and the meta: the memory is kept")
         let status = await device.status()
         XCTAssertEqual(status.state, .held(.noAccount))
         let stored = await holdFact(device)
@@ -44,32 +44,33 @@ final class SyncCoreHoldTests: XCTestCase {
         XCTAssertEqual(relaunched.state, .held(.noAccount))
     }
 
-    func testNothingIsRemovedWhenTheBackupFails() async {
+    func testASignOutAsksForNoBackupSoNoneCanFail() async {
         let device = await synced([task("A", "Milk")])
         device.host.backupError = TestHost.BackupFailed()
         await device.transport.deliver(.account(.signedOut(previous: "alice")))
+        XCTAssertEqual(device.host.backups, [])
         let a = await device.item(taskKey("A"))
         XCTAssertNotNil(a)
         let entry = await device.entry(taskKey("A"))
-        XCTAssertNotNil(entry, "the memory stays with the items")
+        XCTAssertNotNil(entry?.base, "the memory stays with the items")
         let status = await device.status()
         XCTAssertEqual(status.state, .held(.noAccount))
-        XCTAssertNotNil(status.lastError)
+        XCTAssertNil(status.lastError)
     }
 
-    func testSigningInLiftsTheHoldAndTheItemsLeftMergeAfresh() async throws {
+    func testSigningInLiftsTheHoldAndAWholeFetchComesFirst() async throws {
         let device = await synced([task("A", "Milk")])
         await device.store.put(task("N", "Never synced"))
         await device.transport.deliver(.account(.signedOut(previous: "alice")))
         await device.transport.deliver(.account(.signedIn(current: "alice")))
         let status = await device.status()
         XCTAssertNil(status.hold)
-        XCTAssertFalse(status.firstFetchDone, "a memory begun again: first a whole fetch")
+        XCTAssertFalse(status.firstFetchDone, "a whole fetch first: the zone may have been lost meanwhile")
         let none = await device.pending()
         XCTAssertEqual(none, [])
         await device.deliverFetch([cloud(task("A", "Milk"), "c9"), meta()])
         let a = await device.item(taskKey("A"))
-        XCTAssertNotNil(a, "it returns at sign-in")
+        XCTAssertNotNil(a, "it never left")
         let pending = await device.pending()
         XCTAssertEqual(pending, [.save(taskKey("N"))])
     }
@@ -533,10 +534,11 @@ final class SyncCoreHoldTests: XCTestCase {
         XCTAssertTrue(again.isSynced)
     }
 
-    func testTheHostHearsWhatASignOutRemoved() async {
+    func testTheHostHearsOfNoWriteAtASignOut() async {
         let device = await synced([task("A", "Milk"), task("B", "Bread")])
+        let before = device.host.written
         await device.transport.deliver(.account(.signedOut(previous: "alice")))
-        XCTAssertEqual(device.host.written, [taskKey("A"), taskKey("B")])
+        XCTAssertEqual(device.host.written, before, "nothing was written on the device")
         XCTAssertEqual(device.host.statuses.last?.state, .held(.noAccount))
     }
 

@@ -53,6 +53,12 @@ public actor SyncCore: SyncTransportDelegate {
     /// compared, and at the end of every fetch. Their keys are kept as a fact too (`unsettledFact`), so that a launch
     /// which finds any asks for every record again: the bookmark has moved past them.
     var unsettled: [SyncKey: CloudRecord] = [:]
+    /// A sign-in to the account the device was signed out of, whose whole fetch has not finished (`rejoin`). Kept as
+    /// a fact: a launch that finds it asks for every record again, because the check at that fetch's end
+    /// (`checkRejoin`) needs every record of one whole fetch.
+    var rejoining = false
+    /// The keys that whole fetch brought so far (not kept: a launch fetches everything again).
+    var rejoinSeen: Set<SyncKey> = []
 
     // MARK: Working state, not kept
 
@@ -117,6 +123,7 @@ public actor SyncCore: SyncTransportDelegate {
     static let switchFact = "switchTo"
     static let epochFact = "sentEpoch"
     static let unsettledFact = "unsettled"
+    static let rejoinFact = "rejoin"
     static let metaKey = SyncKey(type: SyncSchema.metaType, name: SyncSchema.metaName)
     /// How many times a record the person changed between the read and the write is decided again within one event
     /// before it is set aside for the next.
@@ -220,8 +227,9 @@ public actor SyncCore: SyncTransportDelegate {
                     // An account switch whose backup failed: tried again.
                     await retrySwitch(to: next)
                 } else if let next = joinTo {
-                    // A sign-in the ledger could not take: taken again.
-                    await joinAccount(next)
+                    // A sign-in the ledger could not take: taken again, decided afresh (back to the account it was
+                    // signed out of is a rejoin, brief 165).
+                    await accountChanged(.signedIn(current: next))
                 }
             }
             await compare(nil)
@@ -347,6 +355,7 @@ public actor SyncCore: SyncTransportDelegate {
             case Self.refetchFact: refetch = value != nil
             case Self.switchFact: switchTo = value.map { String(decoding: $0, as: UTF8.self) }
             case Self.epochFact: sentEpoch = value.flatMap { Int(String(decoding: $0, as: UTF8.self)) } ?? 0
+            case Self.rejoinFact: rejoining = value != nil
             default: break
             }
         }
@@ -367,6 +376,7 @@ public actor SyncCore: SyncTransportDelegate {
             let aside = try await ledger.fact(Self.unsettledFact)
             let next = try await ledger.fact(Self.switchFact)
             let epoch = try await ledger.fact(Self.epochFact)
+            let rejoin = try await ledger.fact(Self.rejoinFact)
             sentEpoch = epoch.flatMap { Int(String(decoding: $0, as: UTF8.self)) } ?? 0
             try await loadRememberedSends()
             unanswered = [:]
@@ -375,7 +385,10 @@ public actor SyncCore: SyncTransportDelegate {
             waits = Dictionary(waitList.map { ($0.key, $0) }, uniquingKeysWith: { _, last in last })
             firstFetchDone = first != nil
             account = owner.flatMap { String(data: $0, encoding: .utf8) }
-            refetch = refetch || again != nil || aside != nil
+            rejoining = rejoin != nil
+            rejoinSeen = []
+            // A sign-in's whole fetch that had not finished: every record is asked for again.
+            refetch = refetch || again != nil || aside != nil || rejoining
             switchTo = next.map { String(decoding: $0, as: UTF8.self) }
             if let held {
                 hold = try? JSONDecoder().decode(SyncHold.self, from: held)

@@ -97,14 +97,14 @@ extension SyncCore {
     }
 
     /// Compares `keys` (nil: everything) and makes the transport's list match. Deletions the store wrote down are
-    /// noted first (while held too); then, unless held (a full iCloud excepted: the count is kept and nothing is
-    /// added), each item is compared with its base. The ledger is written first, then the list: a crash in between
-    /// leaves a list the next compare puts right. `launch`: the start's own whole compare, which also clears notes left
+    /// noted first (while held too); then, unless held (a full iCloud, one not ready and a sign-out excepted: the
+    /// count is kept and nothing is added, `SyncHold.countsWhileHeld`), each item is compared with its base. The
+    /// ledger is written first, then the list: a crash in between leaves a list the next compare puts right. `launch`: the start's own whole compare, which also clears notes left
     /// for rows that are here (`noteDeletions`).
     func compare(_ asked: Set<SyncKey>?, launch: Bool = false) async {
         guard loaded else { return }
         guard await noteDeletions(clearingLeftovers: launch && asked == nil) else { return }
-        if let hold, !hold.triedOnReturn { return }
+        if let hold, !hold.countsWhileHeld { return }
         // The deletions just noted are looked at too, whatever was asked for.
         let keys = asked.map { $0.union(noted) }
         noted = []

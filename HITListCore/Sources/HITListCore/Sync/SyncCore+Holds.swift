@@ -124,15 +124,21 @@ extension SyncCore {
         switch change {
         case .signedOut(let previous):
             log("Signed out of iCloud (\(previous))")
-            _ = await leaveAccount(reason: .signedOut)
+            await signOut()
         case .switched(let previous, let current):
             log("iCloud account switched (\(previous) to \(current))")
             await switchAccount(to: current)
         case .signedIn(let current):
             log("Signed in to iCloud (\(current))")
             if let account, account != current {
-                // Another account came while the app was not running: as a switch.
+                // Another account came while the app was not running, or after a sign-out: as a switch.
                 await switchAccount(to: current)
+            } else if account == current, hold == .noAccount || heldUnder == .noAccount, switchTo == nil, hasMemory {
+                // Back to the account it was signed out of (brief 165): the memory carries on. The transport has
+                // forgotten its bookmark (T12), so a whole fetch comes first; what changed here and in iCloud meanwhile
+                // then settles three ways, as after any time offline.
+                log("Signed in again to the account it was signed out of: the memory is kept; a whole fetch first")
+                await rejoin(current)
             } else if hasMemory, account == nil || account == current {
                 // A sign-in to the ledger's own account means the transport's state was lost (T12): a fresh bookmark
                 // never tells of a zone lost meanwhile, so the bases cannot be trusted. (A memory nobody's account
@@ -150,58 +156,87 @@ extension SyncCore {
         }
     }
 
-    /// The account's items leave the device, as they did under the mirror: held first (nothing is sent from now
-    /// on, and a missing item is not read as a deletion), then the backup, then the memory forgotten, and only then
-    /// the items that iCloud held removed. A crash before the removal leaves items with no memory of them, which
-    /// merge afresh at the next sign-in; the other order would leave a memory of items that are gone, which the next
-    /// compare would read as deletions to send. False when the backup failed: nothing was removed.
-    ///
-    /// At a switch to another account (`joining`) from one the device is signed in to, every item leaves, those
-    /// iCloud never held too, after the same backup: they are the previous account's, and would otherwise go to the
-    /// next account's iCloud (brief 160, review 147 F11). A sign-out removes only what iCloud held, as the mirror did
-    /// (George decides separately whether a sign-out should keep everything), and what it left stays on the device
-    /// at a later sign-in, to whichever account. At every switch the host's backup names both accounts, so that it
-    /// sets the previous account's backups aside itself, in this order (147 F6).
-    func leaveAccount(reason: SyncRemovalReason, joining current: String? = nil) async -> Bool {
-        // Signed in to the account it leaves (or a switch from one tried again after its backup failed), not one it
-        // was already signed out of.
-        let signedIn = hold != .noAccount || switchTo != nil
-        await enterHold(.noAccount)
-        var leaving = Set(entries.values.filter { $0.base?.isDeleted == false }.map(\.key))
-        if current != nil, signedIn {
+    /// A sign-out (brief 165; George, 2026-11-18: "definitely keep tasks on the device after sign-out if possible").
+    /// Nothing leaves the device and nothing is forgotten: the ledger keeps its bases, the account it was signed out of
+    /// and the deletions not sent yet. Held, so nothing is sent or fetched; the device is still compared, so what
+    /// changes waits and is counted. A switch that was waiting on a failed backup is dropped: the next sign-in says
+    /// which account comes, and a different one is a switch again.
+    func signOut() async {
+        joinTo = nil
+        if switchTo != nil {
+            var write = LedgerWrite()
+            write.facts.updateValue(nil, forKey: Self.switchFact)
             do {
-                leaving.formUnion(try await store.records().map(\.key))
+                try await commit(write)
             } catch {
-                await storeFailed(error)
-                return false
+                await fail(SyncFailureWords.recordsNotSaved, error)
+                return
             }
         }
-        if !leaving.isEmpty || current != nil {
-            guard await backup(reason, from: account, to: current) else { return false }
+        await enterHold(.noAccount)
+        log("Nothing leaves this device while signed out; changes wait for the sign-in")
+        await compare(nil)
+    }
+
+    /// The sign-in to the account the device was signed out of: the hold lifted, the memory kept, but nothing sent
+    /// before a whole fetch has finished (`firstFetchDone` cleared, `rejoinFact` kept), because iCloud may have lost
+    /// the zone meanwhile and a bookmark that starts afresh never says so. At the end of that fetch a base whose record
+    /// it did not bring is forgotten (`checkRejoin`): the item goes again as new, never deleted here.
+    func rejoin(_ current: String) async {
+        var write = LedgerWrite()
+        write.facts.updateValue(nil, forKey: LedgerFact.firstFetchDone)
+        write.facts[Self.rejoinFact] = Data([1])
+        do {
+            try await commit(write)
+        } catch {
+            joinTo = current
+            await fail(SyncFailureWords.recordsNotSaved, error)
+            return
         }
-        // A deletion made here and not sent yet is the person's, as every one is (section 7): across a sign-out it is
-        // kept, with the account it belongs to, and goes at the next sign-in to that account (a sign-in to another
-        // drops it, as a switch: `accountChanged`). Round 32, account seed 362: a Group deleted just before a
-        // sign-out came back at the sign-in.
-        let unsent = reason == .signedOut ? entries.values.filter { $0.deletedHereAt != nil }.sorted { $0.key < $1.key } : []
-        let owner = account
+        rejoinSeen = []
+        await joinAccount(current)
+    }
+
+    /// The end of the whole fetch after a sign-in to the same account (`rejoin`), added to the write that marks the
+    /// first fetch done: every entry with a base whose record that fetch did not bring, and that the transport does not
+    /// owe, is forgotten. iCloud does not hold it: an item here goes again as new (M2), one not here is nothing (M11).
+    /// Absence never deletes anything. The keys forgotten.
+    func checkRejoin(into write: inout LedgerWrite) -> [SyncKey] {
+        guard rejoining else { return [] }
+        let stale = entries.values.filter { $0.base != nil && !rejoinSeen.contains($0.key) && !owedKeys.contains($0.key) }
+            .map(\.key).sorted()
+        write.remove += stale
+        write.facts.updateValue(nil, forKey: Self.rejoinFact)
+        return stale
+    }
+
+    /// At a switch to another account every item leaves the device, those iCloud never held too, after a backup
+    /// that names both accounts (so the host sets the previous account's backups aside itself, 147 F6): they are the
+    /// previous account's, what was changed while signed out among them, and would otherwise go to the next account's
+    /// iCloud (brief 160, review 147 F11). In this order: held (nothing is sent from now on, a missing item is not
+    /// read as a deletion), the backup, the memory forgotten, and only then the items removed. A crash before the
+    /// removal leaves items with no memory of them; the other order would leave a memory of items that are gone. False
+    /// when the backup failed: nothing was removed.
+    func leaveAccount(joining current: String) async -> Bool {
+        await enterHold(.noAccount)
+        let leaving: Set<SyncKey>
+        do {
+            leaving = Set(entries.values.filter { $0.base?.isDeleted == false }.map(\.key))
+                .union(try await store.records().map(\.key))
+        } catch {
+            await storeFailed(error)
+            return false
+        }
+        guard await backup(.accountSwitched, from: account, to: current) else { return false }
         do {
             try await ledger.reset()
             forgetCache(keepAccount: false)
-            // At a sign-out the account it was is kept too (brief 160): a sign-in to another account later is then
-            // a switch, whose backup sets the previous account's backups aside (`SyncHost`); to the same one, a join.
-            if let owner, reason == .signedOut {
-                var write = LedgerWrite()
-                write.facts[LedgerFact.account] = Data(owner.utf8)
-                write.upsert = unsent.map { LedgerEntry(key: $0.key, base: nil, system: nil, deletedHereAt: $0.deletedHereAt) }
-                try await commit(write)
-            }
         } catch {
             await fail(SyncFailureWords.recordsNotSaved, error)
             return false
         }
         await enterHold(.noAccount)
-        await removeHere(leaving, why: reason.rawValue)
+        await removeHere(leaving, why: SyncRemovalReason.accountSwitched.rawValue)
         return true
     }
 
@@ -209,7 +244,7 @@ extension SyncCore {
     /// fails, the brain stays held with the account it is to join remembered (`switchFact`), and `resume()` or the
     /// next start tries again: the transport has moved on and will not say it twice.
     func switchAccount(to current: String) async {
-        if await leaveAccount(reason: .accountSwitched, joining: current) {
+        if await leaveAccount(joining: current) {
             await joinAccount(current)
         } else {
             var write = LedgerWrite()
@@ -416,6 +451,8 @@ extension SyncCore {
         unanswered = [:]
         unsettled = [:]
         switchTo = nil
+        rejoining = false
+        rejoinSeen = []
         // A ledger reset takes every fact with it, the remembered sends and their epoch among them.
         remembered = [:]
         sentEpoch = 0

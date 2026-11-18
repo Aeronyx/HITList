@@ -31,6 +31,8 @@ public enum SyncInvariant: String, Hashable, Sendable, CaseIterable, Comparable 
     /// Accounts apart (section 10, brief 145): each account's iCloud holds only items that belong to it (made there,
     /// made signed out, or carried there by a device that left another account holding items iCloud never held).
     case accountsApart = "I10"
+    /// Kept at a sign-out (brief 165): after a sign-out every item that was on the device is there, as it was.
+    case keptAtSignOut = "I11"
 
     public static func < (a: SyncInvariant, b: SyncInvariant) -> Bool {
         (Int(a.rawValue.dropFirst()) ?? 0) < (Int(b.rawValue.dropFirst()) ?? 0)
@@ -166,10 +168,10 @@ public struct SimIntent: Sendable {
 
     // MARK: Accounts (section 10, brief 145)
     //
-    // What the design says of a sign-out and an account switched (section 10, decision 2): what was synced leaves the
-    // device at sign-out, after a backup; it returns at sign-in; an account switched is a sign-out then a sign-in;
-    // items iCloud never held stay on the device (so they go to whichever account it joins next); nothing of one
-    // account reaches another. The model: every item has the account it belongs to: the one its device was signed in
+    // What the design says of a sign-out and an account switched (section 10, decision 2, as brief 165 changed it):
+    // nothing leaves the device at a sign-out and what is done there meanwhile is the account's it was signed out of;
+    // a sign-in to that account carries on; a sign-in to another is a switch, and every item leaves with the backup;
+    // nothing of one account reaches another. The model: every item has the account it belongs to: the one its device was signed in
     // to when a person made it (none: signed out, it goes where the device signs in next), moved to the next account
     // when its device leaves an account holding it while iCloud never held it ("travelling", read from the device's
     // ledger at the moment: no living base). I2 and I3 judge only the run's account's own items (`foreign` skips the
@@ -190,16 +192,24 @@ public struct SimIntent: Sendable {
     /// holds no living base for: they stay on the device, and go to `to`. At a switch from an account the device is
     /// signed in to (`leaving`), they leave the device with the rest instead, after a backup, and belong to no
     /// account (`leftWithTheBackup`).
+    ///
+    /// Brief 165: a sign-out moves nothing. The items stay on the device with the account it was signed out of, what
+    /// a person does there meanwhile is that account's, and a sign-in back to it is no move at all; a sign-in to
+    /// another account is a switch (`leaving`).
     public mutating func recordAccount(step: Int, device: String, to: String?, travelling: [SyncKey], leaving: Bool = false) {
         let from = accountOf(device, at: step)
         accountChanges.append((step, device, to))
+        guard let to, leaving || from != to else { return }
         for key in travelling { travels[key, default: []].append((step, from, leaving ? Self.leftWithTheBackup : to)) }
     }
 
-    /// The account `device` was signed in to at `step` (nil: signed out).
+    /// The account whose items `device` held at `step`: the one it was signed in to, or, signed out, the one it was
+    /// signed out of (brief 165: nothing leaves at a sign-out). Nil only for a device that never signed in.
     public func accountOf(_ device: String, at step: Int) -> String? {
         var current: String? = account
-        for change in accountChanges where change.device == device && change.step <= step { current = change.account }
+        for change in accountChanges where change.device == device && change.step <= step {
+            if let next = change.account { current = next }
+        }
         return current
     }
 

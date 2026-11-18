@@ -312,10 +312,10 @@ final class SyncCoreSimulationTests: XCTestCase {
         print("SyncCore, the spread: \(tally)")
     }
 
-    /// Section 10, as the rig's model now says it (brief 145): at a sign-out what was synced leaves the device after a
-    /// backup and items iCloud never held stay; they go to whichever account the device signs in to next; what was
-    /// synced comes back at the sign-in to its own account; nothing of one account reaches another (I10).
-    func testSignOutAndAnotherAccount_whatWasSyncedLeavesAndComesBack_nothingCrossesAccounts() async {
+    /// Section 10, as brief 165 changed it: at a sign-out nothing leaves the device, what iCloud never held included;
+    /// a sign-in to another account is the switch, every item leaving with the backup; what was synced comes back at
+    /// the sign-in to its own account; nothing of one account reaches another (I10).
+    func testSignOutAndAnotherAccount_nothingLeavesAtTheSignOut_nothingCrossesAccounts() async {
         let sim = SyncSimulation(seed: 1, brain: SyncCoreSimBrain.make)
         await sim.addDevice("A")
         let t1 = SyncKey(type: "TaskItem", name: "T1"), t2 = SyncKey(type: "TaskItem", name: "T2")
@@ -324,20 +324,45 @@ final class SyncCoreSimulationTests: XCTestCase {
                         .fault("A", .account(nil))])
         let afterSignOut = await sim.device("A")?.store.record(t1)
         let kept = await sim.device("A")?.store.record(t2)
-        XCTAssertNil(afterSignOut, "what was synced left the device")
+        XCTAssertNotNil(afterSignOut, "what was synced stays on the device")
         XCTAssertNotNil(kept, "an item iCloud never held stays")
-        let backups = (await sim.device("A")?.brain as? SyncCoreSimBrain)?.host.backups ?? []
-        XCTAssertEqual(backups, [.signedOut], "a backup first")
+        let host = (await sim.device("A")?.brain as? SyncCoreSimBrain)?.host
+        XCTAssertEqual(host?.backups ?? [], [], "nothing removed, no backup")
         await sim.play([.fault("A", .account("alice-other")), .fault("A", .network(up: true)), .sync("A"), .sync("A")])
+        XCTAssertEqual(host?.backups ?? [], [.accountSwitched], "the switch's backup first")
         let other = await sim.cloud.records(account: "alice-other").map(\.key)
-        XCTAssertEqual(other.filter { $0.type == "TaskItem" }, [t2], "it went with the device to the next account")
+        XCTAssertEqual(other.filter { $0.type == "TaskItem" }, [], "nothing of the first account reached the other")
         await sim.play([.fault("A", .account(FakeCloud.defaultAccount)), .sync("A"), .sync("A")])
         let back = await sim.device("A")?.store.record(t1)
         XCTAssertNotNil(back, "what was synced came back at the sign-in")
         let gone = await sim.device("A")?.store.record(t2)
-        XCTAssertNil(gone, "the other account's item left with its account")
+        XCTAssertNil(gone, "what iCloud never held left with the backup at the switch")
         let alice = await sim.cloud.records().map(\.key)
         XCTAssertEqual(alice.filter { $0.type == "TaskItem" }, [t1], "nothing of the other account reached this one")
+        let findings = await sim.check()
+        XCTAssertEqual(findings, [])
+    }
+
+    /// Brief 165: what changes on either side while a device is signed out is not lost at its sign-in to the same
+    /// account. A edits T's title and deletes U signed out; B, signed in, edits T's notes and makes V.
+    func testASignOutAndBackToTheSameAccountLosesNothingMadeOnEitherSide() async {
+        let sim = await Self.twoDevices([Self.task("T", "task"), Self.task("U", "doomed")])
+        let t = SyncKey(type: "TaskItem", name: "T"), u = SyncKey(type: "TaskItem", name: "U")
+        await sim.play([.fault("A", .account(nil)), .advance(milliseconds: 10),
+                        .act("A", .edit(t, ["title": .string("renamed signed out"), "updatedAt": .millis(sim.clock.millis + 10)])),
+                        .act("A", .delete(u)), .sync("A"),
+                        .act("B", .edit(t, ["notes": .string("noted on B"), "updatedAt": .millis(sim.clock.millis + 20)])),
+                        .act("B", .put(Self.task("V", "made on B"))), .sync("B"),
+                        .fault("A", .account(FakeCloud.defaultAccount)), .sync("A"), .sync("A"), .sync("B")])
+        for device in ["A", "B"] {
+            let task = await sim.device(device)?.store.record(t)
+            XCTAssertEqual(task?["title"], .string("renamed signed out"), device)
+            XCTAssertEqual(task?["notes"], .string("noted on B"), device)
+            let doomed = await sim.device(device)?.store.record(u)
+            XCTAssertNil(doomed, "deleted while signed out, on \(device)")
+            let v = await held(sim, device, "V")
+            XCTAssertNotNil(v, device)
+        }
         let findings = await sim.check()
         XCTAssertEqual(findings, [])
     }

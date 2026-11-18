@@ -25,6 +25,8 @@ extension SyncCore {
     // MARK: Fetched
 
     func fetched(_ changed: [CloudRecord], removed: [SyncKey]) async {
+        // After a sign-in to the account it was signed out of: what iCloud holds, for the check at the fetch's end.
+        if rejoining { rejoinSeen.formUnion(changed.map(\.key)) }
         if let hold, hold.stopsFetching {
             log("\(changed.count + removed.count) fetched records let go unread while held (\(hold.words)); all will be fetched again")
             await markRefetch()
@@ -75,9 +77,15 @@ extension SyncCore {
         if !firstFetchDone {
             var write = LedgerWrite()
             write.facts[LedgerFact.firstFetchDone] = Data([1])
+            // After a sign-in to the account it was signed out of: what this fetch did not bring is not in iCloud.
+            let stale = checkRejoin(into: &write)
             do {
                 try await commit(write)
+                rejoinSeen = []
                 log("First whole fetch finished: what iCloud lacks can go now")
+                if !stale.isEmpty {
+                    log("\(stale.count) record\(stale.count == 1 ? "" : "s") this device had synced \(stale.count == 1 ? "is" : "are") not in iCloud after the sign-in (the first: \(stale[0])): what is here goes again, nothing is deleted")
+                }
             } catch {
                 await fail(SyncFailureWords.recordsNotSaved, error)
                 return
