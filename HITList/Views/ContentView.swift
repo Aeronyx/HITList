@@ -241,6 +241,9 @@ private struct SplitContent: View {
         .onAppear {
             let popouts = popouts
             focusGuard.allowsTextFocus = { !popouts.state.showsAddButton }
+            #if DEBUG && os(iOS)
+            ResponseProbe.startIfAsked() // brief 164: `-responseProbe YES` times every tap's answer
+            #endif
         }
         #if DEBUG
         // `-focusSearchAtLaunch YES`: the case macOS 27 showed, kept on purpose for screenshots.
