@@ -24,6 +24,7 @@ enum ResponseProbe {
     private static var runs: [(CFTimeInterval, CFTimeInterval)] = []
     private static var pending: [(lift: CFTimeInterval, view: String)] = []
     private static var count = 0
+    private static var restFrom: CFTimeInterval = 0
     private static let file = FileManager.default.temporaryDirectory.appendingPathComponent("response-probe.txt")
 
     static var isAsked: Bool { UserDefaults.standard.bool(forKey: "responseProbe") }
@@ -75,14 +76,27 @@ enum ResponseProbe {
             count += 1
             let line = String(format: "%d %@ %.0f %.0f %.0f %.0f\n", count, first.view, start * 1000, busy * 1000,
                               longest * 1000, settled * 1000)
-            if let handle = try? FileHandle(forWritingTo: file) {
-                handle.seekToEndOfFile()
-                handle.write(Data(line.utf8))
-                try? handle.close()
-            }
-            print("responseProbe", line, terminator: "")
+            write(line)
         }
-        runs.removeAll { $0.1 < now - 5 }
+        // Every 5 s: how much the main thread worked, touched or not (a busy thread at rest answers every tap late).
+        if restFrom == 0 { restFrom = now }
+        if now - restFrom >= 5 {
+            let span = runs.filter { $0.1 > restFrom }
+            let busy = span.reduce(0) { $0 + ($1.1 - max($1.0, restFrom)) }
+            write(String(format: "rest %.1fs busy %.0f longest %.0f runs %d\n", now - restFrom, busy * 1000,
+                         (span.map { $0.1 - $0.0 }.max() ?? 0) * 1000, span.count))
+            restFrom = now
+        }
+        runs.removeAll { $0.1 < now - 7 }
+    }
+
+    private static func write(_ line: String) {
+        if let handle = try? FileHandle(forWritingTo: file) {
+            handle.seekToEndOfFile()
+            handle.write(Data(line.utf8))
+            try? handle.close()
+        }
+        print("responseProbe", line, terminator: "")
     }
 
     private final class Watcher: UIGestureRecognizer, UIGestureRecognizerDelegate {

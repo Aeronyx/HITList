@@ -52,7 +52,7 @@ final class PhoneResponseUITests: XCTestCase {
             pause(4)
 
             timed("browse open \(round)", tap: app.buttons["browseButton"].firstMatch) {
-                self.app.buttons["browse-settings-row"].exists
+                self.app.buttons["settingsButton"].exists
             }
             pause()
             timed("group open \(round)", tap: app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Home")).firstMatch) {
@@ -67,7 +67,7 @@ final class PhoneResponseUITests: XCTestCase {
             pause()
             app.navigationBars.buttons.firstMatch.tap()
             pause()
-            timed("settings open \(round)", tap: app.buttons["browse-settings-row"].firstMatch) {
+            timed("settings open \(round)", tap: app.buttons["settingsButton"].firstMatch) {
                 self.element("settings-profile").exists
             }
             pause()
