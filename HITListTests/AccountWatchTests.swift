@@ -130,5 +130,8 @@ final class AccountWatchTests: XCTestCase {
     func testBannerTexts() {
         XCTAssertEqual(AccountChangeBanner.message(for: .signedOut),
                        "Signed out of iCloud. Your tasks are safe in iCloud and come back when you sign in.")
+        // On the engine a sign-out removes nothing (round 33, brief 165), and the banner says so.
+        XCTAssertEqual(AccountChangeBanner.message(for: .signedOut, onEngine: true),
+                       "Signed out of iCloud. Your tasks stay on this device and sync again when you sign in.")
     }
 }

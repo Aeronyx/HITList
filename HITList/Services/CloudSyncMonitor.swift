@@ -745,8 +745,9 @@ final class CloudSyncMonitor {
         let change = accountWatch.change(from: previous, to: shown, shown: accountNotice, signedOutDismissed: signedOutDismissed)
         setNotice(change.notice)
         if change.forgetsAccount { accountKey = nil }
-        // Signed out (now, or while the app was closed): the reminders name tasks the purge took away.
-        if change.signsOut {
+        // Signed out (now, or while the app was closed): the reminders name tasks the purge took away. On the engine
+        // nothing leaves at a sign-out (round 33, brief 165), so the reminders of tasks still here stay too.
+        if change.signsOut, !isOnEngine {
             Task { await AccountSwitch.handleSignOut() }
         }
     }

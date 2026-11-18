@@ -101,7 +101,7 @@ struct AccountChangeBanner: View {
         if let notice = monitor.accountNotice {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Image(systemName: "person.crop.circle.badge.exclamationmark").foregroundStyle(Theme.accent)
-                Text(Self.message(for: notice))
+                Text(Self.message(for: notice, onEngine: monitor.isOnEngine))
                     .font(HITType.callout)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
@@ -118,9 +118,12 @@ struct AccountChangeBanner: View {
         }
     }
 
-    static func message(for notice: AccountWatch.Notice) -> String {
+    /// `onEngine`: on HITList's own sync a sign-out removes nothing from the device (round 33, brief 165); on the
+    /// earlier sync Apple's mirror takes its copy away until the sign-in.
+    static func message(for notice: AccountWatch.Notice, onEngine: Bool = false) -> String {
         switch notice {
         case .signedOut:
+            if onEngine { return "Signed out of iCloud. Your tasks stay on this device and sync again when you sign in." }
             return "Signed out of iCloud. Your tasks are safe in iCloud and come back when you sign in."
         case .switched:
             return "Switched iCloud account. Tasks from the other account are safe in iCloud and come back when you sign back in to it."
