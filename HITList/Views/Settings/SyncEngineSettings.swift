@@ -233,6 +233,11 @@ struct SyncEngineSwitchGroup: View {
             if running == .own, SyncEngineAutoMove.movedByItself() {
                 SettingsNote(text: SyncEngineAutoMove.otherDevicesNote)
                     .accessibilityIdentifier("settings-engine-auto-moved")
+                // The check the device made of itself once the engine was at rest (`SyncEngineMoveCheck`).
+                if let checked = SyncEngineMoveCheck.line() {
+                    SettingsNote(text: checked)
+                        .accessibilityIdentifier("settings-engine-auto-move-check")
+                }
             }
             HITMenuRow(waiting ? SyncEngineWords.cancelTitle : SyncEngineWords.moveTitle(to: target),
                        subtitle: board.actions == nil ? SyncEngineWords.notWired : nil,

@@ -76,6 +76,7 @@ struct HITListApp: App {
         // George's word: `SyncEngineAutoMove` R0), and the quiet finish of any move that waits for the next start.
         SyncEngineAutoMove.Runner.start(container: container)
         SyncEngineMoveFinish.install(container: container)
+        if !isTesting { SyncEngineMoveCheck.startIfDue() } // a device the app moved checks itself once, at rest
     }
 
     var body: some Scene {
