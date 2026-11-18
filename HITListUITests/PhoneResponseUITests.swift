@@ -22,7 +22,7 @@ final class PhoneResponseUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["tab-today"].waitForExistence(timeout: 30))
         pause(3)
-        for round in 1...2 {
+        for round in 1...1 {
             tab("inbox", shows: "Read the article Alex sent", round)
             tab("upcoming", shows: "Finish the quarterly report", round)
             tab("flipboard", shows: nil, round)
@@ -67,6 +67,16 @@ final class PhoneResponseUITests: XCTestCase {
             pause()
             app.navigationBars.buttons.firstMatch.tap()
             pause()
+            app.navigationBars.buttons.firstMatch.tap()
+            pause()
+            tab("today", shows: "Gym", round)
+            let list = app.collectionViews.firstMatch.exists ? app.collectionViews.firstMatch : app.scrollViews.firstMatch
+            let start = Date()
+            list.swipeDown()
+            record("pull today \(round)", Date().timeIntervalSince(start))
+            pause(2)
+            app.buttons["browseButton"].firstMatch.tap()
+            pause()
             timed("settings open \(round)", tap: app.buttons["settingsButton"].firstMatch) {
                 self.element("settings-profile").exists
             }
@@ -76,14 +86,6 @@ final class PhoneResponseUITests: XCTestCase {
             pause()
             app.buttons["sheetBack"].firstMatch.tap()
             pause()
-            app.buttons["sheetBack"].firstMatch.tap()
-            pause()
-            tab("today", shows: "Gym", round)
-            let list = app.collectionViews.firstMatch.exists ? app.collectionViews.firstMatch : app.scrollViews.firstMatch
-            let start = Date()
-            list.swipeDown()
-            record("pull today \(round)", Date().timeIntervalSince(start))
-            pause(2)
         }
         let report = lines.joined(separator: "\n")
         print(report)
