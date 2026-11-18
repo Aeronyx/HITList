@@ -158,10 +158,25 @@ final class PopoutController {
         _ = toast.takeAll()
         listToast = nil
     }
-    /// The task the task popout shows; kept in step with `state.taskID`.
+    /// The task the task popout shows; kept in step with `state.taskID`. Written only when it changes (`setTask`).
     private(set) var task: TaskItem?
-    /// The list on screen, so ⌘N and the toolbar "+" add into it.
+    /// The list on screen, so ⌘N and the toolbar "+" add into it. Every list's appearance sets it; the same value
+    /// again is not a change (brief 164: an Observable property tells its readers of every write).
     var listContext: QuickAddContext = .today
+
+    /// Sets the list on screen when it differs: the same list again tells nobody.
+    func setListContext(_ context: QuickAddContext) {
+        if listContext != context { listContext = context }
+    }
+
+    /// How many times `state` or `task` was written, for tests: a call that changes nothing writes nothing.
+    @ObservationIgnored private(set) var writes = 0
+
+    private func setTask(_ new: TaskItem?) {
+        guard task !== new else { return }
+        task = new
+        writes += 1
+    }
     /// "Completed ‘Title’ · Undo" after completing a task from its popout (the lists keep their own).
     var toast = CompletionToastState()
     /// iPhone: the undo toast the list on screen is showing, which `PopoutHost` draws (`completionToast`).
@@ -242,7 +257,7 @@ final class PopoutController {
 
     /// A fresh card: it starts empty, whatever is stored (only the card that was open gets that back).
     func openQuickAdd(_ context: QuickAddContext? = nil, placement: PopoutState.Placement = .floating) {
-        task = nil
+        setTask(nil)
         update { $0.openQuickAdd(context ?? listContext, placement: placement) }
     }
 
@@ -268,7 +283,7 @@ final class PopoutController {
         #endif
         guard state.quickAdd == nil, let stored = QuickAddDraftStore.load(from: draftDefaults),
               !Self.liveCards.contains(stored.cardID) else { return false }
-        task = nil
+        setTask(nil)
         update { $0.openQuickAdd(stored.draft.context, placement: .floating, id: stored.cardID) }
         return true
     }
@@ -296,10 +311,16 @@ final class PopoutController {
     }
 
     /// Every change to what is popped out goes through here: when a quick-add card goes (closed, replaced
-    /// by another card or by a task), its stored draft goes with it.
+    /// by another card or by a task), its stored draft goes with it. A change that leaves the state as it was
+    /// (closing everything on a tab switch with nothing open) writes nothing, so nothing that reads it is
+    /// drawn again (brief 164: every iPhone tab switch redrew the popout host and the "+" for nothing).
     private func update(_ change: (inout PopoutState) -> Void) {
         let before = state.quickAdd?.id
-        change(&state)
+        var next = state
+        change(&next)
+        guard next != state else { return }
+        state = next
+        writes += 1
         let after = state.quickAdd?.id
         guard before != after else { return }
         if let before {
@@ -312,17 +333,17 @@ final class PopoutController {
     // MARK: Task
 
     func open(_ task: TaskItem) {
-        self.task = task
+        setTask(task)
         update { $0.openTask(task.id) }
     }
 
     func closeTask() {
-        task = nil
+        setTask(nil)
         update { $0.closeTask() }
     }
 
     func closeAll() {
-        task = nil
+        setTask(nil)
         update { $0.closeAll() }
     }
 
@@ -331,7 +352,7 @@ final class PopoutController {
     /// Opens a shared task's editor (`SharedTaskPopout`), which `PopoutHost` draws as it draws yours: the panel on the
     /// Mac and iPad, the sheet on the iPhone.
     func openShared(_ ref: SharedTaskRef) {
-        task = nil
+        setTask(nil)
         update { $0.openSharedTask(ref) }
     }
 

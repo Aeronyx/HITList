@@ -22,11 +22,14 @@ final class PhoneResponseUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["tab-today"].waitForExistence(timeout: 30))
         pause(3)
+        // The tabs three times: the first visit builds each screen's types, the later ones are what a day is.
+        for pass in 1...3 {
+            tab("inbox", shows: "Read the article Alex sent", pass)
+            tab("upcoming", shows: "Finish the quarterly report", pass)
+            tab("flipboard", shows: nil, pass)
+            tab("today", shows: "Buy groceries", pass)
+        }
         for round in 1...1 {
-            tab("inbox", shows: "Read the article Alex sent", round)
-            tab("upcoming", shows: "Finish the quarterly report", round)
-            tab("flipboard", shows: nil, round)
-            tab("today", shows: "Buy groceries", round)
 
             timed("quick add open \(round)", tap: app.buttons["quickAddButton"].firstMatch) {
                 self.element("quickAddTitle").exists
