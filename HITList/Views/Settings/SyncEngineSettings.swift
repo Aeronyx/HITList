@@ -224,6 +224,16 @@ struct SyncEngineSwitchGroup: View {
             HITMenuRow("Syncs through", systemImage: "gearshape.2", value: SyncEngineWords.engineName(running))
                 .accessibilityIdentifier("settings-engine-switch")
             SettingsNote(text: waiting ? SyncEngineWords.waitingNote(next) : SyncEngineWords.moveNote(to: target))
+            // Brief 167, the move made by the app itself (off in 0.9.15): its one line while it waits, and on a
+            // device it moved, that the other devices need the update (a build before it cannot know).
+            if let line = SyncEngineAutoMove.Runner.shared?.line {
+                SettingsNote(text: line)
+                    .accessibilityIdentifier("settings-engine-auto-move")
+            }
+            if running == .own, SyncEngineAutoMove.movedByItself() {
+                SettingsNote(text: SyncEngineAutoMove.otherDevicesNote)
+                    .accessibilityIdentifier("settings-engine-auto-moved")
+            }
             HITMenuRow(waiting ? SyncEngineWords.cancelTitle : SyncEngineWords.moveTitle(to: target),
                        subtitle: board.actions == nil ? SyncEngineWords.notWired : nil,
                        systemImage: "arrow.left.arrow.right", iconTint: Theme.accent, accessory: .none) {

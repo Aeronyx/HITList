@@ -72,6 +72,9 @@ struct HITListApp: App {
         #if DEBUG
         SyncEngineRehearsal.runIfAsked(container: container) // round 32: the move rehearsed from a terminal, side stores only
         #endif
+        // Brief 167: the move to the new sync made by the app itself. Off in 0.9.15 (`SyncEngineSwitch.movesByItself`):
+        // it returns at once and makes nothing.
+        SyncEngineAutoMove.Runner.start(container: container)
     }
 
     var body: some Scene {
