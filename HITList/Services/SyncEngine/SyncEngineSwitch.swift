@@ -50,6 +50,12 @@ enum SyncEngineSwitch {
     /// at its next launch, should that ever be needed: answer `isDebug` again. (Until 0.9.13 it did.)
     static func isAvailable(isDebug: Bool) -> Bool { true }
 
+    /// Whether a store on the mirror moves to the engine by itself (`SyncEngineAutoMove`; `dev/SYNC-ENGINE.md` section
+    /// 14, stage 6). **False in 0.9.15**: George's own week on the engine comes first, and while it is false nothing a
+    /// build does differs from 0.9.14 (`SyncEngineAutoMoveTests.testGeorgesWeekComesFirst_movesByItselfIsFalse`).
+    /// Flipped only after the rehearsal of each rule on two devices.
+    static let movesByItself = false
+
     // MARK: - The hidden switch
 
     /// Whether Settings → iCloud shows the group that moves a store between the engines on this device. Off until
@@ -130,6 +136,12 @@ enum SyncEngineSwitch {
                          arguments: ProcessInfo.processInfo.arguments, defaults: AppGroup.defaults)
         launchedByArgument = current != decide(storeName: storeName, isTesting: isTesting, isDebug: isDebugBuild,
                                                arguments: [], defaults: AppGroup.defaults)
+        // The move made by the app itself (R3): when it is on, a store whose file is not there yet is noted as fresh,
+        // so a later launch can tell that nothing in it is this device's own. Off: nothing is read or written.
+        if !isTesting, current == .mirror, SyncEngineAutoMove.isOn(storeName: storeName) {
+            let exists = ModelContainerFactory.groupStoreURL.map { FileManager.default.fileExists(atPath: $0.path) } ?? true
+            SyncEngineAutoMove.noteFreshStore(store: storeName, fileExists: exists, isOn: true, defaults: AppGroup.defaults)
+        }
         return current
     }
 

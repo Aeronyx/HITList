@@ -275,7 +275,9 @@ final class SyncEngineWiringTests: XCTestCase {
         } catch let error as SyncEngine.MoveError {
             XCTAssertEqual(error, .reopenToFinish(.own))
         }
-        XCTAssertNil(ModelContainerFactory.requestedReset(in: defaults), "a move to the engine never sets the store aside")
+        // Brief 167: a fresh copy is taken in either direction; to the engine it is the move made by the app itself
+        // for a store with nothing of its own (`SyncEngineAutoMove` R3). The hand move never asks for one.
+        XCTAssertEqual(ModelContainerFactory.requestedReset(in: defaults), store, "a fresh copy of the engine's, set aside at the next launch")
     }
 
     /// A move waits only when the store's preference differs from the engine this launch runs and no Debug argument

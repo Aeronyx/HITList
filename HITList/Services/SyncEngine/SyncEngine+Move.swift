@@ -76,13 +76,17 @@ extension SyncEngine {
             let merged = try Deduplicator.mergeSharedIDs(in: context)
             moveLog.notice("move to the engine: \(merged.description, privacy: .public)")
         }
-        // 3. The preference: from here on the next launch opens the store on `engine`.
+        // 3. The preference: from here on the next launch opens the store on `engine`. A move back is the person's
+        //    word that this store stays on the mirror: the move made by the app itself never moves it again.
         SyncEngineSwitch.setPreference(engine, storeName: storeName, defaults: defaults)
-        // 3b. A move back that takes a fresh copy: the store is set aside at that launch (as Reset local cache does,
-        //     never deleted), and the mirror downloads its zone into a new one.
-        if freshCopy, engine == .mirror {
+        if engine == .mirror { defaults.set(true, forKey: SyncEngineAutoMove.stayKey(storeName)) }
+        // 3b. A move that takes a fresh copy: the store is set aside at that launch (as Reset local cache does,
+        //     never deleted), and the other engine downloads into a new one: the mirror its zone (every device but the
+        //     first to go back), or the engine its zone (a store with nothing of its own that found the engine's zone,
+        //     `SyncEngineAutoMove` R3).
+        if freshCopy {
             LocalCacheReset.request(storeName: storeName, defaults: defaults)
-            moveLog.notice("move to the mirror: with a fresh copy; the store is set aside at the next launch")
+            moveLog.notice("move to \(engine.rawValue, privacy: .public): with a fresh copy; the store is set aside at the next launch")
         }
         guard relaunch else { return }
         #if os(macOS)
