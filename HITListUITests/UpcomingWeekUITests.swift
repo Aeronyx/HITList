@@ -72,7 +72,7 @@ final class UpcomingWeekUITests: XCTestCase {
         let a = chip("Dentist forms"), b = chip("Water filter")
         XCTAssertTrue(a.waitForExistence(timeout: 5) && b.exists)
         #if os(iOS)
-        for _ in 0..<3 where !a.isHittable { app.swipeDown() }
+        for _ in 0..<3 { app.swipeDown() }
         #endif
         XCTAssertEqual(a.frame.minY, b.frame.minY, accuracy: 1, "at one time")
         XCTAssertTrue(a.frame.maxX <= b.frame.minX + 1 || b.frame.maxX <= a.frame.minX + 1, "side by side")
