@@ -72,6 +72,9 @@ struct UpcomingView: View {
     /// Each day's calendar events at the top of that day (brief 77); none while the setting is off.
     private var calendarEvents: CalendarEvents { CalendarEvents.shared }
     @AppStorage(Preferences.compactRows, store: AppGroup.defaults) private var compactRows = Preferences.compactRowsDefault
+    /// Today's layout or Week (brief 161), kept per device; today's by default.
+    @AppStorage(UpcomingLayout.key, store: AppGroup.defaults) private var layoutChoice = UpcomingLayout.defaultValue.rawValue
+    private var layout: UpcomingLayout { UpcomingLayout(rawValue: layoutChoice) ?? UpcomingLayout.defaultValue }
 
     private static let pageDays = 30
     /// The strip's pages: a month back, a year ahead.
@@ -163,7 +166,9 @@ struct UpcomingView: View {
         let listed = currentListing
         VStack(spacing: 0) {
             SwiftUI.Group {
-                if let model = listed.board {
+                if layout == .week {
+                    week
+                } else if let model = listed.board {
                     board(model)
                 } else if let schedule = listed.schedule {
                     weekList(schedule, counts: listed.counts)
@@ -184,10 +189,11 @@ struct UpcomingView: View {
         .followsSystemListMargin()
         .navigationTitle("Upcoming")
         .screenChrome {
+            layoutMenu
             ViewOptionsMenu {
                 Toggle(isOn: $overdueExpanded) { Label("Show overdue", systemImage: "exclamationmark.circle") }
                 // The board always shows seven days.
-                if !showsBoard {
+                if !showsBoard, layout == .tasks {
                     Picker(selection: $dayCount) {
                         Text("2 weeks").tag(14)
                         Text("1 month").tag(30)
@@ -225,11 +231,47 @@ struct UpcomingView: View {
     }
 
     private func jumpToToday() {
-        if showsBoard {
+        if layout == .week {
+            jumpToTodayRequest += 1
+        } else if showsBoard {
             withAnimation(reduceMotion ? nil : .snappy) { window.goToToday() }
         } else {
             jumpToTodayRequest += 1
         }
+    }
+
+    // MARK: - Layout (brief 161)
+
+    /// The layouts, one button with a menu of the two, the current one ticked.
+    private var layoutMenu: some View {
+        Menu {
+            Picker(selection: $layoutChoice) {
+                ForEach(UpcomingLayout.allCases) { choice in
+                    Label(choice.title(showsBoard: showsBoard), systemImage: choice.symbol(showsBoard: showsBoard))
+                        .tag(choice.rawValue)
+                }
+            } label: {
+                Text("Layout")
+            }
+            .pickerStyle(.inline)
+        } label: {
+            Label("Layout", systemImage: layout.symbol(showsBoard: showsBoard))
+        }
+        .accessibilityIdentifier("upcomingLayout")
+    }
+
+    /// The Week layout: three days on an iPhone, the week's seven where the board would be.
+    private var week: some View {
+        UpcomingWeekView(entries: entries, now: now, calendar: calendar, strip: strip, wholeWeek: showsBoard,
+                         todayRequest: jumpToTodayRequest,
+                         phase: { completions.phase(of: $0) },
+                         onToggleCompletion: { toggleCompletion($0) },
+                         onOpen: { entry in
+                             switch entry.kind {
+                             case .own(let task): popouts.listSelection.wrappedValue = .task(task)
+                             case .shared(let row): popouts.listSelection.wrappedValue = .shared(SharedTaskRef(row))
+                             }
+                         })
     }
 
     // MARK: - Board
