@@ -48,6 +48,32 @@ final class SyncEngineMoveFinishTests: XCTestCase {
     }
 
     /// A start made for a move that still finds the move waiting makes no other: the app never ends itself in a loop.
+    /// Brief 172's findings 6 and 7: never under a sheet, an alert or a panel (typed text would go with the
+    /// process), and on an iPhone never in a process the person has not had in front of them (one the system
+    /// started in the background for a widget's button or a push is doing that work).
+    func testItNeverFinishesUnderSomethingPresentedNorInAProcessNobodyOpened() {
+        XCTAssertFalse(SyncEngineMoveFinish.mayFinish(waiting: true, inMemory: false, quiet: true, cardOpen: false,
+                                                      presented: true, wasActive: true))
+        XCTAssertFalse(SyncEngineMoveFinish.mayFinish(waiting: true, inMemory: false, quiet: true, cardOpen: false,
+                                                      presented: false, wasActive: false))
+        XCTAssertTrue(SyncEngineMoveFinish.mayFinish(waiting: true, inMemory: false, quiet: true, cardOpen: false,
+                                                     presented: false, wasActive: true))
+        // Under hosted tests nothing is presented over the host app's window.
+        XCTAssertFalse(SyncEngineMoveFinish.isSomethingPresented)
+    }
+
+    /// Brief 172's finding 2: Reset local cache is not offered while a move waits. The next launch opens on the
+    /// other engine, and on the first device of an account the reset would set every task aside there with nothing
+    /// in iCloud to download.
+    func testResetLocalCacheIsNotOfferedWhileAMoveWaits() {
+        XCTAssertTrue(LocalCacheReset.isAvailable(syncRuns: true, inMemory: false, signedIn: true, moveWaiting: false))
+        XCTAssertFalse(LocalCacheReset.isAvailable(syncRuns: true, inMemory: false, signedIn: true, moveWaiting: true))
+        XCTAssertFalse(LocalCacheReset.isAvailable(syncRuns: false, inMemory: true, signedIn: true, moveWaiting: true))
+        XCTAssertFalse(LocalCacheReset.isAvailable(syncRuns: true, inMemory: false, signedIn: false, moveWaiting: false))
+        XCTAssertTrue(LocalCacheReset.isAvailable(syncRuns: false, inMemory: true, signedIn: true, moveWaiting: false))
+        XCTAssertFalse(LocalCacheReset.isAvailable(syncRuns: false, inMemory: false, signedIn: true, moveWaiting: false))
+    }
+
     func testAStartThatDidNotFinishTheMoveIsNotMadeAgain() {
         XCTAssertFalse(SyncEngineMoveFinish.givesUp(waiting: true, triedFor: nil, next: .own), "the first time")
         XCTAssertTrue(SyncEngineMoveFinish.givesUp(waiting: true, triedFor: "own", next: .own), "tried, and still waiting")
@@ -94,17 +120,19 @@ final class SyncEngineMoveFinishTests: XCTestCase {
         let kept = try XCTUnwrap(LocalBackup.keepBeforeTheNewSync(first))
         XCTAssertTrue(kept.lastPathComponent.hasPrefix("HITList before the new sync "), kept.lastPathComponent)
         XCTAssertFalse(LocalBackup.backups(in: folder).contains(kept), "not one of the daily backups")
-        // A second move the same day replaces the kept copy; it never piles up.
+        // A second move the same day leaves the kept copy as it is: the later backup was made after the new sync had
+        // already had the store (brief 172). It never piles up either.
         let again = try LocalBackup.write(Data("again".utf8), in: folder, now: day0)
         XCTAssertEqual(LocalBackup.keepBeforeTheNewSync(again), kept)
-        XCTAssertEqual(String(decoding: try Data(contentsOf: kept), as: UTF8.self), "again")
+        XCTAssertEqual(String(decoding: try Data(contentsOf: kept), as: UTF8.self), "before")
+        XCTAssertEqual(LocalBackup.keptBeforeTheNewSync(in: folder).count, 1)
         // Three weeks of daily backups: the first day's is rotated away, the kept copy is not.
         for day in 1...21 {
             try LocalBackup.write(Data("day \(day)".utf8), in: folder, now: day0.addingTimeInterval(Double(day) * 86_400))
         }
         XCTAssertEqual(LocalBackup.backups(in: folder).count, LocalBackup.keep)
         XCTAssertFalse(FileManager.default.fileExists(atPath: first.path), "the daily one is gone")
-        XCTAssertEqual(String(decoding: try Data(contentsOf: kept), as: UTF8.self), "again")
+        XCTAssertEqual(String(decoding: try Data(contentsOf: kept), as: UTF8.self), "before")
     }
 
     /// The move itself keeps that copy when it goes to the engine, and not on the way back.

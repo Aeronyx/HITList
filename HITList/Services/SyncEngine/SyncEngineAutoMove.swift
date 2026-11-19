@@ -26,8 +26,9 @@ import HITListCore
 ///   and iCloud's earlier copy lacks (the engine sends that itself). What a device has not yet received from the
 ///   mirror would be left behind in the earlier sync's zone, so a device that still lacks something waits. **A
 ///   device whose mirror never catches up is not left on it alone for good**: seven days and three launches after
-///   it was first ready, it moves with what it holds, and the sync log says how many records stay in the earlier
-///   sync's zone (kept there, not deleted). Then the hand move's own steps (`SyncEngine.move`): a backup that
+///   it was first ready, and once the mirror has ended an import in the launch at hand (it had its chance, and
+///   what it lacks is counted), it moves with what it holds, and the sync log says how many records stay in the
+///   earlier sync's zone (kept there, not deleted). Then the hand move's own steps (`SyncEngine.move`): a backup that
 ///   succeeded, the rows that share an `id` merged, the preference written. It takes effect at the next launch, and
 ///   the app sees to that launch itself at the first quiet moment (`SyncEngineMoveFinish`). At most one try per
 ///   launch; a try that failed is written in the sync log and tried again at a later launch, never in a loop.
@@ -42,7 +43,12 @@ import HITListCore
 ///   aside and took the engine's copy; the review of round 34 (brief 171) showed that the merge already does the
 ///   right thing with a stale copy (an item deleted on the engine since stays deleted, an item changed since keeps
 ///   the change), and that taking a copy could hide everything when the engine's zone was not yet whole. It is gone.
-/// - **R4 Words.** One line, nothing to tap (`line`); the hidden group stays as the way back.
+/// - **R4 Words.** One line, nothing to tap (`line`); the hidden group stays as the way back. A move that waits
+///   and is cancelled there is the person's word like a move back: the app never makes it again (the "stay" key).
+///
+/// A Debug build runs none of this unless it is asked to (`-syncEngineAutoMove YES` on a side store): agents'
+/// stores and a Development build's own would otherwise follow whatever zone a rehearsal left in iCloud's
+/// Development side.
 enum SyncEngineAutoMove {
     typealias Engine = SyncEngineBoard.Engine
 
@@ -86,6 +92,9 @@ enum SyncEngineAutoMove {
         var caughtUp = false
         /// Seven days and three launches since this store was first ready to move and the mirror had not caught up.
         var waitedLongEnough = false
+        /// The mirror has ended an import in this launch, well or badly: it had its chance, and what it found to
+        /// differ is known. Patience never runs out before that (a launch is always behind at its start).
+        var mirrorTriedThisLaunch = false
         var word: Word = .notAsked
         /// Settings → Reset local cache waits for the next launch.
         var resetWaiting = false
@@ -135,7 +144,7 @@ enum SyncEngineAutoMove {
             case .go: break
             }
         }
-        if !f.caughtUp, !f.waitedLongEnough { return .wait(.mirrorBehind) }
+        if !f.caughtUp, !(f.waitedLongEnough && f.mirrorTriedThisLaunch) { return .wait(.mirrorBehind) }
         return .move
     }
 
@@ -198,9 +207,18 @@ enum SyncEngineAutoMove {
     /// The one line a person sees, or nil: while this device waits to join (another device moved), and once the move
     /// is written and waits for the app to start again.
     static func line(zone: ZoneLook, moved: Bool) -> String? {
-        if moved { return "Moving to the new sync: HITList finishes the next time it opens. Nothing to do." }
+        if moved { return movingLine }
         if zone == .found { return "Waiting to join the new sync: HITList moves this device once it's up to date." }
         return nil
+    }
+
+    /// While a written move waits: the app finishes it itself (`SyncEngineMoveFinish`), so the words name when.
+    static var movingLine: String {
+        #if os(macOS)
+        return "Moving to the new sync: HITList finishes when you switch to another app. Nothing to do."
+        #else
+        return "Moving to the new sync: HITList finishes the next time you leave it. Nothing to do."
+        #endif
     }
 
     /// Said on a device that moved by itself (the switch group, on the engine): a device on an older build cannot know.
@@ -233,9 +251,12 @@ enum SyncEngineAutoMove {
         return arguments[index + 1] == "YES"
     }
 
+    /// Whether this launch runs the move by itself: every released build while the constant is true; a Debug build
+    /// only where it was asked to (brief 172's finding 10: with the constant alone, every agent's side store on the
+    /// mirror, and a Development build's own store, followed the zones the rehearsals left in Development).
     static func isOn(constant: Bool = SyncEngineSwitch.movesByItself, storeName: String = ModelContainerFactory.storeName,
                      isDebug: Bool = SyncEngineSwitch.isDebugBuild, arguments: [String] = ProcessInfo.processInfo.arguments) -> Bool {
-        constant || debugAsked(storeName: storeName, isDebug: isDebug, arguments: arguments)
+        (constant && !isDebug) || debugAsked(storeName: storeName, isDebug: isDebug, arguments: arguments)
     }
 }
 
@@ -251,10 +272,19 @@ struct CloudKitZoneLook: SyncEngineZoneLooking {
     let containerID: String
     let zoneName: String
 
+    /// Offline, CloudKit may wait a long while before it gives up, and a look that never ends would keep this launch
+    /// from asking anything else (a Mac opened at login before the network is up, then left open for weeks): the
+    /// look gives up after `timeout` and is made again when the app next comes forward.
+    static let timeout: TimeInterval = 30
+
     func zoneExists() async throws -> Bool {
         let database = CKContainer(identifier: containerID).privateCloudDatabase
+        let zoneID = CKRecordZone.ID(zoneName: zoneName, ownerName: CKCurrentUserDefaultName)
+        let configuration = CKOperation.Configuration()
+        configuration.timeoutIntervalForRequest = Self.timeout
+        configuration.timeoutIntervalForResource = Self.timeout
         do {
-            _ = try await database.recordZone(for: CKRecordZone.ID(zoneName: zoneName, ownerName: CKCurrentUserDefaultName))
+            _ = try await database.configuredWith(configuration: configuration) { try await $0.recordZone(for: zoneID) }
             return true
         } catch let error as CKError where error.code == .zoneNotFound || error.code == .userDeletedZone {
             return false
@@ -297,6 +327,8 @@ extension SyncEngineAutoMove {
         var caughtUp: @MainActor () -> Bool = {
             SyncEngineAutoMove.caughtUp(CloudSyncMonitor.shared.state, difference: CloudSyncMonitor.shared.recordDifference)
         }
+        /// The mirror has ended an import in this launch (`CloudSyncMonitor.importEndedThisLaunch`).
+        var mirrorTried: @MainActor () -> Bool = { CloudSyncMonitor.shared.importEndedThisLaunch }
         /// What a move now would leave in the earlier sync's zone (for the log, when patience ran out).
         var leftBehind: @MainActor () -> Int = { SyncEngineAutoMove.leftBehind(CloudSyncMonitor.shared.recordDifference) }
         var now: @MainActor () -> Date = { Date() }
@@ -333,6 +365,8 @@ extension SyncEngineAutoMove {
         @ObservationIgnored private var isAsking = false
         @ObservationIgnored private var countedThisLaunch = false
         @ObservationIgnored private var watching = false
+        /// Whether the launch was signed in when it last decided: what a look found belongs to that account.
+        @ObservationIgnored private var wasSignedIn: Bool?
         /// The move, the look and the question in flight (the tests wait for them).
         @ObservationIgnored private(set) var moving: Task<Void, Never>?
         @ObservationIgnored private(set) var looking: Task<Void, Never>?
@@ -388,7 +422,8 @@ extension SyncEngineAutoMove {
                 launches: defaults.integer(forKey: SyncEngineAutoMove.readyLaunchesKey(storeName)), now: live.now())
             return Facts(isOn: true, engine: live.engine(), preferred: preferred, byArgument: live.byArgument(),
                          inMemory: live.inMemory(), mirrorRunning: live.mirrorRunning(), signedIn: live.signedIn(),
-                         caughtUp: live.caughtUp(), waitedLongEnough: waited, word: word,
+                         caughtUp: live.caughtUp(), waitedLongEnough: waited, mirrorTriedThisLaunch: live.mirrorTried(),
+                         word: word,
                          resetWaiting: ModelContainerFactory.requestedReset(in: defaults) == storeName,
                          movedBefore: SyncEngineAutoMove.movedBefore(store: storeName, defaults: defaults),
                          triedThisLaunch: tried, zone: zone)
@@ -397,6 +432,7 @@ extension SyncEngineAutoMove {
         /// Decides once more, and acts. Returns what was decided (the tests read it).
         @discardableResult
         func evaluate() -> Decision {
+            forgetAnotherAccountsAnswers()
             let now = facts()
             let clock = live.now()
             if !isLooking, SyncEngineAutoMove.shouldLook(now, sinceLastLook: lastLooked.map { clock.timeIntervalSince($0) }) {
@@ -416,12 +452,26 @@ extension SyncEngineAutoMove {
                 }
                 moving = Task { await self.move() }
             case .wait(.mirrorBehind):
-                countReadyLaunch()
+                // Counted once the mirror has had its chance in this launch: every launch is behind at its start, and
+                // one made in the background for a push would otherwise count as a launch the mirror failed in.
+                if now.mirrorTriedThisLaunch { countReadyLaunch() }
             default:
                 break
             }
             refreshLine()
             return decision
+        }
+
+        /// The account went away and came back in one launch (a sign-out and a sign-in while a Mac stayed open): the
+        /// zone that was found, and the word, were the earlier account's. Both are asked again.
+        private func forgetAnotherAccountsAnswers() {
+            let signedIn = live.signedIn()
+            defer { wasSignedIn = signedIn }
+            guard let wasSignedIn, wasSignedIn != signedIn else { return }
+            zone = .notYet
+            word = .notAsked
+            lastLooked = nil
+            lastAsked = nil
         }
 
         /// The app came forward: a "not yet" may have become a yes, or another device may have moved.

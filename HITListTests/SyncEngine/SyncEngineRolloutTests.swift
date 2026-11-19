@@ -241,4 +241,27 @@ final class SyncEngineRolloutTests: XCTestCase {
         let text = "a\n#if DEBUG\nb\n#else\nc\n#endif\n#if os(iOS)\nd\n#if DEBUG\ne\n#endif\n#endif\nf"
         XCTAssertEqual(Self.releaseOnly(text), "a\nc\nd\nf")
     }
+
+    /// Several records (one made in the Console under a name of its own beside `everyone`, or two by mistake): one
+    /// that says wait wins over every other, whichever was changed last, because the pause is the brake; otherwise
+    /// the one changed last is the word (brief 172: a go named `everyone` used to beat a newer pause).
+    func testAmongSeveralRecordsAPauseWinsThenTheNewest() {
+        typealias Fields = SyncEngineRollout.Fields
+        let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+        func at(_ days: Double) -> Date { t0.addingTimeInterval(days * 86_400) }
+        XCTAssertNil(SyncEngineRollout.word(among: []))
+        XCTAssertEqual(SyncEngineRollout.word(among: [(Fields(), at(0))]), Fields())
+        // A newer pause beside an older go.
+        XCTAssertEqual(SyncEngineRollout.word(among: [(Fields(), at(0)), (Fields(paused: 1), at(1))]), Fields(paused: 1))
+        // An older pause beside a newer go: still paused, until that record is changed or deleted.
+        XCTAssertEqual(SyncEngineRollout.word(among: [(Fields(paused: 1), at(0)), (Fields(), at(1))]), Fields(paused: 1))
+        // A record that cannot be read is no yes either.
+        XCTAssertEqual(SyncEngineRollout.answer(fields: SyncEngineRollout.word(among: [(Fields(unreadable: true), at(0)), (Fields(), at(1))]),
+                                                build: "40"), .unknown)
+        // No pause: the one changed last, with its own minimum.
+        XCTAssertEqual(SyncEngineRollout.word(among: [(Fields(minBuild: 30), at(0)), (Fields(minBuild: 50), at(2)), (Fields(), at(1))]),
+                       Fields(minBuild: 50))
+        // "paused 0" is not a pause.
+        XCTAssertEqual(SyncEngineRollout.word(among: [(Fields(paused: 0), at(0)), (Fields(minBuild: 9), at(1))]), Fields(minBuild: 9))
+    }
 }

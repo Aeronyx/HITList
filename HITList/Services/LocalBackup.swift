@@ -67,13 +67,15 @@ enum LocalBackup {
             .map { directory.appending(path: $0) }
     }
 
-    /// Copies `backup` to its kept name in the same folder, replacing one of the same day. A failure is logged and
-    /// stops nothing: the backup itself was written.
+    /// Copies `backup` to its kept name in the same folder. **One of the same day stays as it is**: a store moved,
+    /// moved back and moved again in one day would otherwise keep, under "before the new sync", a copy made after
+    /// the new sync had already had the store (brief 172). A failure is logged and stops nothing: the backup itself
+    /// was written.
     @discardableResult
     static func keepBeforeTheNewSync(_ backup: URL) -> URL? {
         let kept = backup.deletingLastPathComponent().appending(path: beforeTheNewSyncName(for: backup))
         do {
-            if FileManager.default.fileExists(atPath: kept.path) { try FileManager.default.removeItem(at: kept) }
+            if FileManager.default.fileExists(atPath: kept.path) { return kept }
             try FileManager.default.copyItem(at: backup, to: kept)
             return kept
         } catch {

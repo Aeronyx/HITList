@@ -15,10 +15,22 @@ enum LocalCacheReset {
     /// On HITList's own engine (brief 143) it is offered as on the mirror: the store moves aside the same way, the new
     /// file has a new identity, so the engine's ledger (bound to the old file, `SyncLedgerStore.bind(toStore:)`) is
     /// forgotten with it and the engine fetches everything again into the empty store.
+    ///
+    /// **Never while a move between the engines waits for the next launch** (round 34, brief 172): that launch opens
+    /// on the other engine, and a reset beside it would set the store aside there. On the first device of an account
+    /// to move, the engine would then start empty against a zone that is still empty, with every task in a store
+    /// set aside. The app finishes a waiting move by itself within moments (`SyncEngineMoveFinish`), and the reset
+    /// is offered again on the engine, where iCloud holds what it downloads.
     @MainActor
     static var isAvailable: Bool {
-        (ModelContainerFactory.isCloudKitEnabled || ModelContainerFactory.isOwnEngineEnabled || ModelContainerFactory.isRunningInMemory)
-            && CloudSyncMonitor.shared.accountStatus == .available
+        isAvailable(syncRuns: ModelContainerFactory.isCloudKitEnabled || ModelContainerFactory.isOwnEngineEnabled,
+                    inMemory: ModelContainerFactory.isRunningInMemory,
+                    signedIn: CloudSyncMonitor.shared.accountStatus == .available,
+                    moveWaiting: SyncEngineMoveFinish.isWaiting())
+    }
+
+    static func isAvailable(syncRuns: Bool, inMemory: Bool, signedIn: Bool, moveWaiting: Bool) -> Bool {
+        (syncRuns || inMemory) && signedIn && !moveWaiting
     }
 
     /// Asks for a reset of the store this launch opened (`storeName`), by name: another build on the

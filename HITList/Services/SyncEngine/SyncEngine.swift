@@ -509,6 +509,10 @@ final class SyncEngine {
     func mergeSharedIDs(trigger: String) {
         let context = container.mainContext
         do {
+            // Before the brain reads anything: an untouched seed carries the engine's seed stamp, so it never beats
+            // what iCloud holds for that item (a deletion made on the engine since, round 34).
+            let seeds = try Deduplicator.backdateUntouchedSeeds(in: context)
+            if seeds > 0 { say("\(seeds) untouched default(s) given the seed's stamp \(trigger)") }
             let merged = try Deduplicator.mergeSharedIDs(in: context)
             let names = try Deduplicator.run(in: context, profileLog: { _, _, _ in })
             if merged.removed > 0 || names.removed > 0 {

@@ -133,4 +133,40 @@ final class SyncCoreMoveFromTheMirrorTests: XCTestCase {
         XCTAssertNil(c, "taken down before the move: stays deleted")
         print("RT171 D (deleted day 1 on the Mac, edited after on the phone):", d == nil ? "gone, the later edit lost" : "kept")
     }
+    /// Brief 172's finding 3. A default filter is seeded at install with a name-based id. Deleted on the engine, its
+    /// note carries the time of the deletion; a device installed afterwards seeds the filter again. Stamped "now",
+    /// that seed is newer than the note and the filter is back on every device (M6: what was changed after a
+    /// deletion outlives it). Stamped as the engine stamps its own seeds, long before anything a person did, the
+    /// deletion stands. The app gives an untouched default that stamp before the brain's first read
+    /// (`Deduplicator.backdateUntouchedSeeds`); this holds both halves.
+    func testADefaultFilterDeletedOnTheEngineStaysDeletedOnlyIfAFreshSeedCarriesTheSeedStamp() async throws {
+        let key = SyncKey(type: "SavedFilter", name: "seed-focus")
+        func filter(made: TimeInterval) -> SyncRecord {
+            SyncSchema.filled(SyncRecord(type: "SavedFilter", name: "seed-focus",
+                                         fields: ["name": .string("Focus"), "query": .string("p1"),
+                                                  "createdAt": at(made), "updatedAt": at(made)]))
+        }
+        let seedStamp: TimeInterval = -1_000_000
+        for (stamp, staysDeleted) in [(seedStamp, true), (9 * 86_400, false)] {
+            let w = World()
+            let phone = w.device([filter(made: seedStamp)])
+            await phone.core.start()
+            try await w.settle([phone])
+            w.clock.advance(86_400)
+            await phone.store.delete(key)
+            await phone.core.localChanged(nil)
+            try await w.settle([phone])
+            w.clock.advance(8 * 86_400)
+            let fresh = w.device([filter(made: stamp)])
+            await fresh.core.start()
+            try await w.settle([phone, fresh])
+            let onPhone = await phone.store.record(key), onFresh = await fresh.store.record(key)
+            if staysDeleted {
+                XCTAssertNil(onPhone, "a seed with the seed stamp loses to the deletion")
+                XCTAssertNil(onFresh, "and goes from the fresh device too")
+            } else {
+                XCTAssertNotNil(onPhone, "a seed stamped now outlives the deletion: why the app never sends one so")
+            }
+        }
+    }
 }

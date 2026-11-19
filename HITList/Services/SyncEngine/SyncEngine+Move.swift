@@ -36,11 +36,13 @@ extension SyncEngine {
             switch self {
             case .inMemory: return "This device's data couldn't be opened, so there is nothing to move."
             case .reopenToFinish(let engine):
+                // The app finishes a waiting move itself (`SyncEngineMoveFinish`); a side store on the Mac, which a
+                // relaunch would not reopen, is the one case left to the person.
                 let name = engine == .own ? "the new sync" : "the earlier sync"
                 #if os(macOS)
                 return "Ready: quit HITList and open it again to finish moving to \(name)."
                 #else
-                return "Ready: swipe HITList away in the app switcher and open it again to finish moving to \(name)."
+                return "Ready: HITList finishes moving to \(name) the next time you leave it."
                 #endif
             }
         }
@@ -66,6 +68,9 @@ extension SyncEngine {
                 if ModelContainerFactory.requestedReset(in: defaults) == storeName {
                     defaults.removeObject(forKey: ModelContainerFactory.resetLocalStoreKey)
                 }
+                // A waiting move to the new sync that a person cancels is their word, as a move back is: without
+                // this the app made the same move again by itself at the mirror's next change (brief 172).
+                if engine == .mirror { defaults.set(true, forKey: SyncEngineAutoMove.stayKey(storeName)) }
                 moveLog.notice("move to \(engine.rawValue, privacy: .public): a waiting move was taken back")
             }
             return
@@ -111,11 +116,18 @@ extension SyncEngine {
     }
 
     #if os(macOS)
+    /// A relaunch for a move is under way in this process.
+    static var isRelaunching = false
+
     /// As Reset local cache relaunches: a new instance, which waits for this one to exit before it opens the store
     /// (`SyncRecovery.waitForPreviousInstance`, through the App Group's defaults), then this one quits.
     /// `activates: false` (the move the app finishes by itself, `SyncEngineMoveFinish`): the new instance opens behind
     /// whatever the person is working in.
     static func relaunchMac(defaults: UserDefaults, activates: Bool = true) {
+        // Once: a second call (the hand move relaunches, and this instance stops being the active app while the new
+        // one comes forward, which `SyncEngineMoveFinish` reads as its quiet moment) would open a second instance.
+        guard !isRelaunching else { return }
+        isRelaunching = true
         let me = ProcessInfo.processInfo.processIdentifier
         defaults.set(Int(me), forKey: SyncRecovery.pidKey)
         defaults.set(Date(), forKey: SyncRecovery.atKey)
@@ -137,6 +149,7 @@ extension SyncEngine {
             }
             defaults.removeObject(forKey: SyncRecovery.pidKey)
             defaults.removeObject(forKey: SyncRecovery.atKey)
+            isRelaunching = false
             moveLog.error("move: no new instance appeared; the move finishes at the next launch")
         }
     }

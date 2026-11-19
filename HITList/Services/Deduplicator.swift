@@ -82,8 +82,16 @@ enum Deduplicator {
     @discardableResult
     /// `profileLog` is where the profile merge's line goes (the sync log; tests pass their own). `byName`: whether rows
     /// of one name are merged; the engine's answer by default (`mergesByName`).
+    ///
+    /// On the mirror a `TaskItem` or a `Switchboard` that shares an `id` with another row is left alone, always. For
+    /// a few hours of round 34 a store that had come back from the engine by hand merged such rows here too; the
+    /// review of that round (brief 172) showed two such devices deleting each other's copy of one item, which the
+    /// mirror then deletes everywhere: on the mirror each row is a record of its own, a device cannot tell which of
+    /// two equal rows is whose, and so two devices cannot be made to keep the same one. Two rows are an eyesore; a
+    /// deletion nobody made is a loss. The way back's rule stays the procedure (`SyncEngine.move`): the first
+    /// device sends, every other device downloads.
     static func run(in context: ModelContext, profileLog: @escaping ProfileStore.Log = ProfileStore.syncLog,
-                    byName: Bool = mergesByName, mergesSharedIDs: Bool = cameBackFromTheEngine) throws -> DedupeReport {
+                    byName: Bool = mergesByName) throws -> DedupeReport {
         var report = DedupeReport()
         report.projects = try collapse(Project.self, in: context, byName: byName) { loser, winner in
             for task in loser.tasks ?? [] { task.project = winner }
@@ -98,17 +106,8 @@ enum Deduplicator {
         report.filters = try collapse(SavedFilter.self, in: context, byName: byName) { _, _ in }
         report.subtasks = try repairSubtasks(in: context)
         report.profiles = try ProfileStore(context: context, log: profileLog).mergeDuplicates()
-        // A store that came back from HITList's own sync by hand: what it received through the engine may also
-        // arrive from the mirror as another device's records, and the mirror would keep both (round 34, brief 171).
-        // Rows that share an `id` are one item there too.
-        if mergesSharedIDs { _ = try mergeSharedIDs(in: context) }
         if context.hasChanges { try context.save() }
         return report
-    }
-
-    /// Whether this store was moved back from HITList's own sync by hand (`SyncEngineAutoMove.stayKey`), on the mirror.
-    nonisolated static var cameBackFromTheEngine: Bool {
-        mergesByName && AppGroup.defaults.bool(forKey: SyncEngineAutoMove.stayKey(ModelContainerFactory.storeName))
     }
 
     /// A seed this device made and nobody changed: a name-based id (`SeedIdentity`) and `updatedAt` within a second
@@ -117,6 +116,28 @@ enum Deduplicator {
     /// would beat every change made to it on another device since (round 34, brief 171's A8).
     static func isUntouchedSeed(id: UUID, createdAt: Date, updatedAt: Date) -> Bool {
         (id.uuid.6 >> 4) == 5 && abs(updatedAt.timeIntervalSince(createdAt)) < 1
+    }
+
+    /// Before HITList's own engine reads the store: a default filter nobody changed takes the stamp the engine's own
+    /// seeds carry (`TaskActions.engineSeedDate`), so it loses to whatever iCloud holds for that filter, a deletion
+    /// included. A fresh install on the mirror stamps its default filters "now"; moved to the engine as they were,
+    /// such a seed was newer than the note of a deletion made on the engine since and brought the filter back on
+    /// every device (round 34, brief 172). Only the filters seeded at install (`TaskActions.seedDefaultsIfNeeded`):
+    /// any other row with a name-based id was made by something a person did, at the time its stamp says. Never on
+    /// the mirror, where the earliest `createdAt` wins a merge and an old stamp would let a pristine seed win over
+    /// the person's copy. Returns how many rows changed; a second pass changes nothing. Saves when anything changed.
+    @discardableResult
+    static func backdateUntouchedSeeds(in context: ModelContext, to stamp: Date = TaskActions.engineSeedDate) throws -> Int {
+        var changed = 0
+        for filter in try context.fetch(FetchDescriptor<SavedFilter>())
+        where isUntouchedSeed(id: filter.id, createdAt: filter.createdAt, updatedAt: filter.updatedAt)
+            && (filter.createdAt != stamp || filter.updatedAt != stamp) {
+            filter.createdAt = stamp
+            filter.updatedAt = stamp
+            changed += 1
+        }
+        if context.hasChanges { try context.save() }
+        return changed
     }
 
     /// Whether this launch merges Groups, labels and filters by name: on SwiftData's mirror only, never on HITList's own

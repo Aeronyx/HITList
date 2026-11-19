@@ -56,13 +56,18 @@ final class SyncEngineAutoMoveTests: XCTestCase {
     /// The tests' clock: `clock.now` moves when a test moves it.
     private final class Clock { var now = Date(timeIntervalSince1970: 1_800_000_000) }
 
+    /// `imported`: whether the mirror has ended an import in this launch (it has, unless a test is about that).
+    /// `account`: a sign-in state that changes while the launch runs.
     private func runner(look: Look = Look(.success(false)), bolt: Bool = true, signedIn: Bool = true,
                         asker: Asker = Asker(.go), clock: Clock = Clock(), left: Int = 0,
+                        imported: @escaping @MainActor () -> Bool = { true },
+                        account: (@MainActor () -> Bool)? = nil,
                         logged: @escaping @MainActor (String) -> Void = { _ in },
                         move: @escaping @MainActor () async throws -> Void) -> SyncEngineAutoMove.Runner {
         let live = SyncEngineAutoMove.Live(engine: { .mirror }, byArgument: { false }, inMemory: { false },
-                                           mirrorRunning: { true }, signedIn: { signedIn }, caughtUp: { bolt },
-                                           leftBehind: { left }, now: { clock.now }, log: logged, move: move)
+                                           mirrorRunning: { true }, signedIn: account ?? { signedIn }, caughtUp: { bolt },
+                                           mirrorTried: imported, leftBehind: { left }, now: { clock.now }, log: logged,
+                                           move: move)
         return SyncEngineAutoMove.Runner(storeName: store, defaults: defaults, live: live, look: look, asker: asker)
     }
 
@@ -93,6 +98,14 @@ final class SyncEngineAutoMoveTests: XCTestCase {
         XCTAssertTrue(SyncEngineAutoMove.isOn(constant: false, storeName: store, isDebug: true,
                                               arguments: ["HITList", "-syncEngineAutoMove", "YES"]),
                       "the rehearsal's way: a Debug side store that asks")
+        // Brief 172's finding 10: a Debug build runs the move only where it is asked to. With the constant alone,
+        // every agent's side store on the mirror and a Development build's own store followed the zones the
+        // rehearsals left in iCloud's Development side.
+        XCTAssertFalse(SyncEngineAutoMove.isOn(constant: true, storeName: store, isDebug: true, arguments: ["HITList"]))
+        XCTAssertFalse(SyncEngineAutoMove.isOn(constant: true, storeName: "HITList-Development.store", isDebug: true,
+                                               arguments: ["HITList"]))
+        XCTAssertTrue(SyncEngineAutoMove.isOn(constant: true, storeName: store, isDebug: true,
+                                              arguments: ["HITList", "-syncEngineAutoMove", "YES"]))
     }
 
     /// With the move off a launch makes nothing: nothing is decided, asked, looked for, made, read or written, and
@@ -226,16 +239,29 @@ final class SyncEngineAutoMoveTests: XCTestCase {
         XCTAssertFalse(SyncEngineAutoMove.waitedLongEnough(readySince: start, launches: 3, now: start.addingTimeInterval(week - 1)))
         XCTAssertFalse(SyncEngineAutoMove.waitedLongEnough(readySince: start, launches: 2, now: start.addingTimeInterval(week + 1)))
         XCTAssertTrue(SyncEngineAutoMove.waitedLongEnough(readySince: start, launches: 3, now: start.addingTimeInterval(week)))
-        XCTAssertEqual(SyncEngineAutoMove.decide(ready { $0.caughtUp = false; $0.waitedLongEnough = true }), .move)
+        XCTAssertEqual(SyncEngineAutoMove.decide(ready {
+            $0.caughtUp = false; $0.waitedLongEnough = true; $0.mirrorTriedThisLaunch = true
+        }), .move)
+        // Brief 172's finding 5: every launch is behind at its start. Patience never runs out before the mirror has
+        // ended an import in the launch at hand.
+        XCTAssertEqual(SyncEngineAutoMove.decide(ready { $0.caughtUp = false; $0.waitedLongEnough = true }), .wait(.mirrorBehind))
 
         // Three launches over eight days, the mirror behind each time: the third moves, and says why.
         let clock = Clock()
         var moves = 0
         var lines: [String] = []
         func launch() async {
-            let run = runner(bolt: false, clock: clock, left: 4, logged: { lines.append($0) }) { moves += 1 }
+            var imported = false
+            let run = runner(bolt: false, clock: clock, left: 4, imported: { imported }, logged: { lines.append($0) }) { moves += 1 }
+            let launches = defaults.integer(forKey: SyncEngineAutoMove.readyLaunchesKey(store))
             run.evaluate()
             await settle(run)
+            run.evaluate()
+            await settle(run)
+            XCTAssertEqual(moves, 0, "never before this launch's mirror has had its chance")
+            XCTAssertEqual(defaults.integer(forKey: SyncEngineAutoMove.readyLaunchesKey(store)), launches,
+                           "a launch counts once the mirror has tried in it, not at its start")
+            imported = true
             for _ in 0..<3 { run.evaluate() } // the mirror's state changing: counted once per launch
             await settle(run)
         }
@@ -250,6 +276,54 @@ final class SyncEngineAutoMoveTests: XCTestCase {
         XCTAssertEqual(moves, 1, "the third launch, eight days on: it moves at the mirror's next change")
         XCTAssertTrue(lines.contains { $0.contains("has not caught up") && $0.contains("4 record(s)") && $0.contains("kept, not deleted") }, "\(lines)")
         XCTAssertNil(defaults.object(forKey: SyncEngineAutoMove.readySinceKey(store)), "the count is put away with the move")
+    }
+
+    /// Brief 172's finding 4. "Cancel the move" on a move that waits is the person's word, as a move back is: the
+    /// app never makes that move again by itself (it did, at the mirror's next change).
+    func testR4_aCancelledMoveIsNeverMadeAgainByTheApp() async throws {
+        let container = ModelContainerFactory.preview()
+        var moves = 0
+        let run = runner { moves += 1 }
+        SyncEngineSwitch.setPreference(.own, storeName: store, defaults: defaults) // moved by hand, waiting
+        XCTAssertEqual(run.evaluate(), .never(.moveWaiting))
+        await settle(run)
+        // Cancel: a move to the engine this launch runs.
+        try await SyncEngine.move(to: .mirror, container: container, storeName: store, defaults: defaults, current: .mirror,
+                                  backUp: { _ in nil }, relaunch: false)
+        XCTAssertEqual(SyncEngineSwitch.nextEngine(storeName: store, defaults: defaults), .mirror)
+        XCTAssertEqual(run.evaluate(), .never(.movedBefore))
+        await settle(run)
+        XCTAssertEqual(moves, 0, "the person's Cancel stands")
+        XCTAssertFalse(run.tried)
+        // And at every later launch.
+        let later = runner { moves += 1 }
+        later.evaluate()
+        await settle(later)
+        XCTAssertEqual(moves, 0)
+    }
+
+    /// Brief 172: a sign-out and a sign-in in one launch (a Mac left open). The zone that was found, and the word,
+    /// were the earlier account's: both are asked again, and the new account does not follow the old one's zone.
+    func testR2_anotherAccountsAnswersAreForgottenWhenTheAccountChanges() async {
+        var signedIn = true
+        var moves = 0
+        let look = Look(.success(true)), asker = Asker(.notYet)
+        let run = runner(look: look, bolt: false, asker: asker, account: { signedIn }) { moves += 1 }
+        run.evaluate()
+        await settle(run)
+        XCTAssertEqual(run.zone, .found)
+        signedIn = false
+        XCTAssertEqual(run.evaluate(), .wait(.signedOut))
+        XCTAssertEqual(run.zone, .notYet, "what was found belonged to the account that left")
+        XCTAssertEqual(run.word, .notAsked)
+        look.answer = .success(false)
+        signedIn = true
+        run.evaluate()
+        await settle(run)
+        XCTAssertEqual(run.zone, .absent, "looked again for the account that came")
+        XCTAssertEqual(look.asked, 2)
+        XCTAssertEqual(run.evaluate(), .wait(.notReleased))
+        XCTAssertEqual(moves, 0)
     }
 
     func testR1_neverOnTheEngineNorWhileAMoveWaitsNorByArgument() {
@@ -410,6 +484,75 @@ final class SyncEngineAutoMoveTests: XCTestCase {
         XCTAssertEqual(SyncEngineWords.everyoneValue(.paused), "Paused")
         XCTAssertEqual(SyncEngineWords.everyoneValue(.unknown), "Couldn't ask iCloud")
         XCTAssertEqual(SyncEngineWords.everyoneValue(.notAsked), "Asking iCloud…")
+    }
+
+    /// Brief 172's table: the rules' tests call `evaluate` themselves, so the lines that make the app call it (the
+    /// start at launch, the watch on the mirror's marks, the app coming forward, the finish and the check) could be
+    /// deleted with every test green. This reads them in the sources.
+    func testTheAppCallsTheRulesAtLaunchOnTheMirrorsChangesAndWhenItComesForward() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
+        guard let app = try? String(contentsOf: root.appending(path: "HITList/HITListApp.swift"), encoding: .utf8),
+              let move = try? String(contentsOf: root.appending(path: "HITList/Services/SyncEngine/SyncEngineAutoMove.swift"), encoding: .utf8)
+        else { throw XCTSkip("the sources are out of this process's reach") }
+        for line in ["SyncEngineAutoMove.Runner.start(container: container)", "SyncEngineMoveFinish.install(container: container)",
+                     "SyncEngineMoveCheck.startIfDue()", "SyncEngineAutoMove.Runner.shared?.cameForward()"] {
+            XCTAssertTrue(app.contains(line), "HITListApp no longer has: \(line)")
+        }
+        for line in ["evaluate()\n            watchMirror()", "_ = CloudSyncMonitor.shared.state", "_ = CloudSyncMonitor.shared.accountStatus",
+                     "_ = CloudSyncMonitor.shared.recordDifference", "self.evaluate()\n                    self.watchMirror()",
+                     "SyncEngineMoveFinish.moveWritten()", "relaunch: false"] {
+            XCTAssertTrue(move.contains(line), "SyncEngineAutoMove no longer has: \(line)")
+        }
+    }
+
+    /// The app coming forward asks again (no sooner than half an hour), and never after this launch's try.
+    func testComingForwardAsksAgainAndNeverAfterTheTry() async {
+        let clock = Clock()
+        let asker = Asker(.notYet)
+        var moves = 0
+        let run = runner(asker: asker, clock: clock) { moves += 1 }
+        run.begin()
+        await settle(run)
+        XCTAssertEqual(asker.asked, 1)
+        run.cameForward()
+        await settle(run)
+        XCTAssertEqual(asker.asked, 1, "not within half an hour")
+        clock.now.addTimeInterval(SyncEngineAutoMove.askAgainAfter)
+        asker.answer = .go
+        run.cameForward()
+        await settle(run)
+        XCTAssertEqual(asker.asked, 2)
+        XCTAssertEqual(moves, 1, "George's word came meanwhile")
+        clock.now.addTimeInterval(SyncEngineAutoMove.askAgainAfter)
+        run.cameForward()
+        await settle(run)
+        XCTAssertEqual(asker.asked, 2, "one try per launch: nothing is asked after it")
+        XCTAssertEqual(moves, 1)
+    }
+
+    /// The words of a move that waits say what is true since the app finishes it itself: nothing to quit, nothing
+    /// to swipe away (brief 172's finding 9).
+    func testR4_aWaitingMovesWordsSayTheAppFinishesIt() {
+        for words in [SyncEngineAutoMove.movingLine, SyncEngineWords.waitingNote(.own), SyncEngineWords.moveNote(to: .own),
+                      SyncEngineAutoMove.line(zone: .absent, moved: true) ?? ""] {
+            XCTAssertFalse(words.localizedCaseInsensitiveContains("swipe"), words)
+            XCTAssertFalse(words.localizedCaseInsensitiveContains("quit"), words)
+            XCTAssertFalse(words.contains("next time it opens"), words)
+        }
+        XCTAssertTrue(SyncEngineAutoMove.movingLine.hasSuffix("Nothing to do."))
+        XCTAssertTrue(SyncEngineWords.waitingNote(.mirror).contains("the earlier sync"))
+    }
+
+    /// The rows that act show only where the group was revealed by hand (or a Debug side store, or a move that waits
+    /// to be cancelled): a tester whose device moved by itself sees what happened, and no row that moves it back alone.
+    func testR4_onlyARevealedGroupShowsTheRowsThatAct() {
+        XCTAssertFalse(SyncEngineSwitchGroup.showsTheSwitch(revealed: false, isDebugSideStore: false))
+        XCTAssertTrue(SyncEngineSwitchGroup.showsTheSwitch(revealed: true, isDebugSideStore: false))
+        XCTAssertTrue(SyncEngineSwitchGroup.showsTheSwitch(revealed: false, isDebugSideStore: true))
+        XCTAssertTrue(SyncEngineSwitchGroup.showsTheSwitch(revealed: false, isDebugSideStore: false, waiting: true))
+        XCTAssertTrue(SyncEngineSwitchGroup.isShown(revealed: false, engine: .own, isDebugSideStore: false),
+                      "the group itself still tells a moved device what happened")
     }
 
     // MARK: - The hand move's fresh copy (the way back only)

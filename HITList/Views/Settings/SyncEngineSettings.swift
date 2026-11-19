@@ -181,8 +181,13 @@ struct SyncEngineHoldGroup: View {
 
 /// The switch between the engines (`dev/SYNC-ENGINE.md` section 14, stage 5). From 0.9.14 it is in every build and
 /// hidden: it shows once it has been revealed on the device (seven taps on the environment row, `SevenTaps`), on a
-/// store that is already on the engine (the way back), and in a Debug build on a side store. Showing it to everyone
-/// is a later release's decision.
+/// store that is already on the engine, and in a Debug build on a side store.
+///
+/// **On a device that was never revealed the group only tells** (round 34): which sync the device is on, that it
+/// moved by itself and that the other devices need the update, and the check it made of itself. The row that moves
+/// the store and the row for George's word show only where the seven taps were made (`showsTheSwitch`): one device
+/// moved back alone no longer syncs with the person's others, and from 0.9.16 every moved tester would have had
+/// that row one tap away.
 struct SyncEngineSwitchGroup: View {
     private var board: SyncEngineBoard { .shared }
     @State private var confirmMove = false
@@ -200,6 +205,13 @@ struct SyncEngineSwitchGroup: View {
 
     nonisolated static func isShown(revealed: Bool, engine: SyncEngineBoard.Engine, isDebugSideStore: Bool) -> Bool {
         revealed || engine == .own || isDebugSideStore
+    }
+
+    /// Whether the group shows the rows that act (the move, its cancel, George's word): only where it was revealed
+    /// by hand, or a Debug build on a side store. A waiting move keeps its row whatever else, so it can be cancelled
+    /// where it was asked for.
+    nonisolated static func showsTheSwitch(revealed: Bool, isDebugSideStore: Bool, waiting: Bool = false) -> Bool {
+        revealed || isDebugSideStore || waiting
     }
 
     /// Debug builds, a side store (never HITList.store).
@@ -228,13 +240,19 @@ struct SyncEngineSwitchGroup: View {
                                                    byArgument: SyncEngineSwitch.launchedByArgument)
         let waiting = pending != nil
         let target: SyncEngineBoard.Engine = waiting ? SyncEngineSwitch.current : (running == .own ? .mirror : .own)
+        let revealed = SyncEngineSwitch.isSwitchRevealed()
+        let acts = Self.showsTheSwitch(revealed: revealed, isDebugSideStore: Self.isDebugSideStore, waiting: waiting)
+        // A move made by hand that waits on a side store says how to finish it; everywhere else the app finishes it.
+        let byItself = SyncEngineAutoMove.Runner.shared?.line != nil
         HITGroup(Self.title, footer: SyncEngineWords.switchFooter) {
             HITMenuRow("Syncs through", systemImage: "gearshape.2", value: SyncEngineWords.engineName(running))
                 .accessibilityIdentifier("settings-engine-switch")
-            SettingsNote(text: waiting ? SyncEngineWords.waitingNote(next) : SyncEngineWords.moveNote(to: target))
+            if acts, !(waiting && byItself) {
+                SettingsNote(text: waiting ? SyncEngineWords.waitingNote(next) : SyncEngineWords.moveNote(to: target))
+            }
             // George's word as iCloud holds it now (`SyncEngineAutoMove` R0), asked when the group appears: on his own
             // device he sees that the record he made in the CloudKit Console reads as he meant it.
-            if Self.asksForTheWord {
+            if Self.asksForTheWord, Self.showsTheSwitch(revealed: revealed, isDebugSideStore: Self.isDebugSideStore) {
                 HITMenuRow(SyncEngineWords.everyoneTitle, systemImage: "person.3", value: SyncEngineWords.everyoneValue(everyone))
                     .accessibilityIdentifier("settings-engine-everyone")
                     .task { everyone = await CloudKitWord().ask() }
@@ -254,13 +272,15 @@ struct SyncEngineSwitchGroup: View {
                         .accessibilityIdentifier("settings-engine-auto-move-check")
                 }
             }
-            HITMenuRow(waiting ? SyncEngineWords.cancelTitle : SyncEngineWords.moveTitle(to: target),
-                       subtitle: board.actions == nil ? SyncEngineWords.notWired : nil,
-                       systemImage: "arrow.left.arrow.right", iconTint: Theme.accent, accessory: .none) {
-                if waiting { move(to: target, freshCopy: false) } else { confirmMove = true }
+            if acts {
+                HITMenuRow(waiting ? SyncEngineWords.cancelTitle : SyncEngineWords.moveTitle(to: target),
+                           subtitle: board.actions == nil ? SyncEngineWords.notWired : nil,
+                           systemImage: "arrow.left.arrow.right", iconTint: Theme.accent, accessory: .none) {
+                    if waiting { move(to: target, freshCopy: false) } else { confirmMove = true }
+                }
+                .disabled(board.actions == nil || isMoving)
+                .accessibilityIdentifier("settings-engine-move")
             }
-            .disabled(board.actions == nil || isMoving)
-            .accessibilityIdentifier("settings-engine-move")
             if let message {
                 SettingsMessage(text: message)
                     .padding(.leading, HITRowMetrics.titleInset)
@@ -496,7 +516,7 @@ enum SyncEngineWords {
     #if os(macOS)
     private static let reopens = "then HITList relaunches"
     #else
-    private static let reopens = "then asks you to reopen HITList"
+    private static let reopens = "then HITList finishes the move the next time you leave it"
     #endif
 
     /// Under the row, before the move: what moving does, in the direction it would go.
@@ -510,8 +530,6 @@ enum SyncEngineWords {
         return "Moving back saves a backup first, \(reopens). Move every device back, one right after another."
     }
 
-    /// Moving to the new sync while today's sync has not finished here: said in the confirmation, which then offers
-    /// "Move anyway". Nil when nothing stands in the way (the earlier sync is off, or its bolt is filled).
     /// The hidden group's row for George's word that every device may move (`SyncEngineAutoMove` R0).
     static let everyoneTitle = "Everyone's move"
     static func everyoneValue(_ word: SyncEngineAutoMove.Word) -> String {
@@ -524,6 +542,8 @@ enum SyncEngineWords {
         }
     }
 
+    /// Moving to the new sync while today's sync has not finished here: said in the confirmation, which then offers
+    /// "Move anyway". Nil when nothing stands in the way (the earlier sync is off, or its bolt is filled).
     static func moveBlocker(mirrorRunning: Bool, isSynced: Bool) -> String? {
         guard mirrorRunning, !isSynced else { return nil }
         return "iCloud sync hasn't finished on this device (the bolt isn't filled). Moving now can bring back "
@@ -535,13 +555,16 @@ enum SyncEngineWords {
     static let backMessage = "On the first device you move back, send its tasks. On every other device, download: "
         + "it takes a fresh copy from iCloud, so nothing is saved twice. A backup is saved first either way."
 
+    /// While a move made by hand waits. The app finishes it itself (`SyncEngineMoveFinish`): a Mac when it is no
+    /// longer the active app, an iPhone or iPad once it is left. (A side store on the Mac, which a relaunch would
+    /// not reopen, is finished by quitting and opening it again: the move's own message says so there.)
     static func waitingNote(_ next: SyncEngineBoard.Engine) -> String {
         #if os(macOS)
-        let how = "Quit HITList and open it again"
+        let how = "when you switch to another app"
         #else
-        let how = "Swipe HITList away in the app switcher and open it again"
+        let how = "the next time you leave it"
         #endif
-        return "\(how) to finish moving to \(engineName(next).lowercased())."
+        return "HITList finishes moving to \(engineName(next).lowercased()) \(how). Nothing to do."
     }
 
     static let switchFooter = "Early access. HITList's own sync knows exactly what is waiting to go to iCloud, so the "

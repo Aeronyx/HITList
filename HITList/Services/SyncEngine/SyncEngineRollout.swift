@@ -19,8 +19,12 @@ import CloudKit
 ///   (`unknownItem`) or `minBuild` above this build → `notYet`; anything else (offline, signed out of a network that
 ///   answers nothing, a throttle, a field of the wrong kind) → `unknown`. Only `go` lets a device move.
 ///
-/// One fetch by the record's id: no query, no index. It never throws, never retries by itself, keeps nothing on disk,
-/// and writes one line in the sync log per answer through the closure it is given.
+/// - **Several records** (one made in the Console under a name of its own beside `everyone`, or two made by
+///   mistake): a record that says wait wins over every other, whichever was changed last, because the pause is the
+///   brake; otherwise the one changed last is the word (`word(among:)`).
+///
+/// One fetch by the record's id and one query for the type's records. It never throws, never retries by itself,
+/// keeps nothing on disk, and writes one line in the sync log per answer through the closure it is given.
 enum SyncEngineRollout {
     enum Answer: String, Equatable, Sendable {
         /// The word is there and this build may move.
@@ -66,6 +70,14 @@ enum SyncEngineRollout {
     }
 
     // MARK: - The rules (pure)
+
+    /// The word among several records, each with the time it was last changed: one that says wait (or cannot be
+    /// read) before any other, then the one changed last. Nil for none.
+    static func word(among records: [(fields: Fields, changed: Date)]) -> Fields? {
+        let newestFirst = records.sorted { $0.changed > $1.changed }
+        if let brake = newestFirst.first(where: { $0.fields.unreadable || ($0.fields.paused ?? 0) != 0 }) { return brake.fields }
+        return newestFirst.first?.fields
+    }
 
     /// The answer for these fields (nil: no such record) and this build's number (`AppInfo.build`, a string).
     static func answer(fields: Fields?, build: String) -> Answer {
@@ -155,9 +167,9 @@ struct SyncEngineRolloutAsker: SyncEngineRolloutAsking {
 }
 
 /// The question on CloudKit: one fetch of `HLRollout/everyone` by its id from the engine's container's public
-/// database (Development for a Debug build, Production for TestFlight), the two fields only; and when there is no
-/// record of that name, one query for any record of the type (a record made by hand may carry another name). Read access is the
-/// world's, so it answers signed in or not.
+/// database (Development for a Debug build, Production for TestFlight), the two fields only, and one query for
+/// every record of the type (a record made by hand may carry another name). Read access is the world's, so it
+/// answers signed in or not.
 struct CloudKitRollout: SyncEngineRolloutAsking {
     private let asker: SyncEngineRolloutAsker
 
@@ -179,25 +191,27 @@ struct CloudKitRollout: SyncEngineRolloutAsking {
         let results = try await database.configuredWith(configuration: configuration) { database in
             try await database.records(for: [id], desiredKeys: [SyncEngineRollout.minBuildField, SyncEngineRollout.pausedField])
         }
+        var found: [CKRecord] = []
         if let result = results[id] {
             switch result {
-            case .success(let record): return SyncEngineRollout.Fields(record: record)
+            case .success(let record): found.append(record)
             case .failure(let error):
                 if !SyncEngineRollout.isUnknownItem(error) { throw error }
             }
         }
-        // No record of that name. George makes the word by hand in the CloudKit Console, where a record may be saved
-        // under a name the console gave it: any record of the type is the word, the one changed last if there are
-        // several. (The type's record name is queryable in the schema file for this.) A query that fails (the type
-        // not yet deployed) is no word.
-        return try? await database.configuredWith(configuration: configuration) { database in
+        // George makes the word by hand in the CloudKit Console, where a record may be saved under a name the
+        // console gave it: every record of the type counts (the type's record name is queryable in the schema file
+        // for this). A query that fails (the type not yet deployed) adds nothing.
+        let queried: [CKRecord]? = try? await database.configuredWith(configuration: configuration) { database in
             let query = CKQuery(recordType: SyncEngineRollout.recordType, predicate: NSPredicate(value: true))
             let (matches, _) = try await database.records(matching: query, desiredKeys: [SyncEngineRollout.minBuildField,
                                                                                          SyncEngineRollout.pausedField],
-                                                          resultsLimit: 10)
-            let records: [CKRecord] = matches.compactMap { try? $0.1.get() }
-            let newest = records.max { ($0.modificationDate ?? .distantPast) < ($1.modificationDate ?? .distantPast) }
-            return newest.map(SyncEngineRollout.Fields.init(record:))
+                                                          resultsLimit: 20)
+            return matches.compactMap { try? $0.1.get() }
         }
+        for record in queried ?? [] where !found.contains(where: { $0.recordID == record.recordID }) { found.append(record) }
+        return SyncEngineRollout.word(among: found.map {
+            (fields: SyncEngineRollout.Fields(record: $0), changed: $0.modificationDate ?? .distantPast)
+        })
     }
 }

@@ -15,11 +15,14 @@ import UIKit
 ///
 /// - **iPhone and iPad**: once the app is in the background with a move waiting, what is unsaved is saved and the
 ///   process ends. To the person it is what the system does to a background app every day: the next opening is a
-///   fresh start, on the other engine.
-/// - **Mac**: when HITList is not the active app and no card is open, it relaunches itself behind the other apps,
-///   as the hand move relaunches it (the new instance waits for this one to exit before it opens the store).
+///   fresh start, on the other engine. Only a process the person has had in front of them: one the system started
+///   in the background (a widget's button, a push, a refresh) is doing that work and is left to it.
+/// - **Mac**: when HITList is not the active app, it relaunches itself behind the other apps, as the hand move
+///   relaunches it (the new instance waits for this one to exit before it opens the store).
 ///
-/// Never under tests, never when a Debug argument chose the engine (nothing waits then), never for a side store on
+/// Never while something a person may be typing in is open: a card (`PopoutController.isAnyCardOpen`), or any sheet,
+/// alert or panel (`isSomethingPresented`: the filter, Group and label editors, Review Inbox, the profile, an
+/// invitation, an import or export). Never under tests, never when a Debug argument chose the engine (nothing waits then), never for a side store on
 /// the Mac that its launcher named (a relaunch through the system would not reopen it), and nothing at all when no
 /// move waits.
 @MainActor
@@ -48,6 +51,8 @@ enum SyncEngineMoveFinish {
     }
 
     private static var gaveUp = false
+    /// iPhone and iPad: this process has been in front of the person at least once.
+    private static var wasActive = false
 
     /// Whether a relaunch through the system opens this store again: the real store, and a Development build's own
     /// (`SyncStoreGuard` names it again at every launch). Any other side store is named by its launcher's
@@ -58,8 +63,23 @@ enum SyncEngineMoveFinish {
     }
 
     /// Whether this moment is one the app may end or relaunch itself in (pure, for the tests).
-    static func mayFinish(waiting: Bool, inMemory: Bool, quiet: Bool, cardOpen: Bool) -> Bool {
-        waiting && !inMemory && quiet && !cardOpen
+    static func mayFinish(waiting: Bool, inMemory: Bool, quiet: Bool, cardOpen: Bool, presented: Bool = false,
+                          wasActive: Bool = true) -> Bool {
+        waiting && !inMemory && quiet && !cardOpen && !presented && wasActive
+    }
+
+    /// Whether a sheet, an alert or a panel is open over any of the app's windows: something a person may be in the
+    /// middle of, which a card is not the only kind of (brief 172's finding 7).
+    static var isSomethingPresented: Bool {
+        #if os(macOS)
+        return NSApplication.shared.modalWindow != nil
+            || NSApplication.shared.windows.contains { $0.attachedSheet != nil || $0.sheets.isEmpty == false }
+        #else
+        return UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .contains { $0.rootViewController?.presentedViewController != nil }
+        #endif
     }
 
     /// From `HITListApp.init`. Arms two observers and nothing else; they do nothing while no move waits.
@@ -81,6 +101,9 @@ enum SyncEngineMoveFinish {
             MainActor.assumeIsolated { finishIfQuiet() }
         }
         #else
+        NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated { wasActive = true }
+        }
         NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { finishIfQuiet() }
         }
@@ -100,21 +123,38 @@ enum SyncEngineMoveFinish {
         let waiting = isWaiting()
         guard waiting else { return }
         #if os(macOS)
+        // A relaunch already under way (the hand move's own) is the finish: never a second instance.
+        guard !SyncEngine.isRelaunching else { return }
         let quiet = !NSApplication.shared.isActive
+        let active = true
         guard reopensByItself(storeName: ModelContainerFactory.storeName) else { return }
         #else
         let quiet = UIApplication.shared.applicationState == .background
+        let active = wasActive || UIApplication.shared.applicationState == .active
+        #endif
+        #if DEBUG
+        if ModelContainerFactory.storeName != ModelContainerFactory.mainStoreName {
+            // A rehearsal reads why a waiting move was or was not finished at this moment.
+            print("REHEARSAL finish: quiet \(quiet), card open \(PopoutController.isAnyCardOpen), "
+                  + "presented \(isSomethingPresented), was in front \(active)")
+            fflush(stdout)
+        }
         #endif
         guard mayFinish(waiting: waiting, inMemory: ModelContainerFactory.isRunningInMemory, quiet: quiet,
-                        cardOpen: PopoutController.isAnyCardOpen) else { return }
+                        cardOpen: PopoutController.isAnyCardOpen, presented: isSomethingPresented,
+                        wasActive: active) else { return }
         if let finishForTesting { finishForTesting(); return }
         finish()
     }
 
     private static func finish() {
         let target = SyncEngineSwitch.nextEngine()
-        // What is unsaved is saved first: the next start reads the store, not this process.
-        if let context = container?.mainContext, context.hasChanges { try? context.save() }
+        // What is unsaved is saved before the process goes (just before, below: the engine's stop and the wait come
+        // between): the next start reads the store, not this process.
+        let save: @MainActor () -> Void = {
+            if let context = container?.mainContext, context.hasChanges { try? context.save() }
+        }
+        save()
         CloudSyncMonitor.shared.write(.note, "Finishing the move to \(target == .own ? "the new sync" : "the earlier sync"): HITList starts again by itself")
         #if DEBUG
         print("REHEARSAL finish: ending or relaunching for the move to \(target.rawValue)")
@@ -124,6 +164,7 @@ enum SyncEngineMoveFinish {
         Task { @MainActor in
             // The running engine stops before the process goes, so the transport's state is written.
             if let running = SyncEngine.shared { await running.stop() }
+            save()
             AppGroup.defaults.set(target.rawValue, forKey: triedKey(ModelContainerFactory.storeName))
             SyncEngine.relaunchMac(defaults: AppGroup.defaults, activates: false)
         }
@@ -135,13 +176,14 @@ enum SyncEngineMoveFinish {
         task = app.beginBackgroundTask { app.endBackgroundTask(task) }
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(600))
-            guard app.applicationState == .background, isWaiting() else {
+            guard app.applicationState == .background, isWaiting(), !PopoutController.isAnyCardOpen, !isSomethingPresented else {
                 // The person came straight back: not now. The next time it goes to the background.
                 app.endBackgroundTask(task)
                 return
             }
             // As on the Mac: the running engine stops first, so the transport's state is written.
             if let running = SyncEngine.shared { await running.stop() }
+            save()
             log.notice("move: ending the process in the background so the next opening is on \(target.rawValue, privacy: .public)")
             AppGroup.defaults.set(target.rawValue, forKey: triedKey(ModelContainerFactory.storeName))
             exit(0)

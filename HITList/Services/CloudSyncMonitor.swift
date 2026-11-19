@@ -125,6 +125,9 @@ final class CloudSyncMonitor {
     @ObservationIgnored private var recordRead: Task<Void, Never>?
     /// The mirror reported trouble when the state was last looked at: its clearing asks for a read.
     @ObservationIgnored private var rawShowedTrouble = false
+    /// The mirror has ended an import in this launch, well or badly (`SyncEngineAutoMove` R1: patience with a mirror
+    /// that does not catch up never runs out before the mirror had this launch's chance).
+    private(set) var importEndedThisLaunch = false
     /// What the last believed comparison found to differ; nil while the two agree or nothing is known. Settings shows
     /// a note under the status line from it.
     private(set) var recordDifference: SyncRecordCheck.Difference?
@@ -1424,6 +1427,7 @@ final class CloudSyncMonitor {
         }
         inFlight[event.identifier] = nil
         inFlightImports.remove(event.identifier)
+        if event.type == .import, !importEndedThisLaunch { importEndedThisLaunch = true }
         // The watchdog first: an export's line carries how long after the save it finished ("afterSave"),
         // and its other findings (late, recovered) follow the event's line.
         let failed = event.error != nil || !event.succeeded

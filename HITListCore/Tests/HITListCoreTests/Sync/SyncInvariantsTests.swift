@@ -624,7 +624,9 @@ final class SyncInvariantsTests: XCTestCase {
         print("1,000 steps on 3 devices (seed 42): \(String(format: "%.3f", used)) s of CPU, \(took) on the wall clock; "
               + "\(report.findings.count) findings, \(report.notes.count) notes")
         XCTAssertEqual(report.script.count, 1000)
-        XCTAssertLessThan(used, 2.0, "the simulation must stay cheap enough to run thousands of seeds")
+        // Up to a second on this Mac beside other builds. The bound is for a rig that grew several times dearer, not
+        // for a slow runner: GitHub's took 2.3 s of CPU once (2026-11-18), and failed a push that changed nothing here.
+        XCTAssertLessThan(used, 5.0, "the simulation must stay cheap enough to run thousands of seeds")
     }
 
     static func cpuSeconds() -> Double {

@@ -65,32 +65,78 @@ final class MoveRedTeamTests: XCTestCase {
         context.insert(filter("Today", "today", id: seedID, made: longAgo, changed: lastMonth))
         context.insert(filter("Today", "today", id: seedID, made: now, changed: now))
         try context.save()
-        _ = try Deduplicator.run(in: context, byName: true, mergesSharedIDs: false)
+        _ = try Deduplicator.run(in: context, byName: true)
         let left = try context.fetch(FetchDescriptor<SavedFilter>())
         XCTAssertEqual(left.count, 1)
         XCTAssertEqual(left.first?.updatedAt, lastMonth)
         // Two copies a person changed still take the newer stamp, as before.
         context.insert(filter("Today", "today", id: UUID(), made: longAgo.addingTimeInterval(60), changed: now))
         try context.save()
-        _ = try Deduplicator.run(in: context, byName: true, mergesSharedIDs: false)
+        _ = try Deduplicator.run(in: context, byName: true)
         XCTAssertEqual(try context.fetch(FetchDescriptor<SavedFilter>()).first?.updatedAt, now)
     }
 
-    /// A5: a store that came back from HITList's own sync by hand merges rows that share an id on the mirror too
-    /// (what it received through the engine may arrive again as another device's records); any other store on the
-    /// mirror is left exactly as before.
-    func testAStoreThatCameBackMergesRowsThatShareAnID() throws {
+    /// A5, taken back (brief 172's finding 1): on the mirror, rows of a task that share an `id` are never merged,
+    /// whatever the store went through. Two devices that both came back from the engine with their own file each
+    /// hold an item made on the engine twice, as two records of the mirror's; a merge on each kept "its own" of
+    /// two equal rows and deleted the other, and the mirror took both deletions to every device.
+    func testTheMirrorNeverMergesTasksThatShareAnIDSoTwoDevicesCannotDeleteEachOthersCopy() throws {
+        let made = Date(timeIntervalSince1970: 1_800_000_000.123_456)
+        let rounded = Date(timeIntervalSince1970: (made.timeIntervalSince1970 * 1000).rounded() / 1000)
+        let id = UUID()
+        func row(_ record: String, _ stamp: Date) -> TaskItem {
+            let task = TaskItem(title: "Item made on the engine")
+            task.id = id
+            task.notes = record
+            task.createdAt = stamp
+            task.updatedAt = stamp
+            return task
+        }
+        // Device A made the item (its row X, at full precision) and received E's record Y; device E received the
+        // item through the engine (rounded to milliseconds) and then A's record X.
+        let onA = ModelContainerFactory.preview(), a = onA.mainContext
+        a.insert(row("X", made)); try a.save()
+        a.insert(row("Y", rounded)); try a.save()
+        let onE = ModelContainerFactory.preview(), e = onE.mainContext
+        e.insert(row("Y", rounded)); try e.save()
+        e.insert(row("X", rounded)); try e.save()
+        // Both stores came back by hand: the key that once switched the merge on.
+        AppGroup.defaults.set(true, forKey: SyncEngineAutoMove.stayKey(ModelContainerFactory.storeName))
+        defer { AppGroup.defaults.removeObject(forKey: SyncEngineAutoMove.stayKey(ModelContainerFactory.storeName)) }
+        _ = try Deduplicator.run(in: a, byName: true)
+        _ = try Deduplicator.run(in: e, byName: true)
+        let keptOnA = try a.fetch(FetchDescriptor<TaskItem>(predicate: #Predicate { $0.id == id })).map(\.notes).sorted()
+        let keptOnE = try e.fetch(FetchDescriptor<TaskItem>(predicate: #Predicate { $0.id == id })).map(\.notes).sorted()
+        XCTAssertEqual(keptOnA, ["X", "Y"], "nothing deleted on A")
+        XCTAssertEqual(keptOnE, ["X", "Y"], "nothing deleted on E: no record of the item is deleted in iCloud")
+        _ = (onA, onE)
+    }
+
+    /// Brief 172's finding 3: a default filter nobody changed takes the engine's seed stamp before the engine reads
+    /// the store, so the note of a deletion made on the engine since wins over a fresh install's seed. A filter a
+    /// person changed, one a person made, and a label keep their stamps; a second pass changes nothing.
+    func testADefaultFilterNobodyChangedTakesTheSeedStampBeforeTheEngineStarts() throws {
         let container = ModelContainerFactory.preview()
         let context = container.mainContext
-        let a = TaskItem(title: "Water the plants"), b = TaskItem(title: "Water the plants")
-        b.id = a.id
-        context.insert(a); context.insert(b)
+        for existing in try context.fetch(FetchDescriptor<SavedFilter>()) { context.delete(existing) }
+        let now = Date()
+        let fresh = filter("Today", "today", id: SeedIdentity.uuid(for: "filter.today"), made: now, changed: now)
+        let changed = filter("Soon", "7 days", id: SeedIdentity.uuid(for: "filter.soon"), made: longAgo, changed: lastMonth)
+        let own = filter("Mine", "p1", id: UUID(), made: now, changed: now)
+        let label = TaskLabel(name: "Board")
+        label.id = SeedIdentity.uuid(for: "TaskLabel/flipboard")
+        label.createdAt = now
+        label.updatedAt = now
+        context.insert(fresh); context.insert(changed); context.insert(own); context.insert(label)
         try context.save()
-        _ = try Deduplicator.run(in: context, byName: true, mergesSharedIDs: false)
-        XCTAssertEqual(try context.fetchCount(FetchDescriptor<TaskItem>(predicate: #Predicate { $0.title == "Water the plants" })), 2,
-                       "the mirror alone never merged tasks")
-        _ = try Deduplicator.run(in: context, byName: true, mergesSharedIDs: true)
-        XCTAssertEqual(try context.fetchCount(FetchDescriptor<TaskItem>(predicate: #Predicate { $0.title == "Water the plants" })), 1)
+
+        XCTAssertEqual(try Deduplicator.backdateUntouchedSeeds(in: context), 1)
+        XCTAssertEqual(fresh.createdAt, TaskActions.engineSeedDate)
+        XCTAssertEqual(fresh.updatedAt, TaskActions.engineSeedDate)
+        XCTAssertEqual(changed.updatedAt, lastMonth, "a default a person changed keeps its stamp")
+        XCTAssertEqual(own.updatedAt, now, "a filter a person made is not a seed")
+        XCTAssertEqual(label.updatedAt, now, "a label is made by something a person did, at the time its stamp says")
+        XCTAssertEqual(try Deduplicator.backdateUntouchedSeeds(in: context), 0, "a second pass changes nothing")
     }
 
     /// C1: the copy kept before the new sync is the previous account's tasks too: it leaves the visible folder with
