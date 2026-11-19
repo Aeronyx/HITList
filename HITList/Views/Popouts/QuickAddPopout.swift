@@ -232,6 +232,8 @@ struct QuickAddPopout: View {
         QuickAddChipRow(signature: chipSignature(chips)) {
             optionChips(chips, parser: parser)
         }
+        // 30 pt chips in one line: past the first accessibility size their words outgrow them (round 34, brief 173).
+        .dynamicTypeSize(...HITType.controlSizeCap)
         // A container of its own: an identifier on the row passes down to its chips and replaces theirs.
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("quickAddOptionBar")
@@ -633,6 +635,8 @@ struct QuickAddPopout: View {
 struct QuickAddChipRow<Chips: View, ID: Hashable>: View {
     /// How far an edge with more beyond it fades.
     static var fade: CGFloat { 16 }
+    /// A compact chip with its 1 pt border whole above and below.
+    static var minimumHeight: CGFloat { HITChip.Size.compact.height + 2 }
 
     let signature: [ID: String]
     @ViewBuilder var chips: () -> Chips
@@ -655,6 +659,13 @@ struct QuickAddChipRow<Chips: View, ID: Hashable>: View {
             }
             // The row's height is its chips' own, whatever is in it: the card never grows a line.
             .fixedSize(horizontal: false, vertical: true)
+            // And never less than a chip and its borders, given first in the card's column: brief 169's pictures and
+            // the supervisor's (the default size with a two-line title, XXXL, AX1) caught the row about 24 pt tall,
+            // its chips cut along their lower edge, which the scroll view's own ideal height did not stop. Not seen
+            // in round 34's own walks, so held here rather than trusted (brief 173). The chips' words stop at
+            // `HITType.controlSizeCap` (`optionBar`), where they still fit a chip.
+            .frame(minHeight: Self.minimumHeight)
+            .layoutPriority(1)
             .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
             .onScrollGeometryChange(for: Edges.self) { geometry in
                 let x = geometry.contentOffset.x + geometry.contentInsets.leading

@@ -229,6 +229,10 @@ private struct PickerPopoverCard<Card: View>: View {
             }
         }
         .environment(\.pickerRoom, room)
+        // A card of a fixed width packed with controls (a month's 42 days, a time field and Repeat side by side): past
+        // the first accessibility size the month's numbers ran into each other and the time read "1…" (round 34,
+        // brief 173). Every chip's card, here once.
+        .dynamicTypeSize(...HITType.controlSizeCap)
         .background(Theme.surface)
         .preferredColorScheme(.dark)
         .tint(Theme.accent)
