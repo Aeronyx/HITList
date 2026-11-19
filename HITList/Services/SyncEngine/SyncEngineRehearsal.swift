@@ -101,7 +101,8 @@ enum SyncEngineRehearsal {
         }
         if let word = value("-rehearsalRollout", arguments) {
             let minBuild = value("-rehearsalRolloutMinBuild", arguments).flatMap(Int64.init)
-            Task { @MainActor in say(await rollout(word, minBuild: minBuild)) }
+            let name = value("-rehearsalRolloutName", arguments)
+            Task { @MainActor in say(await rollout(word, minBuild: minBuild, name: name)) }
         }
         if value("-rehearsalRolloutAsk", arguments) == "YES" {
             Task { @MainActor in
@@ -131,9 +132,10 @@ enum SyncEngineRehearsal {
     }
 
     /// The word written, paused or deleted in the engine's container's public database: one line back.
-    private static func rollout(_ word: String, minBuild: Int64?) async -> String {
+    private static func rollout(_ word: String, minBuild: Int64?, name: String? = nil) async -> String {
         let database = CKContainer(identifier: SyncEngineSwitch.containerID).publicCloudDatabase
-        let id = SyncEngineRollout.recordID
+        // `-rehearsalRolloutName <name>`: a record under another name, as one made by hand in the console may be.
+        let id = name.map { CKRecord.ID(recordName: $0, zoneID: CKRecordZone.default().zoneID) } ?? SyncEngineRollout.recordID
         do {
             switch word {
             case "go", "pause":

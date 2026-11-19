@@ -155,7 +155,8 @@ struct SyncEngineRolloutAsker: SyncEngineRolloutAsking {
 }
 
 /// The question on CloudKit: one fetch of `HLRollout/everyone` by its id from the engine's container's public
-/// database (Development for a Debug build, Production for TestFlight), the two fields only. Read access is the
+/// database (Development for a Debug build, Production for TestFlight), the two fields only; and when there is no
+/// record of that name, one query for any record of the type (a record made by hand may carry another name). Read access is the
 /// world's, so it answers signed in or not.
 struct CloudKitRollout: SyncEngineRolloutAsking {
     private let asker: SyncEngineRolloutAsker
@@ -178,12 +179,25 @@ struct CloudKitRollout: SyncEngineRolloutAsking {
         let results = try await database.configuredWith(configuration: configuration) { database in
             try await database.records(for: [id], desiredKeys: [SyncEngineRollout.minBuildField, SyncEngineRollout.pausedField])
         }
-        guard let result = results[id] else { return nil }
-        switch result {
-        case .success(let record): return SyncEngineRollout.Fields(record: record)
-        case .failure(let error):
-            if SyncEngineRollout.isUnknownItem(error) { return nil }
-            throw error
+        if let result = results[id] {
+            switch result {
+            case .success(let record): return SyncEngineRollout.Fields(record: record)
+            case .failure(let error):
+                if !SyncEngineRollout.isUnknownItem(error) { throw error }
+            }
+        }
+        // No record of that name. George makes the word by hand in the CloudKit Console, where a record may be saved
+        // under a name the console gave it: any record of the type is the word, the one changed last if there are
+        // several. (The type's record name is queryable in the schema file for this.) A query that fails (the type
+        // not yet deployed) is no word.
+        return try? await database.configuredWith(configuration: configuration) { database in
+            let query = CKQuery(recordType: SyncEngineRollout.recordType, predicate: NSPredicate(value: true))
+            let (matches, _) = try await database.records(matching: query, desiredKeys: [SyncEngineRollout.minBuildField,
+                                                                                         SyncEngineRollout.pausedField],
+                                                          resultsLimit: 10)
+            let records: [CKRecord] = matches.compactMap { try? $0.1.get() }
+            let newest = records.max { ($0.modificationDate ?? .distantPast) < ($1.modificationDate ?? .distantPast) }
+            return newest.map(SyncEngineRollout.Fields.init(record:))
         }
     }
 }
