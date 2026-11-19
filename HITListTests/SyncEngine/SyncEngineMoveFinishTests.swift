@@ -47,6 +47,14 @@ final class SyncEngineMoveFinishTests: XCTestCase {
                        "not under something a person is typing in")
     }
 
+    /// A start made for a move that still finds the move waiting makes no other: the app never ends itself in a loop.
+    func testAStartThatDidNotFinishTheMoveIsNotMadeAgain() {
+        XCTAssertFalse(SyncEngineMoveFinish.givesUp(waiting: true, triedFor: nil, next: .own), "the first time")
+        XCTAssertTrue(SyncEngineMoveFinish.givesUp(waiting: true, triedFor: "own", next: .own), "tried, and still waiting")
+        XCTAssertFalse(SyncEngineMoveFinish.givesUp(waiting: true, triedFor: "own", next: .mirror), "another move, another try")
+        XCTAssertFalse(SyncEngineMoveFinish.givesUp(waiting: false, triedFor: "own", next: .own), "nothing waits")
+    }
+
     /// The Mac relaunches itself only for a store a plain relaunch opens again.
     func testOnlyAStoreARelaunchReopensIsRelaunched() {
         XCTAssertTrue(SyncEngineMoveFinish.reopensByItself(storeName: "HITList.store"))

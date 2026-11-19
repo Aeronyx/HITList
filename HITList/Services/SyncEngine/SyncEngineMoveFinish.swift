@@ -38,6 +38,17 @@ enum SyncEngineMoveFinish {
         !byArgument && SyncEngineSwitch.nextEngine(storeName: storeName, defaults: defaults) != current
     }
 
+    /// Written just before the app ends or relaunches itself: the engine that start was meant to open on.
+    static func triedKey(_ store: String) -> String { "syncEngine.moveFinish.tried.\(store)" }
+
+    /// A start that was made for a move and still finds that move waiting does not make another: whatever keeps the
+    /// store from opening on the other engine, ending the app again and again would not mend it.
+    static func givesUp(waiting: Bool, triedFor: String?, next: SyncEngineBoard.Engine) -> Bool {
+        waiting && triedFor == next.rawValue
+    }
+
+    private static var gaveUp = false
+
     /// Whether a relaunch through the system opens this store again: the real store, and a Development build's own
     /// (`SyncStoreGuard` names it again at every launch). Any other side store is named by its launcher's
     /// environment, which a relaunch drops.
@@ -57,6 +68,14 @@ enum SyncEngineMoveFinish {
         guard !installed, !isTesting else { return }
         installed = true
         self.container = container
+        let store = ModelContainerFactory.storeName
+        let tried = AppGroup.defaults.string(forKey: triedKey(store))
+        if givesUp(waiting: isWaiting(), triedFor: tried, next: SyncEngineSwitch.nextEngine()) {
+            gaveUp = true
+            CloudSyncMonitor.shared.write(.note, "The move was finished once and still waits: HITList leaves it for a later start")
+        } else if !isWaiting(), tried != nil {
+            AppGroup.defaults.removeObject(forKey: triedKey(store))
+        }
         #if os(macOS)
         NotificationCenter.default.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { finishIfQuiet() }
@@ -77,6 +96,7 @@ enum SyncEngineMoveFinish {
     static func finishIfQuiet() {
         // Never under tests (nothing was installed), unless a test asks to see what would be done.
         guard installed || finishForTesting != nil else { return }
+        guard !gaveUp else { return }
         let waiting = isWaiting()
         guard waiting else { return }
         #if os(macOS)
@@ -100,6 +120,7 @@ enum SyncEngineMoveFinish {
         Task { @MainActor in
             // The running engine stops before the process goes, so the transport's state is written.
             if let running = SyncEngine.shared { await running.stop() }
+            AppGroup.defaults.set(target.rawValue, forKey: triedKey(ModelContainerFactory.storeName))
             SyncEngine.relaunchMac(defaults: AppGroup.defaults, activates: false)
         }
         #else
@@ -118,6 +139,7 @@ enum SyncEngineMoveFinish {
             // As on the Mac: the running engine stops first, so the transport's state is written.
             if let running = SyncEngine.shared { await running.stop() }
             log.notice("move: ending the process in the background so the next opening is on \(target.rawValue, privacy: .public)")
+            AppGroup.defaults.set(target.rawValue, forKey: triedKey(ModelContainerFactory.storeName))
             exit(0)
         }
         #endif
