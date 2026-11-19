@@ -822,7 +822,7 @@ holds (you are an agent; nobody answers a question; your final message is your r
 - **Changes in behaviour a person will notice** are listed in your report, each in one line: George asked to be
   told of every one.
 
-## Round 34 (2026-11-18, evening; briefs 168–171, Opus 5.5 agents; `ROUND-34.md` says why)
+## Round 34 (2026-11-18, evening; briefs 168–173, Opus 5.5 agents; `ROUND-34.md` says why)
 
 0.9.15 was prepared and not released. George that evening: "I want to be very confident in the next build we
 release and I also want it to force everyone to move over to the new sync engine so we can settle this once and
@@ -843,6 +843,41 @@ phone; nobody talks to iCloud); what is new:
   `HITListApp.swift` and `LocalBackup.swift`: nobody else edits those.
 - **Read**: the two sections at the top of this file, this block, the Round 33 record, your brief, then what it
   names.
+
+## Round 34 record (2026-11-18, night; agents 168 to 173 for 0.9.16): what a session must know now
+
+- **The app moves a store to its own sync by itself, and it is on** (`SyncEngineSwitch.movesByItself`;
+  `SyncEngineAutoMove`, `SyncEngineMoveFinish`, `SyncEngineMoveCheck`, `SyncEngineRollout`; `dev/SYNC-ENGINE.md`
+  section 14, stage 6). It starts no account until George's word, a record of type `HLRollout` he makes in the
+  CloudKit Console; **no session makes, changes or deletes that record in Production**, and no released code
+  writes it (a test greps for one). Nobody changes these files without a brief that says so, and any change to
+  how a store moves gets two reviews before it is released: one told to lose a tester's tasks, one that reads the
+  finished code line by line.
+- **A Debug build runs the move by itself only where asked** (`-syncEngineAutoMove YES` on a side store). Your side
+  stores stay on the engine you launch them on.
+- **On the mirror, rows of a task that share an `id` are never merged** (two devices cannot be made to keep the
+  same one; each deleting "the other" deletes the item everywhere). **Reset local cache is not offered while a
+  move waits.** **Cancel the move and a move back write the "stay" key**: the app never moves that store again.
+- **The app ends its own process (iPhone, in the background) or relaunches itself (Mac, when not the active app)
+  to finish a move**, never under a card, a sheet or an alert, never in a process the person has not had in front
+  of them. A new sheet or panel a person can type in is covered by `SyncEngineMoveFinish.isSomethingPresented`
+  only if it is presented the system's way; a custom overlay needs `PopoutController.isAnyCardOpen` or its own
+  check.
+- **The group in Settings → iCloud only tells on a device where it was never revealed**; the rows that act need
+  the seven taps (`SyncEngineSwitchGroup.showsTheSwitch`).
+- **Debug builds share the real app's Documents and reminders on a device**: anything that writes the backups
+  folder or sets backups aside checks it runs on the real store (`ModelContainerFactory.isMainStoreOpen`).
+- **Dates typed as past are past**: "3 days ago", "2 weeks ago", "last monday" (only a weekday after "last").
+- **A view never sizes its children from a measurement of the stack that holds them**: the Week layout measured
+  itself, its columns kept it as wide as it had ever been, and a narrower window cut it off. Measure a ruler
+  that holds nothing (`UpcomingWeekView`), and draw wide, narrow, wide again in a hosted test.
+- **The Mac toolbar's capsule is as wide as its controls** (`ToolbarPill`): a screen that adds a control to
+  `screenChrome`'s view options needs nothing else.
+- **`StrangerSweepUITests`** (on demand: `HITLIST_SWEEP=1`, `HITLIST_SHOTS_DIR`, `HITLIST_SWEEP_SIZES`,
+  `HITLIST_SWEEP_LANDSCAPE`, `HITLIST_SWEEP_REDUCED`) walks every screen and saves pictures; it does not judge.
+  Read the pictures.
+- **`scripts/test.sh ios` uses the simulator named in `SIMULATOR`** (default the stock "iPhone 17", which every
+  agent shares): give it your own.
 
 ## Round 33 record (2026-11-18; agents 161 to 167 merged for 0.9.15): what a session must know now
 

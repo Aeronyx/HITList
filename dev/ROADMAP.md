@@ -5,29 +5,34 @@ of each round; delegated sessions never edit it (their rows conflicted at every 
 release, is in `CHANGELOG.md`; how each round ran is in `dev/briefs/COMMON.md`; George's standing decisions are in
 `dev/SUPERVISOR.md` §7. Rewritten 2026-11-10: the file had grown a row per brief (history is in git before that date).
 
-## Now: 0.9.15, the engine for George's own devices, and a build fit for strangers (rounds 32 and 33, 2026-11-16 to 18)
+## Now: 0.9.16, the build that moves everyone to the engine (rounds 32 to 34, 2026-11-16 to 18)
 
-George: "Please work freely and complete the sync engine … let's shift into review and hardening mode so we can
-prepare for a real launch, but I also won't feel comfortable launching until we have at least a few days of
-experience with the new sync system" (`dev/briefs/ROUND-32.md`). The engine's road is `dev/SYNC-ENGINE.md` section 14.
+George, 2026-11-18: "I want to be very confident in the next build we release and I also want it to force everyone
+to move over to the new sync engine so we can settle this once and for all … Please take more time to prepare a
+build that is truly worthy of both the new sync engine and to be sent to a wider group of friends"
+(`dev/briefs/ROUND-34.md`; 0.9.14 and 0.9.15 were prepared and not released). The engine's road is
+`dev/SYNC-ENGINE.md` section 14.
 
 | Stage | What | Status |
 |---|---|---|
 | 1 | On real devices | done, round 31 |
-| 2 | Close what can lose or hide a change | done, round 32 (and one nobody had listed: Apple's engine did not catch up after a relaunch); the contract suite and the two simplifications wait for the first live week |
-| 3 | His decisions | done: plain fields; a sign-out keeps the tasks on the device (built, round 33) |
+| 2 | Close what can lose or hide a change | done, round 32; the contract suite and the two simplifications wait for the first live week |
+| 3 | His decisions | done: plain fields; a sign-out keeps the tasks on the device (round 33) |
 | 4 | The move rehearsed, Mac and phone, with a copy of his own tasks | done, round 32 |
-| 5 | Live for George only, a week | ready with 0.9.15 (0.9.14 was not released): the schema is deployed (2026-11-18); he releases, moves the Mac and then the iPhone |
-| 6 | Everyone, moved by the app itself | built and switched off in round 33 (`SyncEngineAutoMove`); flipped after his week, a rehearsal on two devices and his word; he is told first what a friend should do (export) and what could go wrong |
-| 7 | The mirror and its instruments removed | a release |
+| 5 | Live for George only | with 0.9.16: he deploys the schema once more, releases, moves his Mac by hand (his iPhone follows by itself) and looks for as long as he likes |
+| 6 | Everyone, moved by the app itself | **built, switched on, waiting for his word** (round 34): one record he makes in the CloudKit Console; reviewed twice by agents told to break it; rehearsed on iCloud's test side with his phone as the second device. Never yet run in Production |
+| 7 | The mirror and its instruments removed | a release, after every tester's devices have moved and two weeks without a sync report |
 
-Round 33 (`dev/briefs/ROUND-33.md`): Upcoming's Week layout, quick add's chips on one scrolling line, shorter tips,
-the Calendar settings page, a first measured fix for the iPhone's response (its cause on George's own phone is
-still to measure), and a repository with no identifying strings.
+Round 34 also: a sweep of every screen in 358 pictures and its fixes (a wrong date for "3 days ago", the Week
+layout cut off in a narrower window, the Mac toolbar's capsule, the largest text sizes), the iPhone's tab switches
+and Settings measured on George's phone, the history rewritten, and a cleanup of 71 old sessions and 110 GB of
+worktrees. Round 33 (`dev/briefs/ROUND-33.md`): Upcoming's Week layout, quick add's chips on one scrolling line,
+shorter tips, the Calendar settings page, a repository with no identifying strings. Round 32: six reviews of the
+whole app and their findings fixed.
 
-Hardening: six reviews of the whole app (the engine on the real store, the transport, data safety, crashes, every
-screen, performance, privacy) and their findings fixed in 0.9.14. What was left on purpose is at the foot of
-`dev/briefs/ROUND-32.md`.
+After the move, on the way back (`dev/SYNC-ENGINE.md` section 13): a mark on a zone that everyone left, so a
+device that never moved does not follow it; the mirror's deletions taken down for the engine in the gap between
+two of one person's devices moving.
 
 ## Before: 0.9.13 (round 30, 2026-11-16, the day after 0.9.12 was released; released that day)
 
