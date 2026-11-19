@@ -8,8 +8,12 @@ import HITListCore
 //
 // They stick: nothing here is placed from a `GeometryReader` or animated by a transaction that can reach layout. The
 // overdue light's breathing was a `PhaseAnimator`, whose 1.3 s easing also carried the light's first layout, so on
-// every visit to the Flipboard the light drifted in across the title from the left; it is a `TimelineView` now, which
-// only redraws. A light changes colour and glow; its frame never animates.
+// every visit to the Flipboard the light drifted in across the title from the left. Then it was a `TimelineView`,
+// which only redraws, but redrew every overdue pill thirty times a second: with a few dozen switches George's phone
+// spent half of every second on its main thread while the Flipboard was on show (round 34, measured: 28 s of work
+// a minute). Now the pill is drawn twice, once at its dimmest and once fully lit, and only the lit one's opacity
+// is animated, by an animation scoped to that one modifier (`BreathingPill`): nothing is redrawn, and the
+// animation cannot reach layout. A light changes colour and glow; its frame never animates.
 
 /// The pills' look, from plain values.
 enum FlipLightStyle {
@@ -82,6 +86,31 @@ struct FlipPill: View {
             }
             .shadow(color: colour.opacity(lit ? 0.6 * level : 0), radius: 1.5 + 2.5 * level)
             .accessibilityHidden(true)
+    }
+}
+
+/// An overdue light. The pill at its dimmest (`FlipLightStyle.breathLow`) and, over it, the pill fully lit; the lit
+/// one's opacity goes from nothing to whole and back, once per `breathPeriod`, for as long as it is on screen. The
+/// animation is scoped to the opacity alone (`animation(_:body:)`), so it carries no layout with it, and nothing is
+/// redrawn while it runs: neither pill's body is evaluated again. Every light that appears with the board starts
+/// together, from dim.
+struct BreathingPill: View {
+    var tint: Color?
+    var ember: Double = 0
+    @State private var lit = false
+
+    /// Half a breath: from dim to lit, or back.
+    static var half: TimeInterval { FlipLightStyle.breathPeriod / 2 }
+
+    var body: some View {
+        ZStack {
+            FlipPill(tint: tint, level: FlipLightStyle.breathLow, ember: ember)
+            FlipPill(tint: tint, level: 1, ember: ember)
+                .animation(.easeInOut(duration: Self.half).repeatForever(autoreverses: true)) { pill in
+                    pill.opacity(lit ? 1 : 0)
+                }
+        }
+        .onAppear { lit = true }
     }
 }
 
@@ -158,10 +187,7 @@ struct FlipLights: View {
     private func pill(_ index: Int) -> some View {
         let look = FlipLightStyle.pill(index, target: target, lit: lit, side: side)
         if breathes {
-            // Redrawn on a clock, never animated: a breath changes brightness only, so it can't carry layout with it.
-            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: false)) { context in
-                FlipPill(tint: look.tint, level: FlipLightStyle.breath(at: context.date), ember: look.ember)
-            }
+            BreathingPill(tint: look.tint, ember: look.ember)
         } else if target <= 1 {
             // One flare as the switch turns green; the trigger fires on every change, the flare only shows on green.
             let strength = side == .green && !reduceMotion ? 1.0 : 0

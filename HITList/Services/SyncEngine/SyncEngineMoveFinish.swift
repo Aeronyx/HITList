@@ -69,7 +69,9 @@ enum SyncEngineMoveFinish {
     }
 
     /// Whether a sheet, an alert or a panel is open over any of the app's windows: something a person may be in the
-    /// middle of, which a card is not the only kind of (brief 172's finding 7).
+    /// middle of, which a card is not the only kind of (brief 172's finding 7). **A tip is not one**: TipKit presents
+    /// its popover the same way, nobody types in it, and it sat over the main screen of George's phone the first time
+    /// this was rehearsed there, so a move never finished while a tip showed.
     static var isSomethingPresented: Bool {
         #if os(macOS)
         return NSApplication.shared.modalWindow != nil
@@ -78,9 +80,32 @@ enum SyncEngineMoveFinish {
         return UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .flatMap(\.windows)
-            .contains { $0.rootViewController?.presentedViewController != nil }
+            .compactMap { $0.rootViewController?.presentedViewController }
+            .contains { !isOnlyATip(className: String(describing: type(of: $0))) }
         #endif
     }
+
+    /// TipKit's popover, by its class's name ("TipUIPopoverViewController" on iOS 26 and 27). Should the name ever
+    /// change, a tip counts as something open again: the move then finishes a moment later, never wrongly.
+    static func isOnlyATip(className: String) -> Bool { className.hasPrefix("TipUI") }
+
+    #if DEBUG
+    /// What is presented, by window and class, for a rehearsal's line.
+    private static var presentedNames: String {
+        #if os(macOS)
+        return ""
+        #else
+        let names = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .compactMap { window -> String? in
+                guard let presented = window.rootViewController?.presentedViewController else { return nil }
+                return "\(type(of: window))/\(type(of: presented))"
+            }
+        return names.isEmpty ? "" : " (\(names.joined(separator: ", ")))"
+        #endif
+    }
+    #endif
 
     /// From `HITListApp.init`. Arms two observers and nothing else; they do nothing while no move waits.
     static func install(container: ModelContainer,
@@ -136,7 +161,7 @@ enum SyncEngineMoveFinish {
         if ModelContainerFactory.storeName != ModelContainerFactory.mainStoreName {
             // A rehearsal reads why a waiting move was or was not finished at this moment.
             print("REHEARSAL finish: quiet \(quiet), card open \(PopoutController.isAnyCardOpen), "
-                  + "presented \(isSomethingPresented), was in front \(active)")
+                  + "presented \(isSomethingPresented)\(presentedNames), was in front \(active)")
             fflush(stdout)
         }
         #endif

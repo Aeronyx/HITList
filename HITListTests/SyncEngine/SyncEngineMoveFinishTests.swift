@@ -60,6 +60,11 @@ final class SyncEngineMoveFinishTests: XCTestCase {
                                                      presented: false, wasActive: true))
         // Under hosted tests nothing is presented over the host app's window.
         XCTAssertFalse(SyncEngineMoveFinish.isSomethingPresented)
+        // A tip's popover is presented as a sheet is, and is nothing a person types in: seen on George's phone,
+        // where it kept a move from finishing (the class's name as iOS 26 and 27 have it).
+        XCTAssertTrue(SyncEngineMoveFinish.isOnlyATip(className: "TipUIPopoverViewController"))
+        XCTAssertFalse(SyncEngineMoveFinish.isOnlyATip(className: "PresentationHostingController<AnyView>"))
+        XCTAssertFalse(SyncEngineMoveFinish.isOnlyATip(className: "UIAlertController"))
     }
 
     /// Brief 172's finding 2: Reset local cache is not offered while a move waits. The next launch opens on the

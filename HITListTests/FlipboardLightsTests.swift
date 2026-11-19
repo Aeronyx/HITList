@@ -86,7 +86,27 @@ final class FlipboardLightsTests: XCTestCase {
         XCTAssertEqual(FlipLightStyle.pill(2, target: 3, lit: 2, side: .green).ember, 0)
     }
 
-    /// The overdue light breathes on a clock: its brightness at a moment, never an animation that could carry layout.
+    /// Round 34: the breath is one opacity animation, scoped to that opacity so it can carry no layout, over a pill
+    /// drawn once at its dimmest and once fully lit. It was a clock that redrew every overdue pill thirty times a
+    /// second: with a few dozen switches George's phone spent 28 s of every minute on its main thread while the
+    /// Flipboard was on show, and half of that with a handful.
+    func testTheBreathIsOneScopedAnimationNeverARedrawOnAClock() throws {
+        XCTAssertEqual(BreathingPill.half * 2, FlipLightStyle.breathPeriod, "dim to lit and back in one period")
+        let file = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appending(path: "HITList/Views/Flipboard/FlipLights.swift")
+        guard let source = try? String(contentsOf: file, encoding: .utf8) else {
+            throw XCTSkip("the sources are out of this process's reach")
+        }
+        let code = source.split(separator: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
+        XCTAssertFalse(code.contains("TimelineView"), "a light redrawn on a clock again")
+        XCTAssertFalse(code.contains("PhaseAnimator"), "the animator that carried the light's first layout")
+        XCTAssertTrue(code.contains(".repeatForever(autoreverses: true)) { pill in"), "the animation scoped to the opacity")
+        XCTAssertTrue(code.contains("pill.opacity(lit ? 1 : 0)"))
+    }
+
+    /// The breath's curve, as it was drawn on a clock until round 34 and as the animation follows it now: from its
+    /// dimmest to fully lit and back, once per period.
     func testAnOverdueLightBreathesBetweenDimAndLitOnAClock() {
         let start = Date(timeIntervalSinceReferenceDate: 0)
         let period = FlipLightStyle.breathPeriod
