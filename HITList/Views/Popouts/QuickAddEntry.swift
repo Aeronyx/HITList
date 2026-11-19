@@ -43,9 +43,21 @@ private struct QuickAddEntry: ViewModifier {
                 }
             }
             #endif
-            .onAppear { popouts.setListContext(context) }
-            .onChange(of: context) { _, new in popouts.setListContext(new) }
+            // Brief 168: an iPhone tab is kept alive behind the one on show, so a list's appearance is not its showing.
+            // The list sets the "+"'s list while it is on top of its own stack (`appeared`) and its tab is on show; a
+            // tab shown again hands the "+" to the list on top of it.
+            .onAppear {
+                appeared = true
+                if onShow { popouts.setListContext(context) }
+            }
+            .onDisappear { appeared = false }
+            .onChange(of: onShow) { _, shown in if shown, appeared { popouts.setListContext(context) } }
+            .onChange(of: context) { _, new in if onShow, appeared { popouts.setListContext(new) } }
     }
+
+    @Environment(\.tabOnShow) private var onShow
+    /// On top of its own stack: between its onAppear and its onDisappear (a screen pushed over it disappears it).
+    @State private var appeared = false
 
     #if os(macOS)
     /// The Mac's "+": the accent capsule with the dark glyph every accent control has (the Confirm pill's arrow,

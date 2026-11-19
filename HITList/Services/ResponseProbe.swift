@@ -198,6 +198,8 @@ enum ResponseAutopilot {
             await step("check off \(n)", window: 1.5) { driver.send(.complete(title)) }
             await pause(0.8)
         }
+        // `-autopilotTabsOnly YES`: the tabs and the saves alone, for quick comparisons.
+        if UserDefaults.standard.bool(forKey: "autopilotTabsOnly") { return say("done") }
         for tab in [MobileTab.today, .inbox, .upcoming, .flipboard] {
             driver.send(.tab(tab))
             await pause(3)
@@ -241,7 +243,8 @@ enum ResponseAutopilot {
         let first = ticker.ticks.first(where: { $0.at >= built }) ?? ticker.ticks.first ?? (t0, t0)
         let toFrame = ResponseProbe.work(from: t0, to: first.at)
         say(String(format: "step %@ frame %.0f work %.0f busy %.0f longest %.0f worst %.0f slow %d", name(label),
-                   (first.target - t0) * 1000, toFrame.busy * 1000, all.busy * 1000, all.longest * 1000,
+                   // A tick that comes late carries a target already past: the frame is then no sooner than the tick.
+                   (max(first.target, first.at) - t0) * 1000, toFrame.busy * 1000, all.busy * 1000, all.longest * 1000,
                    ticker.worstGap * 1000, ticker.slowGaps))
     }
 

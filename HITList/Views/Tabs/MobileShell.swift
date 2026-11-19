@@ -56,6 +56,8 @@ struct MobileShell: View {
     @State private var paths: [MobileTab: NavigationPath]
     /// The same screens as values (`PhoneStack`): a `NavigationPath` can't be read back.
     @State private var stacks: [MobileTab: PhoneStack]
+    /// The tabs visited since launch: each one's screen is kept alive behind the one on show (brief 168).
+    @State private var visited: Set<MobileTab>
     @State private var now = Date()
     /// The on-screen keyboard is up: the upright island and its "+" step aside (`IslandPlacement.showsChrome`).
     @State private var keyboardUp = false
@@ -65,24 +67,44 @@ struct MobileShell: View {
         let start = place.wrappedValue
         let stack = PhoneStack(start.routes)
         _tab = State(initialValue: start.tab)
+        _visited = State(initialValue: [start.tab])
         _paths = State(initialValue: start.routes.isEmpty ? [:] : [start.tab: stack.path])
         _stacks = State(initialValue: start.routes.isEmpty ? [:] : [start.tab: stack])
     }
 
     private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
+    /// Visited tabs are kept alive (brief 168). A measuring build can ask for 0.9.15's shell, which builds the tab on
+    /// show afresh at every switch, with `-rebuildTabs YES`, so one build measures before and after.
+    static var keepsTabs: Bool {
+        #if DEBUG || RESPONSE_PROBE
+        !UserDefaults.standard.bool(forKey: "rebuildTabs")
+        #else
+        true
+        #endif
+    }
+
     var body: some View {
-        // Only the tab on show is built, so the list on screen is the one whose `.quickAddEntry` sets
-        // `popouts.listContext` for the "+" (its onAppear runs on every switch and every pop).
+        // Brief 168: a tab visited once is kept alive behind the one on show, so coming back to it shows a screen
+        // that exists instead of building it again (a warm switch built the whole list each time). A kept tab is
+        // told it is hidden (`\.tabOnShow`): its clocks, timelines, motion and tips wait, it takes no touch and
+        // VoiceOver skips it, and its lists leave `popouts.listContext` to the tab on show (`QuickAddEntry`).
         let placement = placement
         ZStack(alignment: placement.alignment) {
-            // A change of tab crossfades the screens (`HITMotion.tabSwitch`, brief 58): the stack is identified
-            // by its tab, so the old one leaves and the new one arrives through the transition. Only this layer
-            // animates: the island has its own motion and popouts are drawn outside the shell. The incoming
-            // list's onAppear sets `popouts.listContext` as it is inserted; the outgoing one, fading, sets nothing.
+            // A change of tab crossfades the screens (`HITMotion.tabSwitch`, brief 58): the outgoing one fades out
+            // where it is, the incoming one fades in rising `TabSwitch.rise` (`KeptTab`); a tab's first visit
+            // arrives through the same transition. Only this layer animates: the island has its own motion and
+            // popouts are drawn outside the shell.
             ZStack {
-                stack(for: tab)
-                    .transition(HITMotion.tabSwitchTransition(reduceMotion: reduceMotion))
+                ForEach(MobileTab.allCases.filter { Self.keepsTabs ? visited.contains($0) || $0 == tab : $0 == tab }) { kept in
+                    stack(for: kept)
+                        #if DEBUG
+                        .background { ShellDebug.Built(tab: kept) }
+                        #endif
+                        .environment(\.tabOnShow, kept == tab)
+                        .modifier(KeptTab(onShow: kept == tab, reduceMotion: reduceMotion))
+                        .transition(HITMotion.tabSwitchTransition(reduceMotion: reduceMotion))
+                }
             }
             .animation(HITMotion.tabSwitch(reduceMotion: reduceMotion), value: tab)
             // Beside the upright island the rows' type is a step larger (brief 63).
@@ -94,16 +116,30 @@ struct MobileShell: View {
             .modifier(SideMargin(edge: placement == .side(.leading) ? .leading : .trailing,
                                  length: placement.listSideMargin(columnWidth: barColumnWidth(placement))))
             chrome(placement)
+            #if DEBUG
+            ShellDebug.Readout(popouts: popouts)
+            #endif
         }
         // The quick-add card docks above the keyboard; the island stays put underneath it.
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .onGeometryChange(for: BarColumn.self) { BarColumn($0) } action: { bar = $0 }
         // Leaving a tab takes it back to its first screen (brief 63, George: Browse opened on a tab should be
-        // gone when you come back to it). Its stack is still fading out, and keeps the frame it left on.
-        .onChange(of: tab) { left, _ in
+        // gone when you come back to it). It keeps the frame it left on while it fades out, then goes back,
+        // unseen and without motion; its first screen keeps its scroll position, as a kept screen does.
+        .onChange(of: tab) { left, new in
+            visited.insert(new)
             popouts.closeAll()
-            popToRoot(left)
             report()
+            guard Self.keepsTabs else { return popToRoot(left) }
+            guard paths[left] != nil || stacks[left] != nil else { return }
+            let fade = reduceMotion ? HITMotion.TabSwitch.reducedDuration : HITMotion.TabSwitch.duration
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(fade + 0.05))
+                guard tab != left else { return } // came back before the fade ended: it keeps its place
+                var quiet = Transaction()
+                quiet.disablesAnimations = true
+                withTransaction(quiet) { popToRoot(left) }
+            }
         }
         .onReceive(clock) { now = $0 }
         .onReceive(CalendarChange.moments) { now = $0 } // brief 82's follow-up: a new zone or day shows at once, not at the next minute
@@ -122,6 +158,47 @@ struct MobileShell: View {
         .modifier(ProbeHooks(tab: $tab))
         #endif
     }
+
+    #if DEBUG
+    /// Brief 168, for UI tests, with `-debugShell YES` only: how many times each tab's screen was built
+    /// (`MobileTabsKeptUITests`), and the list the "+" adds to, read from one 1-pt element, `debug-shell`.
+    enum ShellDebug {
+        @MainActor @Observable final class Counts {
+            var builds: [MobileTab: Int] = [:]
+        }
+        @MainActor static let counts = Counts()
+        static var isOn: Bool { UserDefaults.standard.bool(forKey: "debugShell") }
+
+        /// Made once per tab screen: a `StateObject`'s value is built only when its view is new.
+        final class Token: ObservableObject {
+            init(_ tab: MobileTab) {
+                // Counted after the update that builds it, never during it.
+                DispatchQueue.main.async { MainActor.assumeIsolated { ShellDebug.counts.builds[tab, default: 0] += 1 } }
+            }
+        }
+
+        struct Built: View {
+            @StateObject private var token: Token
+            init(tab: MobileTab) { _token = StateObject(wrappedValue: Token(tab)) }
+            var body: some View { Color.clear }
+        }
+
+        struct Readout: View {
+            let popouts: PopoutController
+            var body: some View {
+                if ShellDebug.isOn {
+                    let builds = MobileTab.allCases.map { "\($0.rawValue)=\(ShellDebug.counts.builds[$0] ?? 0)" }
+                    Text("context=\(String(describing: popouts.listContext)) " + builds.joined(separator: " "))
+                        .font(.system(size: 1))
+                        .foregroundStyle(.clear)
+                        .frame(width: 1, height: 1)
+                        .allowsHitTesting(false)
+                        .accessibilityIdentifier("debug-shell")
+                }
+            }
+        }
+    }
+    #endif
 
     #if DEBUG || RESPONSE_PROBE
     /// Brief 168: the autopilot's orders (`ResponseAutopilot`), carried out through the shell's own state: a tab as the
@@ -270,6 +347,28 @@ struct MobileShell: View {
 
     @ViewBuilder
     private func stack(for tab: MobileTab) -> some View {
+        // Drawn again only when its own path changes (brief 168): a switch of tab, the island's day or any other
+        // change of the shell leaves every kept tab's screen as it is, rather than handing each a new chrome closure
+        // and binding, which drew all four lists and their toolbars again on every switch.
+        KeptStack(tab: tab, path: paths[tab] ?? NavigationPath()) {
+            navigationStack(for: tab)
+        }
+        .equatable()
+    }
+
+    /// A tab's screen, compared by its tab and its path alone (`stack(for:)`).
+    private struct KeptStack<Content: View>: View, Equatable {
+        let tab: MobileTab
+        let path: NavigationPath
+        @ViewBuilder let content: () -> Content
+
+        static func == (a: Self, b: Self) -> Bool { a.tab == b.tab && a.path == b.path }
+
+        var body: some View { content() }
+    }
+
+    @ViewBuilder
+    private func navigationStack(for tab: MobileTab) -> some View {
         NavigationStack(path: path(tab)) {
             root(tab)
                 .environment(\.mobileChrome, MobileChrome(control: .forScreen(atTabRoot: true)) {
@@ -290,6 +389,26 @@ struct MobileShell: View {
                 }
         }
         .id(tab)
+    }
+
+    /// A kept tab's screen (brief 168): on show, it fades in rising `TabSwitch.rise` points, as a new screen arrived
+    /// before (`HITMotion.tabSwitchTransition`); left, it fades out where it is, and only once unseen drops back to
+    /// where the next arrival rises from. Hidden, it takes no touch and VoiceOver skips it.
+    private struct KeptTab: ViewModifier {
+        let onShow: Bool
+        let reduceMotion: Bool
+
+        func body(content: Content) -> some View {
+            let rise = reduceMotion ? 0 : HITMotion.TabSwitch.rise
+            let fade = HITMotion.tabSwitch(reduceMotion: reduceMotion)
+            let faded = reduceMotion ? HITMotion.TabSwitch.reducedDuration : HITMotion.TabSwitch.duration
+            content
+                .animation(onShow ? fade : .linear(duration: 0.01).delay(faded)) { $0.offset(y: onShow ? 0 : rise) }
+                .animation(fade) { $0.opacity(onShow ? 1 : 0) }
+                .allowsHitTesting(onShow)
+                .accessibilityHidden(!onShow)
+                .zIndex(onShow ? 1 : 0)
+        }
     }
 
     /// The lists' margin on the island's side, only where the bar column is too narrow for it (else the lists'

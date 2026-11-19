@@ -342,8 +342,11 @@ private struct NowLine: View {
     let x: CGFloat
     let width: CGFloat
 
+    /// Brief 168: the line waits while its iPhone tab is kept behind another.
+    @Environment(\.tabOnShow) private var onShow
+
     var body: some View {
-        TimelineView(.everyMinute) { context in
+        TimelineView(EveryMinuteTimelineSchedule().paused(!onShow)) { context in
             let minutes = context.date.timeIntervalSince(start) / 60
             let y = CGFloat(max(0, min(minutes, 24 * 60))) / 60 * hourHeight
             // The hour whose name the present time stands on or touches (within about a third of an hour's height):

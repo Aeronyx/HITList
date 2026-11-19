@@ -171,6 +171,8 @@ struct SyncBolt: View {
     @AppStorage(BoltStyle.key, store: AppGroup.defaults) private var style: BoltStyle = .fallback
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
+    /// Brief 168: a bolt in an iPhone tab kept behind another neither ticks nor strikes; the one on show does both.
+    @Environment(\.tabOnShow) private var onShow
 
     /// The one gate every bolt on screen asks, so two windows strike together and "the app opened" is the
     /// session's, not each screen's.
@@ -186,7 +188,7 @@ struct SyncBolt: View {
 
     var body: some View {
         let state = displayState
-        TimelineView(.periodic(from: .now, by: 60)) { tick in
+        TimelineView(PeriodicTimelineSchedule(from: .now, by: 60).paused(!onShow)) { tick in
             let look = Self.look(for: state, now: tick.date)
             Button(action: action) {
                 BoltGlyph(look: look, reduceMotion: reduceMotion)
@@ -252,6 +254,7 @@ struct SyncBolt: View {
     }
 
     private func strikeIfDue(from old: Date?, to new: Date?) {
+        guard onShow else { return }
         let kind = Self.strikeGate.advance(from: old, to: new, now: Date(), isActive: isActive, reduceMotion: reduceMotion)
         guard let motion = style.motion(for: kind) else { return }
         // The strike or slam plays as the bolt turns green, whatever the marks were holding.

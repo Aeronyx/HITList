@@ -137,3 +137,92 @@ final class PhoneResponseUITests: XCTestCase {
         RunLoop.current.run(until: Date().addingTimeInterval(seconds))
     }
 }
+
+/// Brief 168: the iPhone keeps the screen of every tab visited alive behind the one on show. Read from the Debug shell's
+/// one-point readout (`-debugShell YES`, `MobileShell.ShellDebug`): each tab's screen is built once however often it is
+/// shown, and after every kind of switch the "+" adds to the list on show (`popouts.listContext`).
+final class MobileTabsKeptUITests: XCTestCase {
+    private var app: XCUIApplication!
+
+    override func setUp() {
+        continueAfterFailure = false
+        app = XCUIApplication()
+        app.launchEnvironment["HITLIST_STORE_SUFFIX"] = "uitest-\(UUID().uuidString.prefix(8))"
+        app.launchArguments += ["-disableCloudKit", "YES", "-hideTips", "-seedDemoData", "YES", "-debugShell", "YES"]
+    }
+
+    func testEachTabIsBuiltOnceAndThePlusFollowsTheTabOnShow() throws {
+        app.launch()
+        XCTAssertTrue(app.buttons["tab-today"].waitForExistence(timeout: 30))
+        expect(context: "today")
+        for _ in 1...3 {
+            for (tab, context) in [("inbox", "inbox"), ("upcoming", "upcoming"), ("flipboard", "plain"), ("today", "today")] {
+                app.buttons["tab-\(tab)"].firstMatch.tap()
+                expect(context: context, "after a tap on \(tab)")
+            }
+        }
+        expect(builds: "inbox=1 today=1 upcoming=1 flipboard=1")
+
+        // A screen pushed on a tab: Browse, then a Group from it, each sets the "+"; leaving the tab and coming back
+        // shows its first screen again and gives the "+" back to it.
+        app.buttons["browseButton"].firstMatch.tap()
+        expect(context: "inbox", "on Browse") // Browse adds to the Inbox
+        let home = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Home")).firstMatch
+        XCTAssertTrue(home.waitForExistence(timeout: 5))
+        home.tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Call the dentist")).firstMatch
+                          .waitForExistence(timeout: 5))
+        let onGroup = readout().context
+        XCTAssertNotEqual(onGroup, "inbox", "a Group's own list once it is pushed")
+        XCTAssertNotEqual(onGroup, "today")
+        app.navigationBars.buttons.firstMatch.tap()
+        expect(context: "inbox", "back on Browse")
+        app.buttons["tab-upcoming"].firstMatch.tap()
+        expect(context: "upcoming", "a tab left from a pushed screen")
+        app.buttons["tab-today"].firstMatch.tap()
+        expect(context: "today", "back on a tab whose pushed screens went")
+        XCTAssertFalse(app.buttons["browse-settings-row"].exists, "Today came back on its first screen")
+
+        // A tap on the tab on show takes it back to its first screen.
+        app.buttons["browseButton"].firstMatch.tap()
+        expect(context: "inbox", "on Browse again")
+        app.buttons["tab-today"].firstMatch.tap()
+        expect(context: "today", "after a tap on the tab on show")
+
+        // The "+" itself: from Inbox, the card adds a task that the Inbox shows.
+        app.buttons["tab-inbox"].firstMatch.tap()
+        expect(context: "inbox")
+        app.buttons["quickAddButton"].firstMatch.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["quickAddTitle"].firstMatch.waitForExistence(timeout: 5))
+        app.typeText("Kept tabs check")
+        app.buttons["quickAddSave"].firstMatch.tap()
+        // The newest task is at the Inbox's end: a long list builds its last rows once they scroll into sight.
+        let added = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Kept tabs check")).firstMatch
+        for _ in 0..<4 where !added.exists {
+            app.swipeUp()
+        }
+        if !added.waitForExistence(timeout: 5) { print("TREE", app.debugDescription) }
+        XCTAssertTrue(added.exists, "added to the Inbox on show")
+        expect(builds: "inbox=1 today=1 upcoming=1 flipboard=1")
+    }
+
+    // MARK: Helpers
+
+    private func readout() -> (context: String, builds: String) {
+        let label = app.staticTexts["debug-shell"].firstMatch.label
+        let parts = label.split(separator: " ", maxSplits: 1).map(String.init)
+        let context = parts.first.map { String($0.dropFirst("context=".count)) } ?? ""
+        return (context, parts.count > 1 ? parts[1] : "")
+    }
+
+    private func expect(context: String, _ when: String = "", file: StaticString = #filePath, line: UInt = #line) {
+        let deadline = Date().addingTimeInterval(5)
+        while readout().context != context, Date() < deadline { RunLoop.current.run(until: Date().addingTimeInterval(0.1)) }
+        XCTAssertEqual(readout().context, context, when, file: file, line: line)
+    }
+
+    private func expect(builds: String, file: StaticString = #filePath, line: UInt = #line) {
+        RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        XCTAssertEqual(readout().builds, builds, file: file, line: line)
+    }
+}
