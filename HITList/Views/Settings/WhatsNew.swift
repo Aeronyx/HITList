@@ -20,18 +20,16 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
+        // Seven lines for three rounds' work (0.9.14 and 0.9.15 were never released): the page was nearly two
+        // screens long, and `SettingsTidyTests` holds every page under 1,400 pt. The whole of it is in the changelog.
         Entry(version: "0.9.16", items: [
             "A new sync of HITList's own. Your devices move to it by themselves over the coming days, after saving a backup: nothing is deleted and there is nothing to do. Open HITList on each of your devices, so they move together.",
-            "Upcoming has a Week layout: your week's tasks on a calendar, all-day ones under each day and timed ones at their hour. Choose it from the Layout button at the top of Upcoming; the list stays the default.",
-            "Quick add's options stay on one line that scrolls sideways, so the card no longer grows as you add to it.",
-            "Settings → Calendar reads at a glance: one switch, a row that says whether HITList may see your calendars, and the calendars to show. Titles and notes across Settings are shorter.",
-            "Tips are shorter, keep one shape, and no longer appear over quick add or a task's card.",
-            "Quicker: switching tabs on iPhone does less work, and checking off a task, switching lists and searching no longer slow down as your list grows.",
-            "Reminders: HITList asks to send notifications the first time you give a task a reminder. Before, reminders stayed silent until you switched them on in Settings → Reminders.",
-            "Safer deleting: a label that is on tasks asks before it goes, and the question for a task names its sub-tasks. Undo after completing a repeating task puts its reminder and its checklist back too.",
-            "Two Groups, two labels or two filters can no longer share a name; the editor says so, instead of HITList quietly merging them later.",
-            "What you type in a task's card is kept if you leave HITList before confirming. A daily backup that fails says so in Settings → iCloud & data → Backups, and Import JSON asks before bringing back things you deleted since the backup.",
-            "The sync log no longer contains any task's title. Settings → iCloud & data says what the bolt means: filled when everything on this device is in iCloud.",
+            "Upcoming has a Week layout: your week's tasks on a calendar. Choose it from the Layout button at the top of Upcoming; the list stays the default.",
+            "Quick add's options stay on one line that scrolls sideways. Typing “3 days ago” or “last monday” gives a date in the past, as typed.",
+            "Quicker on iPhone: switching tabs and moving around Settings.",
+            "Settings reads more easily: Calendar is one switch and a row that says whether HITList may see your calendars; titles, notes and tips are shorter.",
+            "Reminders: HITList asks to send notifications the first time you give a task a reminder.",
+            "Safer: a label that is on tasks asks before it is deleted, two Groups, labels or filters can't share a name, what you type in a task's card is kept if you leave HITList, and Import JSON asks before bringing back what you deleted.",
         ]),
         Entry(version: "0.9.13", items: [
             "Flipboard: a switch keeps its own timing when you put it on a Switchboard. Group one that resets once a week with one that resets every other day, and each stays on its own days.",

@@ -222,7 +222,13 @@ final class SyncEngineWiringTests: XCTestCase {
             XCTFail("a side store is reopened by hand")
         } catch let error as SyncEngine.MoveError {
             XCTAssertEqual(error, .reopenToFinish(.own))
+            // A Mac's side store is reopened by hand (a relaunch would not reopen it); an iPhone finishes the move
+            // itself the next time it is left (`SyncEngineMoveFinish`, round 34), and says so.
+            #if os(macOS)
             XCTAssertTrue(error.localizedDescription.contains("open it again"))
+            #else
+            XCTAssertTrue(error.localizedDescription.contains("the next time you leave it"), error.localizedDescription)
+            #endif
         }
         XCTAssertEqual(SyncEngineSwitch.nextEngine(storeName: "HITList-s143t.store", defaults: defaults), .own)
         // The move waits for a reopen; moving to the engine that still runs takes it back, and needs no backup.
