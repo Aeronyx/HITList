@@ -111,7 +111,12 @@ struct TaskPopout: View {
                         titleCard(parsed: parsed, typedGroup: phrases.projectName, shown: shown)
                         pillRow(shown)
                         if task.recurrence != nil, !task.isSubtask { flipboardRow }
-                        if !task.isSubtask { SubtaskChecklist(task: task, draft: $draft) }
+                        if !task.isSubtask {
+                            // Its rows and "Add Sub-task" are controls in a card: past the first accessibility size
+                            // "Add Sub-task" wrapped and was cut (round 34, brief 173).
+                            SubtaskChecklist(task: task, draft: $draft)
+                                .dynamicTypeSize(...HITType.controlSizeCap)
+                        }
                     }
                     .padding(.horizontal, HITSpacing.l)
                     .padding(.top, HITSpacing.xs)
@@ -454,6 +459,9 @@ struct TaskPopout: View {
             locationPill
         }
         .frame(height: HITChip.Size.compact.height + 2)
+        // 30 pt pills: past the first accessibility size their words outgrew them and were cut top and bottom
+        // (round 34, brief 173).
+        .dynamicTypeSize(...HITType.controlSizeCap)
         .accessibilityIdentifier("editorPills")
     }
 
