@@ -304,9 +304,13 @@ struct SyncEngineSwitchGroup: View {
 
     /// Why moving to the new sync should wait: today's sync has not finished on this device, so what it has not
     /// yet received (a deletion made on another device, say) would be missing from what this device sends.
+    /// "Finished" as the move made by the app reads it (`SyncEngineAutoMove.caughtUp`): the bolt filled, or a
+    /// comparison that found only what this device holds and iCloud's earlier copy lacks, which the new sync sends
+    /// itself. (Judged by the bolt alone, the hand move warned on a device the app would have moved.)
     private var blocker: String? {
         SyncEngineWords.moveBlocker(mirrorRunning: ModelContainerFactory.isCloudKitEnabled,
-                                    isSynced: CloudSyncMonitor.shared.state.isSynced)
+                                    isSynced: SyncEngineAutoMove.caughtUp(CloudSyncMonitor.shared.state,
+                                                                          difference: CloudSyncMonitor.shared.recordDifference))
     }
 
     private func move(to target: SyncEngineBoard.Engine, freshCopy: Bool) {
@@ -546,8 +550,9 @@ enum SyncEngineWords {
     /// "Move anyway". Nil when nothing stands in the way (the earlier sync is off, or its bolt is filled).
     static func moveBlocker(mirrorRunning: Bool, isSynced: Bool) -> String? {
         guard mirrorRunning, !isSynced else { return nil }
-        return "iCloud sync hasn't finished on this device (the bolt isn't filled). Moving now can bring back "
-            + "something deleted on another device, or miss its latest changes. Better: wait for the bolt, then move."
+        return "iCloud sync hasn't finished on this device: it has not yet received everything iCloud holds. Moving "
+            + "now can bring back something deleted on another device, or miss its latest changes. Better: wait "
+            + "for the bolt, then move."
     }
 
     static let backFirstTitle = "First device: send this device's tasks"
