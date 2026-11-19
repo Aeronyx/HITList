@@ -107,6 +107,7 @@ final class HITListUITests: XCTestCase {
         app.typeText(" in 3 days p2 ")
         XCTAssertFalse(dateRow.label.hasPrefix("Tomorrow"), "the typed day shows: \(dateRow.label)")
         snapshot("7 Typed in 3 days p2")
+        dateRow.waitUntilStill()
         dateRow.tap()
         let today = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Today, ")).firstMatch
         XCTAssertTrue(today.waitForExistence(timeout: 3), "the date card, with the keyboard up")

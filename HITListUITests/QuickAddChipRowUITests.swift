@@ -34,6 +34,7 @@ final class QuickAddChipRowUITests: XCTestCase {
         app.typeText("Pick up the parcel @errands @townhall @weekend ")
         pause(1)
         // "+" → Deadline, then Tomorrow.
+        element("quickAddPlus").waitUntilStill()
         element("quickAddPlus").tap()
         let deadline = app.buttons["Deadline"].firstMatch
         XCTAssertTrue(deadline.waitForExistence(timeout: 3), "the + menu")
