@@ -5,9 +5,48 @@ until the version has a section here, then stamps the heading with the build num
 per release. A second build of one version (0.9.0 had builds 20 and 21) is released with `scripts/release.sh --quick`
 and needs a section headed `## X.Y.Z (N)`, which the script stamps with the date.
 
-## 0.9.15
+## 0.9.16
 
-0.9.14 was prepared on 2026-11-17 and not released: George wanted the release to come at a time of his choosing, and
+0.9.15 was prepared on the afternoon of 2026-11-18 and not released either. George that evening: "I haven't released
+0.9.15 yet because I want to be very confident in the next build we release and I also want it to force everyone to
+move over to the new sync engine so we can settle this once and for all. Before release, tell me clearly that both
+internal and external testers will safely retain their task data after the move, or if I should tell them to
+download everything first. The iPhone is still a bit slow, I notice it mostly when switching between home tabs and
+when browsing/swiping around the Settings menu … Please take more time to prepare a build that is truly worthy of
+both the new sync engine and to be sent to a wider group of friends." So this is 0.9.14, 0.9.15 and that evening's
+round together (`dev/briefs/ROUND-34.md`, `ROUND-33.md`, `ROUND-32.md`).
+
+**This release moves every device to HITList's own sync, by itself, once George says so**, and not before: the
+build reaches everyone, and nothing changes for anyone until he has seen the new sync work on his own devices and
+given the word (one record in iCloud that every device can read; he can also pause it). **The move deletes
+nothing.** Each device keeps its own tasks where they are, saves a backup first and keeps it ("HITList before the
+new sync", in Files → On My iPhone → HITList, and in the Mac's backups folder), and the earlier sync's copy stays
+in iCloud untouched.
+
+The move to the new sync:
+
+- **It waits for George's word**, then starts with the first device of each person; that person's other devices
+  follow by themselves as soon as they are up to date, even if the word is paused meanwhile, so nobody is left
+  with one device on each sync.
+- **A device moves only when it has received everything the earlier sync holds for it.** One whose earlier sync
+  never settles is not left behind for good: after seven days it moves with what it has, and its sync log says
+  what stayed in the earlier copy (kept there).
+- **It always merges.** A device keeps its own store and merges it with what iCloud's new copy holds. (An earlier
+  design had a freshly installed device take iCloud's copy instead; a review that set out to lose a tester's
+  tasks showed that could hide everything, and that the merge already does the right thing. It is gone.)
+- **It finishes by itself**: the move takes effect the next time the app starts, so an iPhone or iPad ends its own
+  process once it is in the background with no card open, and a Mac relaunches itself behind your other apps.
+- **It checks itself**: the first time the new sync is at rest, the device compares every record in iCloud with
+  its own, and its sync log says what it found.
+- **What a person with two devices can meet**, in the time between the first and the second moving: something
+  deleted on the device that has not moved yet comes back; an item changed on both keeps the later change; a
+  task moved to Shared Tasks there shows in both places. Opening HITList on each device the same day keeps that
+  time short. A device left on an older build goes on looking synced and reaches nobody until it is updated.
+- Rehearsed on iCloud's test side: the word itself (not yet, go, paused, limited to a build, cleared); a Mac that
+  waits, then moves, relaunches itself and checks itself; a first send of 6,005 records in a minute and a half,
+  every record the same afterwards; a second device that follows under a pause (`dev/briefs/ROUND-34.md`).
+
+From the afternoon's round (0.9.15, never released). 0.9.14 was prepared on 2026-11-17 and not released: George wanted the release to come at a time of his choosing, and
 wrote on the 18th with what he had seen meanwhile. "Several external testers are now also using HITList on 0.9.13,
 and as it takes a while to release a new build for them, I want to ensure this next one is incredibly solid … some of
 the pages are not very user-friendly (such as the Calendar page) and some of the tooltips are really hard to read …
@@ -17,10 +56,6 @@ bar, not one that wraps … definitely keep tasks on the device after sign-out i
 information from the repository." And of the new sync: "I'd even rather the update just automatically move their
 tasks after we've confirmed the new engine is working." So this is 0.9.14 and the round after it together
 (`dev/briefs/ROUND-33.md`, `ROUND-32.md`): seven Opus agents in one afternoon, then the supervisor's merge.
-
-**Nothing in this release moves, deletes or rewrites anyone's tasks.** Every device goes on syncing exactly as
-before. The move to HITList's own sync is still only for a device where it is switched on by hand, in a group that
-stays hidden; the move the app will one day make by itself is built and switched off.
 
 New in Upcoming:
 
@@ -58,12 +93,9 @@ The sync engine (switched on only where it is moved to):
 - **Signing out of iCloud keeps your tasks on the device.** They can be read and changed, and sync again at sign-in;
   reminders stay too. Signing in to a different account still removes them, after a backup. (On the earlier sync
   Apple's mirror removes its copy at a sign-out, as before, and brings it back at sign-in.)
-- **The move made by the app itself is built and switched off** (`dev/SYNC-ENGINE.md` section 14, stage 6): a
-  device moves once it is up to date, after a backup; a device that finds another has moved follows; a freshly
-  installed device takes the engine's copy instead of merging a stale one. It is switched on only after George's
-  own week on the engine and a rehearsal of each rule on two devices.
-- A store set aside (Reset local cache, a move that takes a fresh copy) is kept for thirty days whatever comes
-  after it. Cancel the move after choosing "Another device already moved back" no longer sets the store aside.
+- A store set aside (Reset local cache, a move back that takes a fresh copy) is kept for thirty days whatever
+  comes after it. Cancel the move after choosing "Another device already moved back" no longer sets the store
+  aside.
 
 The repository:
 
