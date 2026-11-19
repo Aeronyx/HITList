@@ -491,6 +491,8 @@ struct QuickAddPopout: View {
             Spacer(minLength: HITSpacing.s)
             Button(action: onClose) { Image(systemName: "xmark") }
                 .buttonStyle(HITButtonStyle(.ghost, size: .small, shape: .circle))
+                // Its glyph grew past its circle and against the Add pill at the largest size (brief 173).
+                .dynamicTypeSize(...HITType.controlSizeCap)
                 .keyboardShortcut(.cancelAction)
                 .accessibilityLabel("Close")
                 .help("Close (Esc)")
