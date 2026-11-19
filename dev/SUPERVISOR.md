@@ -124,6 +124,18 @@ How George works with you:
   feedback address; `scripts/release.sh` reads all three there and stops without them) and are written nowhere
   in the repository (round 33: it is public); the key's contents never, anywhere. `~/.config/hitlist/api.env` holds an API key that must never be printed or pasted (the
   $200 promotional credit behind it expires 2026-11-05 and is not used any more).
+- **Clean up before the hand-over** (George, 2026-11-18: "there are still many background tasks running … Those
+  should be cleaned up whenever you're done with a release (along with my desktop and temp files too as
+  needed)"): archive every finished session you started and remove its worktree once it is clean and merged;
+  remove agents' worktrees and merged branches; delete the round's simulators; quit any Debug Mac app and any
+  `caffeinate`; clear the scratchpad's and `build.noindex`'s old build folders. His Desktop holds his own work
+  beside `HITList/`: touch nothing there that this project did not make. Say in the hand-over what was removed
+  and what could not be.
+- **The history was rewritten on 2026-11-18** (round 34, on his word): every commit is authored "Aeronyx" with a
+  GitHub no-reply address, and the address, surname, home folder, App Store Connect ids and an old tracked build
+  folder are out of all of it. This checkout's git identity is set the same way (`git config --local`): never
+  change it, and never push a branch cut before that day (none is left here). A local backup of the old history
+  sits in the notes folder as a bundle; it holds the old strings and never goes anywhere.
 - **The repository is public: nothing that identifies a person goes into a tracked file or a commit message**
   (George, 2026-11-18): no e-mail address, surname, home folder (`~/…`, never `/Users/<name>`), device id (write
   "its id from `xcrun devicectl list devices`"), tester's name, App Store Connect id, or a real task's title. The
@@ -143,10 +155,17 @@ How George works with you:
   (`scripts/release.sh` prints the three steps), never from whatever Development holds, and the transport's probe
   is never run between the import and a deploy (it writes a field of its own into Development). **The way back
   has an order**: the first device back sends, every other downloads a fresh copy, and no build from before
-  0.9.15 is installed on a moved device (0.9.14 first held the switch and was not released). **The move made by
-  the app itself is built and off** (`SyncEngineSwitch.movesByItself`, round 33): it is flipped only on George's
-  word, after his own week on the engine and the rehearsal of each rule on two devices (`dev/SYNC-ENGINE.md`
-  section 14, stage 6). **On the engine a sign-out removes nothing** (round 33); only a sign-in to a different
+  0.9.16 is installed on a moved device (0.9.14 and 0.9.15 held the switch and were not released). **The move
+  made by the app itself is on from 0.9.16** (`SyncEngineSwitch.movesByItself`; George, 2026-11-18: "I also want
+  it to force everyone to move over to the new sync engine") **and starts no account until his word**: one
+  record, type `HLRollout`, in the public database of the engine's container (`SyncEngineRollout`,
+  `dev/SYNC-ENGINE.md` section 14, stage 6). He makes it in the CloudKit Console; no released code writes it; a
+  session never makes it in Production. A device whose account has already moved follows whatever the word
+  says; the move always merges and never takes a fresh copy; the app finishes a written move itself
+  (`SyncEngineMoveFinish`) and checks itself afterwards (`SyncEngineMoveCheck`). **Before any release that
+  changes how a store moves, a reviewer whose only job is to lose a tester's data reads it** (round 34's brief
+  171 overturned a rule of round 33 and found seven other ways). **On the engine a sign-out removes nothing**
+  (round 33); only a sign-in to a different
   account does, after a backup. **George is told ahead of anything that could wipe, hide or fail to carry
   over a friend's data**, so they can export first (his word, 2026-11-16). **The engine never reads absence as a deletion**: a deletion is known only from the store's own note of
   it (`SyncDeletionLog`, taken at `willSave`), and an item that is merely not on a device comes back from iCloud.
@@ -409,6 +428,24 @@ does not notify of its own change. Do not spend another run on it here: it needs
 **Driving a menu in my own Mac app**: a click that opens a menu leaves the window looking inactive in a
 single-window capture (the menu is another window); arrow keys sent before the menu is open move the list's
 selection instead. Open it, capture once to see the inactive title bar, then send the keys.
+
+Lessons from round 34 (the move made fit for everyone; four agents and the supervisor's own engine work; 0.9.16):
+**Brief a reviewer to make the promise false before making it.** George asked to be told plainly whether testers
+keep their data; brief 171 was told to lose it, walked twelve kinds of person through the move with the code
+open, and came back with a proof that round 33's "fresh copy" rule was both unnecessary and the one way to hide
+everything, that "caught up" as first drawn left records behind, and that a pause split one person's devices.
+Each became a rule with a test; its own tests went into core. **A design that needs a person to type an exact
+name in a console the supervisor cannot see is not finished**: the word was first one record named `everyone`
+under a custom security role; `cktool` cannot name a record, Chrome was not connected, so the app now reads any
+record of the type and the file keeps its standard grants. **Rehearse each rule on the real service as soon as
+it compiles**: the word (six states), the wait, the move, the Mac's own relaunch and the device's own check all
+ran against iCloud's test side within the hour, and the first real run showed a path nobody had written a test
+for (a store with differences only on its own side, which the rule counts as caught up). **Debug builds share
+the real app's Documents and reminders on a device**: a side store's account "switch" (Development's account id
+is not Production's) had set George's real daily backups aside on his Mac; every writer of that folder now
+checks it runs on the real store. **`archive_session` wants the app's own label** or each call takes two, and
+one unlabelled call in a batch voids the rest; archiving only detaches a worktree, `git worktree remove` frees
+it. **`rm` with a shell variable in its path is refused** by the harness: literal paths.
 
 Lessons from round 33 (seven agents at once in the two hours before a usage limit reset; 0.9.15):
 **Seven agents on one Mac finish, but their own proof thins out**: builds were slow, a Flipboard UI test ran past
