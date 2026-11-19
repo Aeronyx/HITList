@@ -567,8 +567,8 @@ enum SyncEngineWords {
         return "HITList finishes moving to \(engineName(next).lowercased()) \(how). Nothing to do."
     }
 
-    static let switchFooter = "Early access. HITList's own sync knows exactly what is waiting to go to iCloud, so the "
-        + "bolt is exact."
+    /// Under the group. No longer "Early access": from 0.9.16 every device ends up here.
+    static let switchFooter = "HITList's own sync knows exactly what is waiting to go to iCloud, so the bolt is exact."
 
     static let checkDifferenceNote = "Nothing was changed. What is waiting to go is sent by itself; the Sync log names "
         + "each item that differs."

@@ -141,8 +141,8 @@ How George works with you:
   "its id from `xcrun devicectl list devices`"), tester's name, App Store Connect id, or a real task's title. The
   feedback address and the App Store Connect key's ids live in the untracked `Config/Local.xcconfig`, which
   `scripts/release.sh` needs: **a new checkout cannot release until that file is copied into it**. What stays on
-  purpose: the bundle, App Group and container identifiers, the team id, the first name. The history still holds
-  the old strings until George decides (a rewrite, or a private repository).
+  purpose: the bundle, App Group and container identifiers, the team id, the first name. The history was
+  rewritten the same day (the rule above).
 - HITList's own sync engine: **a store syncs on it only when it was moved** (from 0.9.14: every build may run it,
   `SyncEngineSwitch.isAvailable`; the store's own preference decides, only the move writes it, and the group that
   moves a store is hidden behind seven taps; nothing moves by itself until the release George says moves
@@ -164,7 +164,13 @@ How George works with you:
   says; the move always merges and never takes a fresh copy; the app finishes a written move itself
   (`SyncEngineMoveFinish`) and checks itself afterwards (`SyncEngineMoveCheck`). **Before any release that
   changes how a store moves, a reviewer whose only job is to lose a tester's data reads it** (round 34's brief
-  171 overturned a rule of round 33 and found seven other ways). **On the engine a sign-out removes nothing**
+  171 overturned a rule of round 33 and found seven other ways), **and a second reviewer reads the code that came
+  out of the first line by line** (brief 172 found eleven more, three of them losses, one of them in the fix made
+  for 171). **On the mirror, rows of a task that share an `id` are never merged**: two devices cannot be made to
+  keep the same one of two equal rows, and each deleting "the other" deletes the item everywhere. **A Debug
+  build runs the move by itself only where asked** (`-syncEngineAutoMove YES` on a side store). **The rows that
+  move a store show only where the group was revealed by the seven taps**; a device the app moved shows what
+  happened and nothing to tap. **On the engine a sign-out removes nothing**
   (round 33); only a sign-in to a different
   account does, after a backup. **George is told ahead of anything that could wipe, hide or fail to carry
   over a friend's data**, so they can export first (his word, 2026-11-16). **The engine never reads absence as a deletion**: a deletion is known only from the store's own note of
@@ -445,7 +451,19 @@ the real app's Documents and reminders on a device**: a side store's account "sw
 is not Production's) had set George's real daily backups aside on his Mac; every writer of that folder now
 checks it runs on the real store. **`archive_session` wants the app's own label** or each call takes two, and
 one unlabelled call in a batch voids the rest; archiving only detaches a worktree, `git worktree remove` frees
-it. **`rm` with a shell variable in its path is refused** by the harness: literal paths.
+it. **`rm` with a shell variable in its path is refused** by the harness: literal paths. **A fix made for a
+review needs a review**: the merge added for 171's A5 (rows that share an id, merged on the mirror after a way
+back) was the worst finding of 172, which read the finished code line by line with tests it wrote, ran and
+deleted: two devices each keeping "its own" of two equal rows and the mirror taking both deletions everywhere.
+It was taken out rather than tuned; doubles are an eyesore and a deletion nobody made is a loss. The same
+reading found the three moments nobody had walked: Reset local cache while a move waits, a process the system
+started in the background ending itself, and patience running out in the first second of a launch. **Ask the
+reviewer for a table of "would a test fail if this rule were broken?"**: seven rows said no, and two of those
+rules were broken. **A constant that is true for every build is true for every agent's Debug store too**: with
+`movesByItself` on, every side store on the mirror would have followed the zones the rehearsals left in
+Development. **CI's runner is slower than this Mac by more than twice on a bad day**: a test that bounds CPU
+time at twice the local figure fails a push that changed nothing (the simulation's bound is now for a rig grown
+several times dearer, not for a runner).
 
 Lessons from round 33 (seven agents at once in the two hours before a usage limit reset; 0.9.15):
 **Seven agents on one Mac finish, but their own proof thins out**: builds were slow, a Flipboard UI test ran past
