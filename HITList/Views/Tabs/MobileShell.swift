@@ -1,4 +1,30 @@
 import SwiftUI
+#if DEBUG || RESPONSE_PROBE
+import SwiftData
+import HITListCore
+#endif
+
+extension EnvironmentValues {
+    /// Brief 168: false inside an iPhone tab kept alive behind the one on show (`MobileShell`): its clocks, timelines,
+    /// motion and tips wait, and its lists leave the "+"'s list alone. True everywhere else (iPad, Mac, the tab on show).
+    @Entry var tabOnShow: Bool = true
+}
+
+/// A timeline that stops while its tab is kept behind another (`\.tabOnShow`): one entry, the moment it stopped, and
+/// nothing after it until it is shown again, when the base schedule starts afresh.
+struct TabOnShowSchedule<Base: TimelineSchedule>: TimelineSchedule {
+    let base: Base
+    let paused: Bool
+
+    func entries(from start: Date, mode: TimelineScheduleMode) -> AnySequence<Date> {
+        paused ? AnySequence(CollectionOfOne(start)) : AnySequence(base.entries(from: start, mode: mode))
+    }
+}
+
+extension TimelineSchedule {
+    /// This schedule, stopped while `paused` (a hidden tab's clock).
+    func paused(_ paused: Bool) -> TabOnShowSchedule<Self> { TabOnShowSchedule(base: self, paused: paused) }
+}
 
 #if os(iOS)
 /// The iPhone shell (compact width): one screen per tab (Inbox, Today, Upcoming, Flipboard), each in its
@@ -92,7 +118,48 @@ struct MobileShell: View {
         }
         // Siri / Shortcuts "Open Today / Inbox / Upcoming" (brief 46).
         .intentRouting(tab: $tab)
+        #if DEBUG || RESPONSE_PROBE
+        .modifier(ProbeHooks(tab: $tab))
+        #endif
     }
+
+    #if DEBUG || RESPONSE_PROBE
+    /// Brief 168: the autopilot's orders (`ResponseAutopilot`), carried out through the shell's own state: a tab as the
+    /// island's tap sets it, Settings as the screen menu's sheet shows it.
+    private struct ProbeHooks: ViewModifier {
+        @Binding var tab: MobileTab
+        @Environment(PopoutController.self) private var popouts
+        @Environment(\.modelContext) private var context
+        @State private var settings: SettingsSheetRequest?
+
+        func body(content: Content) -> some View {
+            content
+                .onChange(of: ProbeDriver.shared.order) { _, order in
+                    switch order?.command {
+                    case .tab(let new)?: tab = new
+                    case .openSettings?: settings = SettingsSheetRequest()
+                    case .closeSettings?: settings = nil
+                    case .addTask(let line)?:
+                        // As quick add's Add saves a line.
+                        let parsed = QuickAddParser(now: .now, weekStart: Preferences.weekStartWeekday()).parse(line)
+                        _ = try? TaskActions.create(from: parsed, defaultProject: nil, defaultLabel: nil, in: context)
+                    case .complete(let title)?:
+                        // As a row's check does.
+                        let tasks = (try? context.fetch(FetchDescriptor<TaskItem>())) ?? []
+                        if let task = tasks.first(where: { $0.title == title && !$0.isCompleted }) {
+                            withAnimation(HITMotion.standard) { TaskActions.toggleCompletion(task, in: context) }
+                        }
+                    default: break
+                    }
+                }
+                .onAppear {
+                    let popouts = popouts
+                    ProbeDriver.shared.contextReader = { "\(popouts.listContext)" }
+                }
+                .sheet(item: $settings) { request in SettingsView(page: request.page).slateSheet() }
+        }
+    }
+    #endif
 
     /// The system's bar column on the island's side: the safe area on that edge.
     private func barColumnWidth(_ placement: IslandPlacement) -> CGFloat {
