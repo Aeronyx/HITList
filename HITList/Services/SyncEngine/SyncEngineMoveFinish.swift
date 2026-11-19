@@ -116,6 +116,10 @@ enum SyncEngineMoveFinish {
         // What is unsaved is saved first: the next start reads the store, not this process.
         if let context = container?.mainContext, context.hasChanges { try? context.save() }
         CloudSyncMonitor.shared.write(.note, "Finishing the move to \(target == .own ? "the new sync" : "the earlier sync"): HITList starts again by itself")
+        #if DEBUG
+        print("REHEARSAL finish: ending or relaunching for the move to \(target.rawValue)")
+        fflush(stdout)
+        #endif
         #if os(macOS)
         Task { @MainActor in
             // The running engine stops before the process goes, so the transport's state is written.

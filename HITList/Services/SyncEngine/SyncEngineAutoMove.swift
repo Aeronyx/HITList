@@ -354,9 +354,19 @@ extension SyncEngineAutoMove {
             let storeName = ModelContainerFactory.storeName
             let zone = SyncEngineSwitch.zoneName(storeName: storeName, isDebug: SyncEngineSwitch.isDebugBuild,
                                                  arguments: ProcessInfo.processInfo.arguments)
-            let live = Live(move: {
+            var live = Live(move: {
                 try await SyncEngine.move(to: .own, container: container, relaunch: false)
             })
+            #if DEBUG
+            if storeName != ModelContainerFactory.mainStoreName {
+                // A rehearsal reads the move's lines from the app's standard output, on a phone as on a Mac.
+                live.log = { line in
+                    CloudSyncMonitor.shared.write(.note, line)
+                    print("REHEARSAL automove: \(line)")
+                    fflush(stdout)
+                }
+            }
+            #endif
             let runner = Runner(storeName: storeName, defaults: AppGroup.defaults, live: live,
                                 look: CloudKitZoneLook(containerID: SyncEngineSwitch.containerID, zoneName: zone),
                                 asker: CloudKitWord())
