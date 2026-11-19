@@ -242,8 +242,12 @@ struct InlineAddRow: View {
         .listRowSeparator(.hidden)
         // The task rows' insets, so "+ Add task" lines up under the checkboxes.
         .listRowInsets(ListMetrics.rowInsets(compact: false))
-        // Without this the row takes the system grey, which stands out in the darker themes.
-        .slateRow()
+        // The list's own background, as the task rows above it have (`completionRowBackground`). Left to itself the
+        // row took the system grey; given the theme's raised colour (as it was until round 34) it drew a band from
+        // the list's edge to the screen's on an iPad, under rows that have none (brief 169's pictures).
+        #if os(iOS)
+        .listRowBackground(Theme.background)
+        #endif
         .onChange(of: popouts.state.isInlineOpen(key)) { _, open in
             if !open { confirmingDiscard = false; hasContent = false; isRetiring = false }
         }
