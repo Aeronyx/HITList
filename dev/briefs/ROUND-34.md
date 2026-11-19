@@ -136,3 +136,23 @@ longer than 21 ms; the sheet opens in about 180 ms the first time.
   mapping and the finish's observers are still proven only by rehearsal.
 - Session "140 Sync engine: a pretend iCloud and its rig" holds unmerged work and stays open for George.
 
+## Proof
+
+On the final tree: core 1,100 tests, the Mac 2,380, the iPhone 2,341, no failures. Archive and export of both
+platforms pass every packaging check, and the exported apps carry the feedback address. CI green on the push.
+The move against iCloud's Development side, as listed above, twice with George's phone: the second time after
+172's fixes (a fresh side store moved by itself, ended its own process with code 0 when another app came forward
+while a tip was showing, reopened on the engine, 177 items the same in iCloud), and `MoveFinishUITests` holds on
+a simulator that the app stays alive when left with Settings open and ends when left from its main screen. The
+phone's numbers are in "The iPhone". The whole UI suite on the final tree, to its last
+test: 190 tests, 114 passed, 76 on demand, none failed (a first pass on the tree as it was three hours earlier
+had three failures, all three the fresh simulator's keyboard: two tests tapped while it slid, one sent a
+Command-A no hardware keyboard delivered; the tests now wait until the screen is still and clear a field with
+deletes). After it, one walk of the lists on an iPad for the "Add task" row.
+
+Not proven: the engine in Production; the move on a real Mac's real store (the same code moved the Mac's
+Development store and relaunched it); the CloudKit Console's own steps for making the record (written from what
+the Console looked like when the schema was deployed, not seen this round); 0.9.13's speed measured the way
+0.9.16's was; the iPad's and the Mac's pictures after 173's caps and the sweep's fixes beyond the ones named
+(the Mac toolbar and Week layout were looked at in the running app, the iPad's "Add task" row in a picture).
+
