@@ -26,11 +26,11 @@ struct UpcomingView: View {
     }
 
     @Environment(PopoutController.self) private var popouts
+    /// The person's text size, before the Week layout's cap: its Overdue list is rows to read, and grows with it.
+    @Environment(\.dynamicTypeSize) private var typeSize
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.appShell) private var shell
-    /// The person's text size, before the Week layout's cap: its Overdue list is rows to read, and grows with it.
-    @Environment(\.dynamicTypeSize) private var typeSize
     /// iPhone: the island's "+" is the only way to add; lists show no "Add task" row.
     private var isCompact: Bool { sizeClass == .compact }
     /// iPad at full width and the iPhone Duo's inner display: the board (`showsBoard(idiom:sizeClass:shell:)`).
