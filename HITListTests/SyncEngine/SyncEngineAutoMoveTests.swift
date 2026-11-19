@@ -403,6 +403,15 @@ final class SyncEngineAutoMoveTests: XCTestCase {
         XCTAssertEqual(SyncEngineAutoMove.decide(ready { $0.zone = .unknown }), .move, "with the word it moves, and merges")
     }
 
+    /// The hidden group says what George's word is now, in a word a person reads at once.
+    func testR4_theHiddenGroupSaysWhatTheWordIs() {
+        XCTAssertEqual(SyncEngineWords.everyoneValue(.go), "Released")
+        XCTAssertEqual(SyncEngineWords.everyoneValue(.notYet), "Not released")
+        XCTAssertEqual(SyncEngineWords.everyoneValue(.paused), "Paused")
+        XCTAssertEqual(SyncEngineWords.everyoneValue(.unknown), "Couldn't ask iCloud")
+        XCTAssertEqual(SyncEngineWords.everyoneValue(.notAsked), "Asking iCloud…")
+    }
+
     // MARK: - The hand move's fresh copy (the way back only)
 
     /// Finding (round 33): a waiting move back that took a fresh copy, taken back, left the store to be set aside at

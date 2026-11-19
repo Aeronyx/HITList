@@ -186,6 +186,8 @@ struct SyncEngineHoldGroup: View {
 struct SyncEngineSwitchGroup: View {
     private var board: SyncEngineBoard { .shared }
     @State private var confirmMove = false
+    /// George's word, as iCloud answered when the group appeared.
+    @State private var everyone: SyncEngineAutoMove.Word = .notAsked
     @State private var isMoving = false
     @State private var message: String?
     /// The engine the store opens on next, re-read after each move (a move on the iPhone waits for a reopen).
@@ -211,6 +213,12 @@ struct SyncEngineSwitchGroup: View {
 
     static let title = "Sync engine"
 
+    /// Whether the group asks iCloud for George's word: never where nothing may talk to iCloud (a launch with iCloud
+    /// switched off, as every UI test is; the in-memory fallback).
+    static var asksForTheWord: Bool {
+        !AppGroup.defaults.bool(forKey: "disableCloudKit") && !ModelContainerFactory.isRunningInMemory
+    }
+
     var body: some View {
         let running = board.engine
         // A move asked for and waiting for a reopen can be taken back: the button then offers the engine that runs.
@@ -224,8 +232,15 @@ struct SyncEngineSwitchGroup: View {
             HITMenuRow("Syncs through", systemImage: "gearshape.2", value: SyncEngineWords.engineName(running))
                 .accessibilityIdentifier("settings-engine-switch")
             SettingsNote(text: waiting ? SyncEngineWords.waitingNote(next) : SyncEngineWords.moveNote(to: target))
-            // Brief 167, the move made by the app itself (off in 0.9.15): its one line while it waits, and on a
-            // device it moved, that the other devices need the update (a build before it cannot know).
+            // George's word as iCloud holds it now (`SyncEngineAutoMove` R0), asked when the group appears: on his own
+            // device he sees that the record he made in the CloudKit Console reads as he meant it.
+            if Self.asksForTheWord {
+                HITMenuRow(SyncEngineWords.everyoneTitle, systemImage: "person.3", value: SyncEngineWords.everyoneValue(everyone))
+                    .accessibilityIdentifier("settings-engine-everyone")
+                    .task { everyone = await CloudKitWord().ask() }
+            }
+            // The move made by the app itself (round 33, brief 167; on from 0.9.16): its one line while it waits, and
+            // on a device it moved, that the other devices need the update (a build before it cannot know).
             if let line = SyncEngineAutoMove.Runner.shared?.line {
                 SettingsNote(text: line)
                     .accessibilityIdentifier("settings-engine-auto-move")
@@ -497,6 +512,18 @@ enum SyncEngineWords {
 
     /// Moving to the new sync while today's sync has not finished here: said in the confirmation, which then offers
     /// "Move anyway". Nil when nothing stands in the way (the earlier sync is off, or its bolt is filled).
+    /// The hidden group's row for George's word that every device may move (`SyncEngineAutoMove` R0).
+    static let everyoneTitle = "Everyone's move"
+    static func everyoneValue(_ word: SyncEngineAutoMove.Word) -> String {
+        switch word {
+        case .notAsked: return "Asking iCloud…"
+        case .go: return "Released"
+        case .notYet: return "Not released"
+        case .paused: return "Paused"
+        case .unknown: return "Couldn't ask iCloud"
+        }
+    }
+
     static func moveBlocker(mirrorRunning: Bool, isSynced: Bool) -> String? {
         guard mirrorRunning, !isSynced else { return nil }
         return "iCloud sync hasn't finished on this device (the bolt isn't filled). Moving now can bring back "
