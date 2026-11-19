@@ -26,7 +26,7 @@ enum WhatsNew {
             "A new sync of HITList's own. Your devices move to it by themselves over the coming days, after saving a backup: nothing is deleted and there is nothing to do. Open HITList on each of your devices, so they move together.",
             "Upcoming has a Week layout: your week's tasks on a calendar. Choose it from the Layout button at the top of Upcoming; the list stays the default.",
             "Quick add's options stay on one line that scrolls sideways. Typing “3 days ago” or “last monday” gives a date in the past, as typed.",
-            "Quicker on iPhone: switching tabs and moving around Settings.",
+            "Lighter on iPhone: switching tabs does less work, and an overdue switch's light no longer keeps the phone busy while the Flipboard is open.",
             "Settings reads more easily: Calendar is one switch and a row that says whether HITList may see your calendars; titles, notes and tips are shorter.",
             "Reminders: HITList asks to send notifications the first time you give a task a reminder.",
             "Safer: a label that is on tasks asks before it is deleted, two Groups, labels or filters can't share a name, what you type in a task's card is kept if you leave HITList, and Import JSON asks before bringing back what you deleted.",

@@ -19,11 +19,12 @@ was wrong. No clock was set this time.
 
 | Brief | What | Result |
 |---|---|---|
-| 168 `iphone-tabs-settings-speed` | The iPhone's tab switches and Settings, on George's phone | See "The iPhone" below |
+| 168 `iphone-tabs-settings-speed` | The iPhone's tab switches and Settings, on George's phone | See "The iPhone" below: a probe that drives the app on the phone in a Release build; tabs kept alive halved a switch and doubled every save, so it was taken back |
 | 169 `stranger-sweep` | Every screen a new person meets, in pictures, read by eye | 358 pictures (iPhone, iPad both ways, the Mac), 26 findings: one wrong date, the largest text size broken on six screens, the Mac's Week layout cut off in a narrower window; `StrangerSweepUITests` (on demand) |
 | 170 `rollout-signal` | George's word that everyone may move | `SyncEngineRollout`: one record in the engine container's public database, pure rules, an asker with a stand-in, the schema file's new type |
 | 171 `move-red-team` | "Lose a tester's tasks" | Twelve kinds of person walked through the move with the code open: round 33's "fresh copy" rule was unnecessary and the one way to hide everything; "caught up" left records behind; a pause split one person's devices; an untouched seed's stamp beat real changes. Four proof tests adopted into core |
 | 172 `move-code-review` | The finished move's code, line by line | Eleven findings, three of them losses, one in the fix made for 171; a table of which rules no test would catch |
+| 173 `large-text` | The accessibility text sizes | Dense controls stop growing at the first accessibility size (`HITType.controlSizeCap`): the week strip, the Week layout, Flipboard tiles, theme names, the card's pills, quick add's chips and their pickers; what a person reads still grows. XXXL pixel-identical. Left: Settings rows and section headers that should wrap at the largest sizes |
 
 ## The move (the supervisor's own work)
 

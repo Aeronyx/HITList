@@ -128,10 +128,12 @@ final class SweepPolishUITests: XCTestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 5), "the summary's time is our field")
         XCTAssertEqual(app.datePickers.count, 0, "no system date picker on the page")
         shot("Reminders, summary time")
-        field.tap()
+        // The cursor at the field's end, everything before it deleted, then the new time. (Until round 34 this
+        // selected all with Command-A, which a simulator with no hardware keyboard connected does not deliver: the
+        // new time was typed after the old, "8:00 7:30AM", on every simulator made that evening.)
+        field.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.5)).tap()
         pause(0.5)
-        // Everything in the field, then the new time over it (a tap can leave the cursor anywhere in "8:00 AM").
-        field.typeKey("a", modifierFlags: .command)
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 12))
         field.typeText("7:30\n")
         pause(0.8)
         let typed = (field.value as? String ?? "").replacingOccurrences(of: "\u{202F}", with: " ")
