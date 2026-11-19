@@ -1138,6 +1138,8 @@ struct AddSwitchTile: View {
                 .contentShape(plate)
         }
         .buttonStyle(.plain)
+        // As the switches' faces (`FlipSwitchFace`): its words stop where theirs do.
+        .dynamicTypeSize(...HITType.controlSizeCap)
         .onHover { hovered = $0 }
         .animation(HITMotion.quick(reduceMotion: reduceMotion), value: hovered)
         .accessibilityLabel(board.map { "Add a switch to \($0)" } ?? "Add switch")

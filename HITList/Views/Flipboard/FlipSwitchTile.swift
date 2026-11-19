@@ -473,6 +473,10 @@ struct FlipSwitchFace<Rocker: View>: View {
                 }
                 .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
         }
+        // Two lines of name, the interval and the caption in a tile half an iPhone wide: past the first accessibility
+        // size they were cut to "every…" and "Flip t…" (round 34, brief 173). The stand-in measures by this too, so
+        // the Add switch outline stays a switch's size.
+        .dynamicTypeSize(...HITType.controlSizeCap)
     }
 }
 
