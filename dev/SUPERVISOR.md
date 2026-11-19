@@ -1023,7 +1023,49 @@ tips lost their `#` and `@` lessons for shorter words; the App Store Connect key
 address; a store set aside is kept thirty days. Left for him: the history (rewrite or private); the first name in
 `dev/`; Enable UI Automation on his phone so its slowness can be measured.
 
-## 8. Where things stand (2026-11-18: round 33 on master, 0.9.15 prepared for George to release)
+Round 34 (2026-11-18, evening). George's words: "there are still many background tasks running … Those should be
+cleaned up whenever you're done with a release (along with my desktop and temp files too as needed)" (**a
+standing rule**, section 3); "I haven't released 0.9.15 yet because I want to be very confident in the next build
+we release and I also want it to force everyone to move over to the new sync engine so we can settle this once
+and for all" (**the move is on from 0.9.16, behind his word**); "Before release, tell me clearly that both
+internal and external testers will safely retain their task data after the move, or if I should tell them to
+download everything first" (**answered in the hand-over, and to be answered again before any later change to how
+a store moves**); "The iPhone is still a bit slow, I notice it mostly when switching between home tabs and when
+browsing/swiping around the Settings menu. Take another look using my connected iPhone if needed" (his word for
+the phone that round); "Yes, please rewrite the repository if it's relatively easy to scrub my personal
+information" (**done**); "Please take more time to prepare a build that is truly worthy of both the new sync
+engine and to be sent to a wider group of friends" (no clock on the agents; two reviews of the move; a sweep of
+every screen in pictures). My own, told to him: the version is 0.9.16 with 0.9.14 and 0.9.15 folded in; his word
+is a record he makes in the CloudKit Console, so one build reaches everyone and he still sees the engine on his
+own devices first; a device follows its account whatever the word says; the move always merges; the app ends or
+relaunches itself to finish a move; a moved device's group shows what happened and the row that moves it back
+needs the seven taps; "3 days ago" and "last monday" are dates in the past; the Week layout shows three days in a
+narrow window; dense controls stop growing at the first accessibility text size.
+
+## 8. Where things stand (2026-11-18, night: round 34 on master, 0.9.16 prepared for George to release)
+
+**2026-11-18, evening: round 34 on master for 0.9.16 (Fable 5.2 supervisor; six Opus 5.5 agents with the Agent
+tool, briefs 168 to 173)** (`dev/briefs/ROUND-34.md`). 0.9.14 and 0.9.15 were never released. His message is
+quoted in section 7.
+
+**In 0.9.16**: everything 0.9.15 held; **the move to the engine made by the app itself, on, and waiting for his
+word** (section 3; `dev/SYNC-ENGINE.md` section 14, stage 6); the fixes from two reviews of the move and from a
+sweep of every screen in pictures; the iPhone's tab switches and Settings; the history rewritten.
+
+**What he does, in order**: (1) CloudKit Console → `iCloud.com.trammells.hitlist.sync` → Development → Deploy
+Schema Changes… (the file gained one record type; `scripts/release.sh` stops until Production holds it);
+(2) `scripts/release.sh --version 0.9.16 --quick`; (3) reinstall HITList from TestFlight on his phone (a Debug
+build is on it); (4) on his Mac: Settings → iCloud → seven taps on the environment row → Move to the new sync
+(his iPhone follows by itself); Check iCloud… on both; (5) when he is satisfied, the record: CloudKit Console →
+the same container → **Production** → Public Database → Records → new record of type `HLRollout` (leave
+`minBuild` empty; `paused` 0). To pause the accounts that have not started: set `paused` to 1.
+
+**Open with him**: the engine has never run in Production (his own devices are its first); the session
+"140 Sync engine: a pretend iCloud and its rig" still holds unmerged work and was left open; the bundle of the
+old history in the notes folder (his to delete); his Mac's thirteen daily backups from 1 to 14 November sit in a
+set-aside folder (intact; a Debug run moved them, fixed); the first name in `dev/`. The next brief number is 174.
+
+## 8-33. Round 33's state (2026-11-18, afternoon: 0.9.15 prepared, never released; kept for the record)
 
 **2026-11-18, afternoon: round 33 on master for 0.9.15 (Fable 5.2 supervisor; seven Opus 5.5 agents with the Agent
 tool, briefs 161 to 167)** (`dev/briefs/ROUND-33.md`). 0.9.14 was never released; George had deployed the engine's

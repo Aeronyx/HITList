@@ -54,6 +54,20 @@ The move to the new sync:
   waits, then moves, relaunches itself and checks itself; a first send of 6,005 records in a minute and a half,
   every record the same afterwards; a second device that follows under a pause (`dev/briefs/ROUND-34.md`).
 
+From a walk through every screen as a stranger sees it (358 pictures on an iPhone, an iPad and the Mac, each one
+read by eye):
+
+- **"3 days ago", "2 weeks ago" and "last monday" are dates in the past**, as typed, with nothing of the phrase
+  left in the task's name. They were saved as dates ahead (in three days, next Monday).
+- **The Week layout fits the window it has.** A Mac window made narrower, or an iPad turned or put beside another
+  app, left the week at its old width with both sides cut off, the month's name among them. A window too narrow
+  for seven days shows three, as an iPhone does.
+- **On the Mac, Upcoming's toolbar buttons sit inside their capsule**: the Layout button hung out over the sync
+  bolt and the gear touched the +.
+- Settings → Account offers "Sign out in the Settings app" only when an account is signed in. Words that send you
+  to sync's settings name the page you have ("iCloud & data" on an iPhone). Quick add's + menu says "Sub-tasks",
+  as a task's card does. On an iPad the "Add task" row no longer draws a band to the screen's edge.
+
 From the afternoon's round (0.9.15, never released). 0.9.14 was prepared on 2026-11-17 and not released: George wanted the release to come at a time of his choosing, and
 wrote on the 18th with what he had seen meanwhile. "Several external testers are now also using HITList on 0.9.13,
 and as it takes a while to release a new build for them, I want to ensure this next one is incredibly solid … some of
