@@ -101,8 +101,6 @@ struct FlipLights: View {
     @State private var shown: Int?
     @State private var pulse = Pulse()
     @State private var job: Task<Void, Never>?
-    /// Brief 168: an overdue light's breath stops while its iPhone tab is kept behind another.
-    @Environment(\.tabOnShow) private var onShow
 
     struct Pulse: Equatable {
         enum Kind { case pop, bloom }
@@ -161,7 +159,7 @@ struct FlipLights: View {
         let look = FlipLightStyle.pill(index, target: target, lit: lit, side: side)
         if breathes {
             // Redrawn on a clock, never animated: a breath changes brightness only, so it can't carry layout with it.
-            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !onShow)) { context in
+            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: false)) { context in
                 FlipPill(tint: look.tint, level: FlipLightStyle.breath(at: context.date), ember: look.ember)
             }
         } else if target <= 1 {

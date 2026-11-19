@@ -47,11 +47,9 @@ private struct PopoverTip: ViewModifier {
     let tip: HITTip?
     let arrowEdge: Edge
     @Environment(PopoutController.self) private var popouts: PopoutController?
-    /// Brief 168: never from an iPhone tab kept behind the one on show.
-    @Environment(\.tabOnShow) private var onShow
 
     func body(content: Content) -> some View {
-        let popoutUp = popouts.map { !$0.state.showsAddButton } ?? false || !onShow
+        let popoutUp = popouts.map { !$0.state.showsAddButton } ?? false
         content
             // The tip goes for good once its subject is used: Browse's glass, the board's Add task. Not on a switch,
             // whose card has its own long press and drag: its tip goes when it is closed or after it has shown once.

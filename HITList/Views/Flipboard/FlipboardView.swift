@@ -14,8 +14,6 @@ struct FlipboardView: View {
     @Binding var selectedTask: TaskItem?
 
     @Environment(\.modelContext) private var context
-    /// Brief 168: kept behind another iPhone tab, the board's clock waits; shown again, it reads the time at once.
-    @Environment(\.tabOnShow) private var onShow
     /// Optional: a board drawn outside the app shell (previews) deletes without asking.
     @Environment(PopoutController.self) private var popouts: PopoutController?
     #if os(iOS)
@@ -247,9 +245,8 @@ struct FlipboardView: View {
             if let board = boardCard?.board ?? inlineCard?.board, !ids.contains(board.id) { closeCard() }
             if let board = floatingCard?.board, !ids.contains(board.id) { withoutAnimation { floatingCard = nil } }
         }
-        .onReceive(clock) { _ in if onShow { now = Self.clockNow() } }
+        .onReceive(clock) { _ in now = Self.clockNow() }
         .onReceive(CalendarChange.moments) { _ in now = Self.clockNow() } // brief 82: a board resets at its hour where you are
-        .onChange(of: onShow) { _, shown in if shown { now = Self.clockNow() } }
         .onAppear {
             now = Self.clockNow()
             FlipSound.prepare()

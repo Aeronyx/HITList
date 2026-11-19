@@ -15,12 +15,10 @@ extension View {
 private struct CalendarInTodayTip: ViewModifier {
     let isToday: Bool
     @Environment(PopoutController.self) private var popouts: PopoutController?
-    /// Brief 168: never in an iPhone tab kept behind the one on show.
-    @Environment(\.tabOnShow) private var onShow
 
     func body(content: Content) -> some View {
         content.overlay(alignment: .top) {
-            if isToday, onShow, !CalendarEvents.shared.isOn, popouts.map(\.state.showsAddButton) ?? true {
+            if isToday, !CalendarEvents.shared.isOn, popouts.map(\.state.showsAddButton) ?? true {
                 TipView(HITTip(.calendarInToday))
                     .tipViewStyle(HITTipStyle())
                     .tipBackground(Theme.elevated)

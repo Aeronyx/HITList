@@ -138,10 +138,10 @@ final class PhoneResponseUITests: XCTestCase {
     }
 }
 
-/// Brief 168: the iPhone keeps the screen of every tab visited alive behind the one on show. Read from the Debug shell's
-/// one-point readout (`-debugShell YES`, `MobileShell.ShellDebug`): each tab's screen is built once however often it is
-/// shown, and after every kind of switch the "+" adds to the list on show (`popouts.listContext`).
-final class MobileTabsKeptUITests: XCTestCase {
+/// Brief 168: after every kind of switch the iPhone's "+" adds to the list on show (`popouts.listContext`), read from the
+/// Debug shell's one-point readout (`-debugShell YES`); and only the tab on show is within reach (one Browse control,
+/// one bolt), which any shell that keeps tabs alive must still hold.
+final class MobileTabsUITests: XCTestCase {
     private var app: XCUIApplication!
 
     override func setUp() {
@@ -151,7 +151,7 @@ final class MobileTabsKeptUITests: XCTestCase {
         app.launchArguments += ["-disableCloudKit", "YES", "-hideTips", "-seedDemoData", "YES", "-debugShell", "YES"]
     }
 
-    func testEachTabIsBuiltOnceAndThePlusFollowsTheTabOnShow() throws {
+    func testThePlusFollowsTheTabOnShow() throws {
         app.launch()
         XCTAssertTrue(app.buttons["tab-today"].waitForExistence(timeout: 30))
         expect(context: "today")
@@ -161,7 +161,6 @@ final class MobileTabsKeptUITests: XCTestCase {
                 expect(context: context, "after a tap on \(tab)")
             }
         }
-        expect(builds: "inbox=1 today=1 upcoming=1 flipboard=1")
 
         // A screen pushed on a tab: Browse, then a Group from it, each sets the "+"; leaving the tab and coming back
         // shows its first screen again and gives the "+" back to it.
@@ -172,7 +171,7 @@ final class MobileTabsKeptUITests: XCTestCase {
         home.tap()
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Call the dentist")).firstMatch
                           .waitForExistence(timeout: 5))
-        let onGroup = readout().context
+        let onGroup = readout()
         XCTAssertNotEqual(onGroup, "inbox", "a Group's own list once it is pushed")
         XCTAssertNotEqual(onGroup, "today")
         app.navigationBars.buttons.firstMatch.tap()
@@ -195,34 +194,48 @@ final class MobileTabsKeptUITests: XCTestCase {
         app.buttons["quickAddButton"].firstMatch.tap()
         XCTAssertTrue(app.descendants(matching: .any)["quickAddTitle"].firstMatch.waitForExistence(timeout: 5))
         app.typeText("Kept tabs check")
-        app.buttons["quickAddSave"].firstMatch.tap()
+        let save = app.buttons["quickAddSave"].firstMatch
+        XCTAssertTrue(save.wait(for: \.isHittable, toEqual: true, timeout: 5))
+        save.tap()
+        let card = app.descendants(matching: .any)["quickAddTitle"].firstMatch
+        if !card.waitForNonExistence(timeout: 3), save.exists { save.tap() } // a tap the keyboard's arrival swallowed
+        XCTAssertTrue(card.waitForNonExistence(timeout: 5), "the card closes on Add")
         // The newest task is at the Inbox's end: a long list builds its last rows once they scroll into sight.
         let added = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Kept tabs check")).firstMatch
         for _ in 0..<4 where !added.exists {
             app.swipeUp()
         }
-        if !added.waitForExistence(timeout: 5) { print("TREE", app.debugDescription) }
-        XCTAssertTrue(added.exists, "added to the Inbox on show")
-        expect(builds: "inbox=1 today=1 upcoming=1 flipboard=1")
+        XCTAssertTrue(added.waitForExistence(timeout: 5), "added to the Inbox on show")
+    }
+
+    /// A tab left is out of reach: its rows, its title and its toolbar are not there for VoiceOver or a test, at once and
+    /// after the crossfade.
+    func testAHiddenTabIsOutOfReach() throws {
+        continueAfterFailure = true
+        app.launch()
+        XCTAssertTrue(app.buttons["tab-today"].waitForExistence(timeout: 30))
+        let inboxOnly = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Read the article Alex sent")).firstMatch
+        app.buttons["tab-inbox"].firstMatch.tap()
+        XCTAssertTrue(inboxOnly.waitForExistence(timeout: 5))
+        app.buttons["tab-today"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Buy groceries")).firstMatch
+                          .waitForExistence(timeout: 5))
+        XCTAssertTrue(inboxOnly.waitForNonExistence(timeout: 0.5), "the Inbox's row, as the switch begins")
+        XCTAssertEqual(app.buttons.matching(identifier: "browseButton").count, 1, "one Browse control: Today's")
+        RunLoop.current.run(until: Date().addingTimeInterval(1))
+        XCTAssertFalse(inboxOnly.exists, "the Inbox's row, after the fade")
+        XCTAssertEqual(app.buttons.matching(identifier: "syncBolt").count, 1, "one bolt: Today's")
     }
 
     // MARK: Helpers
 
-    private func readout() -> (context: String, builds: String) {
-        let label = app.staticTexts["debug-shell"].firstMatch.label
-        let parts = label.split(separator: " ", maxSplits: 1).map(String.init)
-        let context = parts.first.map { String($0.dropFirst("context=".count)) } ?? ""
-        return (context, parts.count > 1 ? parts[1] : "")
+    private func readout() -> String {
+        String(app.staticTexts["debug-shell"].firstMatch.label.dropFirst("context=".count))
     }
 
     private func expect(context: String, _ when: String = "", file: StaticString = #filePath, line: UInt = #line) {
         let deadline = Date().addingTimeInterval(5)
-        while readout().context != context, Date() < deadline { RunLoop.current.run(until: Date().addingTimeInterval(0.1)) }
-        XCTAssertEqual(readout().context, context, when, file: file, line: line)
-    }
-
-    private func expect(builds: String, file: StaticString = #filePath, line: UInt = #line) {
-        RunLoop.current.run(until: Date().addingTimeInterval(0.5))
-        XCTAssertEqual(readout().builds, builds, file: file, line: line)
+        while readout() != context, Date() < deadline { RunLoop.current.run(until: Date().addingTimeInterval(0.1)) }
+        XCTAssertEqual(readout(), context, when, file: file, line: line)
     }
 }

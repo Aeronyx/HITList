@@ -366,36 +366,3 @@ final class MobileChromeTests: XCTestCase {
     }
     #endif
 }
-
-/// Brief 168: an iPhone tab kept alive behind the one on show stops its clocks. A paused schedule gives the one moment
-/// it stopped at and nothing after it; shown again, the schedule is its base's, entry for entry.
-final class KeptTabClockTests: XCTestCase {
-    func testAHiddenTabsClockDoesNotTick() {
-        let start = Date(timeIntervalSinceReferenceDate: 800_000_000)
-        let hidden = Array(PeriodicTimelineSchedule(from: start, by: 60).paused(true).entries(from: start, mode: .normal).prefix(5))
-        XCTAssertEqual(hidden, [start], "one entry, then no tick")
-        let minute = Array(EveryMinuteTimelineSchedule().paused(true).entries(from: start, mode: .normal).prefix(5))
-        XCTAssertEqual(minute, [start])
-    }
-
-    func testATabOnShowTicksAsBefore() {
-        let start = Date(timeIntervalSinceReferenceDate: 800_000_000)
-        let base = PeriodicTimelineSchedule(from: start, by: 60)
-        let shown = Array(base.paused(false).entries(from: start, mode: .normal).prefix(5))
-        XCTAssertEqual(shown, Array(base.entries(from: start, mode: .normal).prefix(5)))
-        XCTAssertEqual(shown.count, 5)
-    }
-
-    #if os(iOS)
-    /// A build without the measuring argument keeps every visited tab.
-    @MainActor
-    func testTheShellKeepsVisitedTabs() {
-        XCTAssertTrue(MobileShell.keepsTabs)
-    }
-    #endif
-
-    /// Everything that is not a kept iPhone tab is on show.
-    func testEverythingElseIsOnShow() {
-        XCTAssertTrue(EnvironmentValues().tabOnShow)
-    }
-}

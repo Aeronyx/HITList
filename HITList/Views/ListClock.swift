@@ -48,24 +48,12 @@ enum ListClock {
 
 extension View {
     /// Sets `now` at `moment` (`ListClock.next`), once; a new moment (the list changed, or `now` moved) starts over.
-    /// It waits while its iPhone tab is kept behind another (brief 168, `\.tabOnShow`) and, shown again, catches up at
-    /// once if the moment passed meanwhile.
     func listClock(_ moment: Date?, now: Binding<Date>) -> some View {
-        modifier(ListClockModifier(moment: moment, now: now))
-    }
-}
-
-private struct ListClockModifier: ViewModifier {
-    let moment: Date?
-    @Binding var now: Date
-    @Environment(\.tabOnShow) private var onShow
-
-    func body(content: Content) -> some View {
-        content.task(id: onShow ? moment : nil) {
-            guard onShow, let moment else { return }
+        task(id: moment) {
+            guard let moment else { return }
             try? await Task.sleep(for: .seconds(max(0, moment.timeIntervalSinceNow)))
             guard !Task.isCancelled else { return }
-            now = Date()
+            now.wrappedValue = Date()
         }
     }
 }
