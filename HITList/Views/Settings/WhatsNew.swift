@@ -20,7 +20,8 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
-        Entry(version: "0.9.15", items: [
+        Entry(version: "0.9.16", items: [
+            "A new sync of HITList's own. Your devices move to it by themselves over the coming days, after saving a backup: nothing is deleted and there is nothing to do. Open HITList on each of your devices, so they move together.",
             "Upcoming has a Week layout: your week's tasks on a calendar, all-day ones under each day and timed ones at their hour. Choose it from the Layout button at the top of Upcoming; the list stays the default.",
             "Quick add's options stay on one line that scrolls sideways, so the card no longer grows as you add to it.",
             "Settings → Calendar reads at a glance: one switch, a row that says whether HITList may see your calendars, and the calendars to show. Titles and notes across Settings are shorter.",
