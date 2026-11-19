@@ -35,9 +35,17 @@ The move to the new sync:
   design had a freshly installed device take iCloud's copy instead; a review that set out to lose a tester's
   tasks showed that could hide everything, and that the merge already does the right thing. It is gone.)
 - **It finishes by itself**: the move takes effect the next time the app starts, so an iPhone or iPad ends its own
-  process once it is in the background with no card open, and a Mac relaunches itself behind your other apps.
+  process once it is in the background, and a Mac relaunches itself behind your other apps. Never while a card, a
+  sheet or a question is open (what you were typing stays), and never in a moment the system woke the app for a
+  widget or a notification.
 - **It checks itself**: the first time the new sync is at rest, the device compares every record in iCloud with
   its own, and its sync log says what it found.
+- **A second review read the move's code line by line** and found eleven things, each fixed with a test. The ones
+  that could have cost someone data: Reset local cache during the moments a move waits (no longer offered then);
+  a default filter deleted on the new sync coming back when a freshly installed device joined; and, on the way
+  back only, two devices each deleting the other's copy of an item (the earlier sync never merges such copies
+  now). Cancel the move is kept for good; a device that moved by itself shows what happened and no longer shows
+  the row that moves it back alone (that row needs the seven taps).
 - **What a person with two devices can meet**, in the time between the first and the second moving: something
   deleted on the device that has not moved yet comes back; an item changed on both keeps the later change; a
   task moved to Shared Tasks there shows in both places. Opening HITList on each device the same day keeps that
