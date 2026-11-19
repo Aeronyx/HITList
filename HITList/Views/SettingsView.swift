@@ -170,6 +170,16 @@ struct SettingsHome: View {
                 }
             }
         }
+        #if (DEBUG || RESPONSE_PROBE) && os(iOS)
+        // Brief 168: the autopilot opens each page and goes back as the rows and the back control do.
+        .onChange(of: ProbeDriver.shared.order) { _, order in
+            switch order?.command {
+            case .push(let page)?: pages(page)
+            case .back?: pages.back()
+            default: break
+            }
+        }
+        #endif
     }
 }
 

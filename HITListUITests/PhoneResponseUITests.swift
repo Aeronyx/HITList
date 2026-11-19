@@ -137,3 +137,105 @@ final class PhoneResponseUITests: XCTestCase {
         RunLoop.current.run(until: Date().addingTimeInterval(seconds))
     }
 }
+
+/// Brief 168: after every kind of switch the iPhone's "+" adds to the list on show (`popouts.listContext`), read from the
+/// Debug shell's one-point readout (`-debugShell YES`); and only the tab on show is within reach (one Browse control,
+/// one bolt), which any shell that keeps tabs alive must still hold.
+final class MobileTabsUITests: XCTestCase {
+    private var app: XCUIApplication!
+
+    override func setUp() {
+        continueAfterFailure = false
+        app = XCUIApplication()
+        app.launchEnvironment["HITLIST_STORE_SUFFIX"] = "uitest-\(UUID().uuidString.prefix(8))"
+        app.launchArguments += ["-disableCloudKit", "YES", "-hideTips", "-seedDemoData", "YES", "-debugShell", "YES"]
+    }
+
+    func testThePlusFollowsTheTabOnShow() throws {
+        app.launch()
+        XCTAssertTrue(app.buttons["tab-today"].waitForExistence(timeout: 30))
+        expect(context: "today")
+        for _ in 1...3 {
+            for (tab, context) in [("inbox", "inbox"), ("upcoming", "upcoming"), ("flipboard", "plain"), ("today", "today")] {
+                app.buttons["tab-\(tab)"].firstMatch.tap()
+                expect(context: context, "after a tap on \(tab)")
+            }
+        }
+
+        // A screen pushed on a tab: Browse, then a Group from it, each sets the "+"; leaving the tab and coming back
+        // shows its first screen again and gives the "+" back to it.
+        app.buttons["browseButton"].firstMatch.tap()
+        expect(context: "inbox", "on Browse") // Browse adds to the Inbox
+        let home = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Home")).firstMatch
+        XCTAssertTrue(home.waitForExistence(timeout: 5))
+        home.tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Call the dentist")).firstMatch
+                          .waitForExistence(timeout: 5))
+        let onGroup = readout()
+        XCTAssertNotEqual(onGroup, "inbox", "a Group's own list once it is pushed")
+        XCTAssertNotEqual(onGroup, "today")
+        app.navigationBars.buttons.firstMatch.tap()
+        expect(context: "inbox", "back on Browse")
+        app.buttons["tab-upcoming"].firstMatch.tap()
+        expect(context: "upcoming", "a tab left from a pushed screen")
+        app.buttons["tab-today"].firstMatch.tap()
+        expect(context: "today", "back on a tab whose pushed screens went")
+        XCTAssertFalse(app.buttons["browse-settings-row"].exists, "Today came back on its first screen")
+
+        // A tap on the tab on show takes it back to its first screen.
+        app.buttons["browseButton"].firstMatch.tap()
+        expect(context: "inbox", "on Browse again")
+        app.buttons["tab-today"].firstMatch.tap()
+        expect(context: "today", "after a tap on the tab on show")
+
+        // The "+" itself: from Inbox, the card adds a task that the Inbox shows.
+        app.buttons["tab-inbox"].firstMatch.tap()
+        expect(context: "inbox")
+        app.buttons["quickAddButton"].firstMatch.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["quickAddTitle"].firstMatch.waitForExistence(timeout: 5))
+        app.typeText("Kept tabs check")
+        let save = app.buttons["quickAddSave"].firstMatch
+        XCTAssertTrue(save.wait(for: \.isHittable, toEqual: true, timeout: 5))
+        save.tap()
+        let card = app.descendants(matching: .any)["quickAddTitle"].firstMatch
+        if !card.waitForNonExistence(timeout: 3), save.exists { save.tap() } // a tap the keyboard's arrival swallowed
+        XCTAssertTrue(card.waitForNonExistence(timeout: 5), "the card closes on Add")
+        // The newest task is at the Inbox's end: a long list builds its last rows once they scroll into sight.
+        let added = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Kept tabs check")).firstMatch
+        for _ in 0..<4 where !added.exists {
+            app.swipeUp()
+        }
+        XCTAssertTrue(added.waitForExistence(timeout: 5), "added to the Inbox on show")
+    }
+
+    /// A tab left is out of reach: its rows, its title and its toolbar are not there for VoiceOver or a test, at once and
+    /// after the crossfade.
+    func testAHiddenTabIsOutOfReach() throws {
+        continueAfterFailure = true
+        app.launch()
+        XCTAssertTrue(app.buttons["tab-today"].waitForExistence(timeout: 30))
+        let inboxOnly = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Read the article Alex sent")).firstMatch
+        app.buttons["tab-inbox"].firstMatch.tap()
+        XCTAssertTrue(inboxOnly.waitForExistence(timeout: 5))
+        app.buttons["tab-today"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Buy groceries")).firstMatch
+                          .waitForExistence(timeout: 5))
+        XCTAssertTrue(inboxOnly.waitForNonExistence(timeout: 0.5), "the Inbox's row, as the switch begins")
+        XCTAssertEqual(app.buttons.matching(identifier: "browseButton").count, 1, "one Browse control: Today's")
+        RunLoop.current.run(until: Date().addingTimeInterval(1))
+        XCTAssertFalse(inboxOnly.exists, "the Inbox's row, after the fade")
+        XCTAssertEqual(app.buttons.matching(identifier: "syncBolt").count, 1, "one bolt: Today's")
+    }
+
+    // MARK: Helpers
+
+    private func readout() -> String {
+        String(app.staticTexts["debug-shell"].firstMatch.label.dropFirst("context=".count))
+    }
+
+    private func expect(context: String, _ when: String = "", file: StaticString = #filePath, line: UInt = #line) {
+        let deadline = Date().addingTimeInterval(5)
+        while readout() != context, Date() < deadline { RunLoop.current.run(until: Date().addingTimeInterval(0.1)) }
+        XCTAssertEqual(readout(), context, when, file: file, line: line)
+    }
+}

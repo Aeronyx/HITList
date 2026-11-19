@@ -1,4 +1,8 @@
 import SwiftUI
+#if DEBUG || RESPONSE_PROBE
+import SwiftData
+import HITListCore
+#endif
 
 #if os(iOS)
 /// The iPhone shell (compact width): one screen per tab (Inbox, Today, Upcoming, Flipboard), each in its
@@ -68,6 +72,9 @@ struct MobileShell: View {
             .modifier(SideMargin(edge: placement == .side(.leading) ? .leading : .trailing,
                                  length: placement.listSideMargin(columnWidth: barColumnWidth(placement))))
             chrome(placement)
+            #if DEBUG
+            ShellDebugReadout(popouts: popouts)
+            #endif
         }
         // The quick-add card docks above the keyboard; the island stays put underneath it.
         .ignoresSafeArea(.keyboard, edges: .bottom)
@@ -92,7 +99,67 @@ struct MobileShell: View {
         }
         // Siri / Shortcuts "Open Today / Inbox / Upcoming" (brief 46).
         .intentRouting(tab: $tab)
+        #if DEBUG || RESPONSE_PROBE
+        .modifier(ProbeHooks(tab: $tab))
+        #endif
     }
+
+    #if DEBUG
+    /// Brief 168, for UI tests, with `-debugShell YES` only: the list the "+" adds to (`popouts.listContext`), read
+    /// from one 1-pt element, `debug-shell` (`MobileTabsKeptUITests`).
+    private struct ShellDebugReadout: View {
+        let popouts: PopoutController
+
+        var body: some View {
+            if UserDefaults.standard.bool(forKey: "debugShell") {
+                Text("context=\(String(describing: popouts.listContext))")
+                    .font(.system(size: 1))
+                    .foregroundStyle(.clear)
+                    .frame(width: 1, height: 1)
+                    .allowsHitTesting(false)
+                    .accessibilityIdentifier("debug-shell")
+            }
+        }
+    }
+    #endif
+
+    #if DEBUG || RESPONSE_PROBE
+    /// Brief 168: the autopilot's orders (`ResponseAutopilot`), carried out through the shell's own state: a tab as the
+    /// island's tap sets it, Settings as the screen menu's sheet shows it.
+    private struct ProbeHooks: ViewModifier {
+        @Binding var tab: MobileTab
+        @Environment(PopoutController.self) private var popouts
+        @Environment(\.modelContext) private var context
+        @State private var settings: SettingsSheetRequest?
+
+        func body(content: Content) -> some View {
+            content
+                .onChange(of: ProbeDriver.shared.order) { _, order in
+                    switch order?.command {
+                    case .tab(let new)?: tab = new
+                    case .openSettings?: settings = SettingsSheetRequest()
+                    case .closeSettings?: settings = nil
+                    case .addTask(let line)?:
+                        // As quick add's Add saves a line.
+                        let parsed = QuickAddParser(now: .now, weekStart: Preferences.weekStartWeekday()).parse(line)
+                        _ = try? TaskActions.create(from: parsed, defaultProject: nil, defaultLabel: nil, in: context)
+                    case .complete(let title)?:
+                        // As a row's check does.
+                        let tasks = (try? context.fetch(FetchDescriptor<TaskItem>())) ?? []
+                        if let task = tasks.first(where: { $0.title == title && !$0.isCompleted }) {
+                            withAnimation(HITMotion.standard) { TaskActions.toggleCompletion(task, in: context) }
+                        }
+                    default: break
+                    }
+                }
+                .onAppear {
+                    let popouts = popouts
+                    ProbeDriver.shared.contextReader = { "\(popouts.listContext)" }
+                }
+                .sheet(item: $settings) { request in SettingsView(page: request.page).slateSheet() }
+        }
+    }
+    #endif
 
     /// The system's bar column on the island's side: the safe area on that edge.
     private func barColumnWidth(_ placement: IslandPlacement) -> CGFloat {

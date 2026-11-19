@@ -78,7 +78,7 @@ struct ContentView: View {
             }
         }
         .environment(\.appShell, shell)
-        #if DEBUG && os(iOS)
+        #if (DEBUG || RESPONSE_PROBE) && os(iOS)
         .onAppear { ResponseProbe.startIfAsked() } // brief 164: `-responseProbe YES` times every tap's answer
         #endif
         .popoutHost(popouts, style: PopoutHost.Style(shell))
