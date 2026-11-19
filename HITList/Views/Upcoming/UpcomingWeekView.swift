@@ -23,6 +23,9 @@ struct UpcomingWeekView: View {
     let wholeWeek: Bool
     /// Bumped by the screen's "Jump to today".
     var todayRequest = 0
+    /// The person's own text size, from outside the layout's cap (`HITType.controlSizeCap`): the Overdue list's rows
+    /// are read, not operated, and grow with it. Nil: the size the layout sees.
+    var readingSize: DynamicTypeSize?
     var phase: (UUID) -> CompletionPhase? = { _ in nil }
     var onToggleCompletion: (Entry) -> Void = { _ in }
     var onOpen: (Entry) -> Void = { _ in }
@@ -34,9 +37,13 @@ struct UpcomingWeekView: View {
     @State private var gridWidth: CGFloat = 0
     @ScaledMetric(relativeTo: .caption2) private var hourHeight: CGFloat = 56
     @ScaledMetric(relativeTo: .caption2) private var gutter: CGFloat = 66
+    /// `WeekChip.narrowBelow` grown with the text, for the accessibility sizes (`isNarrow`).
+    @ScaledMetric(relativeTo: .caption2) private var scaledNarrowBelow: CGFloat = WeekChip.narrowBelow
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     init(entries: [Entry], now: Date, calendar: Calendar = .current, strip: WeekStrip, wholeWeek: Bool,
-         todayRequest: Int = 0, phase: @escaping (UUID) -> CompletionPhase? = { _ in nil },
+         todayRequest: Int = 0, readingSize: DynamicTypeSize? = nil,
+         phase: @escaping (UUID) -> CompletionPhase? = { _ in nil },
          onToggleCompletion: @escaping (Entry) -> Void = { _ in }, onOpen: @escaping (Entry) -> Void = { _ in }) {
         self.entries = entries
         self.now = now
@@ -44,6 +51,7 @@ struct UpcomingWeekView: View {
         self.strip = strip
         self.wholeWeek = wholeWeek
         self.todayRequest = todayRequest
+        self.readingSize = readingSize
         self.phase = phase
         self.onToggleCompletion = onToggleCompletion
         self.onOpen = onOpen
@@ -70,6 +78,15 @@ struct UpcomingWeekView: View {
     private var shownDays: [Date] { window.days(count: dayCount, strip: strip, now: now) }
     private var columnWidth: CGFloat {
         max(0, (gridWidth - gutter - Self.edge) / CGFloat(dayCount))
+    }
+
+    /// Whether a chip `width` wide drops its ring so its words have the room (`WeekChip.narrow`). Up to the largest
+    /// standard size, below `WeekChip.narrowBelow`, as before. At the accessibility sizes the ring and its padding grow
+    /// with the text while an iPhone's three columns do not: a chip under one and a half grown `narrowBelow` showed
+    /// its ring and "…" alone (round 34, brief 173), so there the words win sooner.
+    private func isNarrow(_ width: CGFloat) -> Bool {
+        if width < WeekChip.narrowBelow { return true }
+        return typeSize.isAccessibilitySize && width < scaledNarrowBelow * 1.5
     }
 
     var body: some View {
@@ -141,7 +158,8 @@ struct UpcomingWeekView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Overdue, \(overdue.count) tasks")
                 .accessibilityIdentifier("weekOverdue")
-                .modifier(OverdueList(isPresented: $showingOverdue, entries: overdue, now: now, phase: phase,
+                .modifier(OverdueList(isPresented: $showingOverdue, entries: overdue, now: now, readingSize: readingSize,
+                                      phase: phase,
                                       onToggleCompletion: onToggleCompletion, onOpen: onOpen))
             }
             HStack(spacing: 2) {
@@ -260,6 +278,7 @@ struct UpcomingWeekView: View {
         return VStack(spacing: HITSpacing.xs) {
             ForEach(shown) { entry in
                 WeekChip(entry: entry, now: now, height: hourHeight / 2, phase: phase(entry.id),
+                         narrow: typeSize.isAccessibilitySize && isNarrow(columnWidth - 4),
                          onToggle: { onToggleCompletion(entry) }, onOpen: { onOpen(entry) })
             }
             if hidden > 0 {
@@ -342,7 +361,7 @@ struct UpcomingWeekView: View {
             ForEach(day.timed, id: \.item.id) { timed in
                 let width = columnWidth / CGFloat(timed.columns)
                 WeekChip(entry: timed.item, now: now, height: hourHeight / 2, phase: phase(timed.item.id),
-                         narrow: width - 4 < WeekChip.narrowBelow,
+                         narrow: isNarrow(width - 4),
                          onToggle: { onToggleCompletion(timed.item) }, onOpen: { onOpen(timed.item) })
                     .frame(width: max(0, width - 4), alignment: .leading)
                     .offset(x: CGFloat(timed.column) * width + 2,
@@ -498,12 +517,23 @@ struct WeekChip: View {
     }
 }
 
+/// Gives back the person's text size under a cap (nil: leaves the environment's).
+private struct ReadingSize: ViewModifier {
+    let size: DynamicTypeSize?
+
+    func body(content: Content) -> some View {
+        if let size { content.environment(\.dynamicTypeSize, size) } else { content }
+    }
+}
+
 /// The overdue tasks in the list's own rows: a sheet on an iPhone, a popover on the iPad and the Mac. A tap on a row
 /// opens it as in the list; its check completes it through the list's completion.
 private struct OverdueList: ViewModifier {
     @Binding var isPresented: Bool
     let entries: [UpcomingView.Entry]
     let now: Date
+    /// The rows' text size (the person's, past the layout's cap).
+    let readingSize: DynamicTypeSize?
     let phase: (UUID) -> CompletionPhase?
     let onToggleCompletion: (UpcomingView.Entry) -> Void
     let onOpen: (UpcomingView.Entry) -> Void
@@ -546,6 +576,7 @@ private struct OverdueList: ViewModifier {
             }
         }
         .preferredColorScheme(.dark)
+        .modifier(ReadingSize(size: readingSize))
         .accessibilityIdentifier("weekOverdueList")
     }
 

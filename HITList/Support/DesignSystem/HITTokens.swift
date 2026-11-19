@@ -180,6 +180,15 @@ enum HITType {
     static let listSectionHeaderSize: CGFloat = 16
     static let listSectionHeader = HITFont.inter(listSectionHeaderSize, .semibold, relativeTo: .subheadline)
     #endif
+    /// The largest text size a dense control grows to (round 34, brief 173): what a person reads (a task's name and
+    /// notes, a row's date and Group line, a Settings row, a section's header) grows through the largest size, but a
+    /// control a person only operates, packed where it cannot grow without breaking (Upcoming's week strip and header,
+    /// the Week layout, the theme grid, the Flipboard's tiles, quick add's chips, the task card's pills and sub-task
+    /// rows), stops here: `.dynamicTypeSize(...HITType.controlSizeCap)` on the smallest container that holds it.
+    /// The first accessibility size, because it is the largest at which the iPhone's pictures of every one of those
+    /// still held (169's and the supervisor's, at XXXL, AX1, AX2, AX3 and AX5); from AX2 on they broke inside words
+    /// ("Graphit/e"), showed "…" where the days' numbers were, and cut their pills.
+    static let controlSizeCap: DynamicTypeSize = .accessibility1
     /// Filter queries and other code-like text stay in the system mono; Inter has no mono cut.
     static let mono = Font.callout.monospaced()
     static let monoCaption = Font.caption.monospaced()

@@ -613,9 +613,16 @@ final class StrangerSweepUITests: XCTestCase {
             number = 0
             launch(seed: true, extra: ["-UIPreferredContentSizeCategoryName", size])
             for screen in ["inbox", "today", "upcoming", "flipboard"] { go(screen); snap(screen) }
+            // Brief 173: the Week layout, the card's sub-tasks, quick add's chips and a picker, the theme grid.
+            go("upcoming")
+            chooseLayout("Week")
+            snap("upcoming-week")
+            chooseLayout(nil)
             go("today")
             openTask("Reply to Sam")
             snap("editor")
+            noteHeights(of: "editorPills", against: "editorDescriptionPill")
+            if scrollTo(element("addSubtask")) { snap("editor-subtasks") }
             closeEditor()
             go("inbox")
             if tapIfExists(app.buttons["quickAddButton"].firstMatch, timeout: 5) {
@@ -623,6 +630,23 @@ final class StrangerSweepUITests: XCTestCase {
                 app.typeText("Haircut tomorrow 11am p1 #Home ")
                 pause()
                 snap("quickadd")
+                noteHeights(of: "quickAddOptionBar", against: "quickAddPriorityChip")
+                pickerShot("quickAddDateChip", "quickadd-picker-date")
+                tapIfExists(app.buttons["Close"].firstMatch)
+                tapIfExists(element("quickAddDiscard"))
+                pause()
+            }
+            // A title on two lines with every chip, typed as 169's walk typed it (its picture at the default size
+            // cut the chips along their lower edge).
+            if tapIfExists(app.buttons["quickAddButton"].firstMatch, timeout: 5) {
+                pause(1)
+                app.typeText("Haircut ")
+                pause()
+                app.typeText("tomorrow 11am p1 !15mb #Home @errands every 2 weeks ")
+                pause()
+                snap("quickadd-every-chip")
+                noteHeights(of: "quickAddOptionBar", against: "quickAddPriorityChip")
+                noteHeights(of: "quickAddTitle", against: "quickAddOptionBar")
                 tapIfExists(app.buttons["Close"].firstMatch)
                 tapIfExists(element("quickAddDiscard"))
                 pause()
@@ -630,6 +654,8 @@ final class StrangerSweepUITests: XCTestCase {
             if isPhoneShell { go("inbox"); openBrowse(); snap("browse") }
             openSettings()
             snap("settings")
+            let theme = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'theme-companion-'")).firstMatch
+            if scrollTo(theme) { snap("settings-themes") }
             if tapScrolling("settings-page-general") { shotDown("settings-general"); sheetBack() }
             closeSettings()
             app.terminate()
@@ -921,6 +947,14 @@ final class StrangerSweepUITests: XCTestCase {
         } else {
             try? line.write(to: url, atomically: true, encoding: .utf8)
         }
+    }
+
+    /// Writes a row's height beside one of its chips' to the notes: a row shorter than its chips cuts them.
+    private func noteHeights(of rowID: String, against chipID: String) {
+        let row = element(rowID), chip = element(chipID)
+        guard row.exists, chip.exists else { return note("no \(rowID) or \(chipID) to measure") }
+        note(String(format: "%@ %.1f pt tall from %.1f, %@ %.1f pt from %.1f", rowID, row.frame.height, row.frame.minY,
+                    chipID, chip.frame.height, chip.frame.minY))
     }
 
     /// Saves the screen as `<walk>-<nn>-<name>.png` in `HITLIST_SHOTS_DIR`, and attaches it.

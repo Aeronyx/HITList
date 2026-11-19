@@ -68,6 +68,9 @@ struct ThemeSwatchRow: View {
             }
         }
         .accessibilityElement(children: .contain)
+        // Four names to a row under 44 pt swatches: past the first accessibility size they broke inside a word
+        // ("Graphit/e", "Slat/e") and cut the companions' names (round 34, brief 173).
+        .dynamicTypeSize(...HITType.controlSizeCap)
     }
 }
 
