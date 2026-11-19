@@ -20,7 +20,8 @@ import UIKit
 ///   as the hand move relaunches it (the new instance waits for this one to exit before it opens the store).
 ///
 /// Never under tests, never when a Debug argument chose the engine (nothing waits then), never for a side store on
-/// the Mac (a relaunch through the system would not reopen it), and nothing at all when no move waits.
+/// the Mac that its launcher named (a relaunch through the system would not reopen it), and nothing at all when no
+/// move waits.
 @MainActor
 enum SyncEngineMoveFinish {
     private static let log = Logger(subsystem: "com.trammells.hitlist", category: "sync")
@@ -35,6 +36,14 @@ enum SyncEngineMoveFinish {
                           current: SyncEngineBoard.Engine = SyncEngineSwitch.current,
                           byArgument: Bool = SyncEngineSwitch.launchedByArgument) -> Bool {
         !byArgument && SyncEngineSwitch.nextEngine(storeName: storeName, defaults: defaults) != current
+    }
+
+    /// Whether a relaunch through the system opens this store again: the real store, and a Development build's own
+    /// (`SyncStoreGuard` names it again at every launch). Any other side store is named by its launcher's
+    /// environment, which a relaunch drops.
+    static func reopensByItself(storeName: String) -> Bool {
+        storeName == ModelContainerFactory.mainStoreName
+            || storeName == ModelContainerFactory.storeName(suffix: SyncStoreGuard.developmentSuffix)
     }
 
     /// Whether this moment is one the app may end or relaunch itself in (pure, for the tests).
@@ -72,8 +81,7 @@ enum SyncEngineMoveFinish {
         guard waiting else { return }
         #if os(macOS)
         let quiet = !NSApplication.shared.isActive
-        let sideStore = ModelContainerFactory.storeName != ModelContainerFactory.mainStoreName
-        guard !sideStore else { return }
+        guard reopensByItself(storeName: ModelContainerFactory.storeName) else { return }
         #else
         let quiet = UIApplication.shared.applicationState == .background
         #endif

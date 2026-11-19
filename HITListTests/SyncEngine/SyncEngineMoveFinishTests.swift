@@ -47,6 +47,13 @@ final class SyncEngineMoveFinishTests: XCTestCase {
                        "not under something a person is typing in")
     }
 
+    /// The Mac relaunches itself only for a store a plain relaunch opens again.
+    func testOnlyAStoreARelaunchReopensIsRelaunched() {
+        XCTAssertTrue(SyncEngineMoveFinish.reopensByItself(storeName: "HITList.store"))
+        XCTAssertTrue(SyncEngineMoveFinish.reopensByItself(storeName: "HITList-Development.store"), "a Development build's own")
+        XCTAssertFalse(SyncEngineMoveFinish.reopensByItself(storeName: "HITList-r34a.store"), "named by its launcher's environment")
+    }
+
     /// Under tests nothing was installed, so the launch's hooks do nothing at all.
     func testNothingIsDoneUnderTests() {
         var finished = 0
