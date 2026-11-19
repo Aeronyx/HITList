@@ -61,10 +61,47 @@ public enum TaskOrdering {
     }
 
     /// `tasks` in `priorityThenDue` order, each by the date it is listed under (a switch listed as today's: today).
+    ///
+    /// **Each task's place is read once** (`OrderKey`), and the keys are what is sorted. Sorted by the tasks
+    /// themselves, every comparison read the priority, the date, the day's start, the age and sometimes the name of
+    /// both again, some nine thousand comparisons for five hundred rows, and on a stored task each read is a call
+    /// into the store: most of what the Inbox spent putting its rows in order (round 34: 0.4 s to show the Inbox of
+    /// a store of 1,500 tasks on George's phone). The order is `priorityThenDue`'s exactly (a test holds the two
+    /// equal on random lists).
     public static func sorted<T: FilterableTask>(_ tasks: [T], now: Date = Date(), calendar: Calendar = .current) -> [T] {
-        tasks.map { FlipboardSwitch.listed($0, now: now, calendar: calendar) }
-            .sorted { priorityThenDue($0, $1, calendar: calendar) }
-            .map(\.base)
+        tasks.map { task -> (key: OrderKey, task: T) in
+            (OrderKey(FlipboardSwitch.listed(task, now: now, calendar: calendar), calendar: calendar), task)
+        }
+        .sorted { $0.key.precedes($1.key) }
+        .map(\.task)
+    }
+
+    /// What `priorityThenDue` and `createdThenTitle` ask of a task, read once.
+    struct OrderKey {
+        let priority: Int
+        let due: Date?
+        let created: Date
+        let title: String
+
+        init<T: FilterableTask>(_ task: T, calendar: Calendar) {
+            priority = task.filterPriority
+            due = TaskOrdering.dueOrderKey(task, calendar: calendar)
+            created = task.filterCreatedDate ?? .distantPast
+            title = task.filterTitle
+        }
+
+        /// `priorityThenDue(_:_:calendar:)`, line for line.
+        func precedes(_ other: OrderKey) -> Bool {
+            if priority != other.priority { return priority < other.priority }
+            switch (due, other.due) {
+            case let (a?, b?) where a != b: return a < b
+            case (nil, .some): return false
+            case (.some, nil): return true
+            default: break
+            }
+            if created != other.created { return created < other.created }
+            return title.localizedCaseInsensitiveCompare(other.title) == .orderedAscending
+        }
     }
 
     // MARK: - Inbox

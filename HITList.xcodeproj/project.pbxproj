@@ -99,6 +99,7 @@
 		257118BE09BECCEE77BAA768 /* SettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E0F881764310827D1A610F1 /* SettingsTests.swift */; };
 		25867322B5DBFEA293437AF1 /* MacAboutSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEBD86391030BCFC15AD273A /* MacAboutSection.swift */; };
 		2627D544E45DE46036EB040C /* HITListApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D05CBD7325605B6D1A94CF1 /* HITListApp.swift */; };
+		2629F2F14E8E7DAA6C426A2E /* ZZListProfileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 941652348A3A1D453AAA6A91 /* ZZListProfileTests.swift */; };
 		26FB4550CD5C3E37C7E303A4 /* FlipSwitchTile.swift in Sources */ = {isa = PBXBuildFile; fileRef = C88ABAD9BF71EABED1CAB264 /* FlipSwitchTile.swift */; };
 		277AD3B42C5742E0F45ABC92 /* MacSearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53515B8CC6A5FF8A70336C46 /* MacSearchTests.swift */; };
 		27DBEFA6994F820D77015727 /* LocalCacheReset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 528485A27E1D787530779DBE /* LocalCacheReset.swift */; };
@@ -1033,6 +1034,7 @@
 		92811CBB96DCB3B993F65CEF /* PickerTime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickerTime.swift; sourceTree = "<group>"; };
 		9388258DD5F4BF21418975C1 /* HighlightTextView+macOS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HighlightTextView+macOS.swift"; sourceTree = "<group>"; };
 		93AA6A7E2EAFE1873C0B7994 /* LargeTextTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LargeTextTests.swift; sourceTree = "<group>"; };
+		941652348A3A1D453AAA6A91 /* ZZListProfileTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZZListProfileTests.swift; sourceTree = "<group>"; };
 		949018764012BBE12E6F0ED2 /* SyncEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEnvironment.swift; sourceTree = "<group>"; };
 		95337ADE991268904AA7383E /* MacChromeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacChromeTests.swift; sourceTree = "<group>"; };
 		966FF672CF1AE97484CD00CE /* TaskActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskActions.swift; sourceTree = "<group>"; };
@@ -2006,6 +2008,7 @@
 				C646F9ABEFD94CE72865AA78 /* WidgetSnapshotWriterTests.swift */,
 				7A0C8DEFBDA26535C47BC4E6 /* WidgetTodayTests.swift */,
 				20CA43020CE7832A00C1FA46 /* WidgetUpcomingTests.swift */,
+				941652348A3A1D453AAA6A91 /* ZZListProfileTests.swift */,
 				C5C1F85884227D5A71DCB7A6 /* SyncEngine */,
 			);
 			path = HITListTests;
@@ -3235,6 +3238,7 @@
 				9BBC494A329759ECFCF6D8E9 /* WidgetSnapshotWriterTests.swift in Sources */,
 				90CC9F55764A248D24E8FAAE /* WidgetTodayTests.swift in Sources */,
 				E95577674FCA941401D4111D /* WidgetUpcomingTests.swift in Sources */,
+				2629F2F14E8E7DAA6C426A2E /* ZZListProfileTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

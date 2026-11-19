@@ -11,6 +11,81 @@ final class TaskOrderingTests: XCTestCase {
 
     // MARK: - Comparator
 
+    /// Round 34: `sorted` reads each task's place once and sorts those keys. Its order is the comparator's own, on
+    /// lists made to tie in every way: equal priorities, equal days with and without a time, no date, equal ages,
+    /// names that differ only in case, and switches listed as today's.
+    func testSortedByKeysIsThePriorityThenDueOrderExactly() {
+        var seed: UInt64 = 0x9E3779B97F4A7C15
+        func next(_ bound: Int) -> Int {
+            seed = seed &* 6364136223846793005 &+ 1442695040888963407
+            return Int((seed >> 33) % UInt64(bound))
+        }
+        let names = ["apple", "Apple", "banana", "Mango", "mango", "zebra", "Zebra", ""]
+        for round in 0..<60 {
+            var tasks: [PlainTask] = []
+            for index in 0..<(5 + next(120)) {
+                let day = Fixed.date(2026, 10, 15 + next(12))
+                let due: Date? = next(4) == 0 ? nil : (next(2) == 0 ? day : day.addingTimeInterval(Double(next(24)) * 3_600))
+                var task = PlainTask(title: names[next(names.count)] + (next(3) == 0 ? "" : " \(index % 4)"),
+                                     priority: 1 + next(4), dueDate: due)
+                task.filterHasDueTime = due != nil && next(2) == 0
+                task.filterCreatedDate = next(6) == 0 ? nil : Fixed.date(2026, 9, 1 + next(5))
+                if next(9) == 0 {
+                    // A switch that opted in: listed as today's while it is due.
+                    task.filterIsRecurring = true
+                    task.filterLabelNames = ["Flipboard"]
+                    task.filterSwitchOptedIn = next(2) == 0
+                }
+                tasks.append(task)
+            }
+            let byComparator = tasks.map { FlipboardSwitch.listed($0, now: now, calendar: cal) }
+                .sorted { TaskOrdering.priorityThenDue($0, $1, calendar: cal) }
+                .map(\.base)
+            let byKeys = TaskOrdering.sorted(tasks, now: now, calendar: cal)
+            XCTAssertEqual(byKeys.map(\.filterTitle), byComparator.map(\.filterTitle), "round \(round)")
+            XCTAssertEqual(byKeys.map(\.filterDueDate), byComparator.map(\.filterDueDate), "round \(round)")
+            XCTAssertEqual(byKeys.map(\.filterPriority), byComparator.map(\.filterPriority), "round \(round)")
+        }
+    }
+
+    /// A task that does not repeat is no switch, and nothing more is asked of it: its labels, its Switchboard and
+    /// its toggles are read only for a switch (every list asks this of every task it holds).
+    func testOnlyASwitchIsAskedForMoreThanWhetherItRepeats() {
+        struct Counting: FilterableTask {
+            var base: PlainTask
+            let reads: Reads
+            final class Reads { var labels = 0, board = 0, optedIn = 0 }
+            var filterTitle: String { base.filterTitle }
+            var filterNotes: String { base.filterNotes }
+            var filterPriority: Int { base.filterPriority }
+            var filterDueDate: Date? { base.filterDueDate }
+            var filterHasDueTime: Bool { base.filterHasDueTime }
+            var filterIsCompleted: Bool { base.filterIsCompleted }
+            var filterProjectName: String? { base.filterProjectName }
+            var filterLabelNames: [String] { reads.labels += 1; return base.filterLabelNames }
+            var filterIsRecurring: Bool { base.filterIsRecurring }
+            var filterCreatedDate: Date? { base.filterCreatedDate }
+            var filterIsSubtask: Bool { base.filterIsSubtask }
+            var filterSwitchOptedIn: Bool { reads.optedIn += 1; return base.filterSwitchOptedIn }
+            var filterSwitchboard: SwitchboardSchedule? { reads.board += 1; return base.filterSwitchboard }
+        }
+        let plain = Counting(base: PlainTask(title: "Milk", priority: 4, dueDate: Fixed.date(2026, 10, 21)), reads: .init())
+        XCTAssertEqual(FlipboardSwitch.listing(for: plain, now: now, calendar: cal), .unchanged)
+        XCTAssertTrue(TaskOrdering.isInInbox(plain, now: now, calendar: cal))
+        XCTAssertEqual([plain.reads.labels, plain.reads.board, plain.reads.optedIn], [0, 0, 0])
+
+        var repeating = PlainTask(title: "Rent", priority: 4, dueDate: Fixed.date(2026, 10, 21))
+        repeating.filterIsRecurring = true
+        let rent = Counting(base: repeating, reads: .init())
+        XCTAssertEqual(FlipboardSwitch.listing(for: rent, now: now, calendar: cal), .unchanged)
+        XCTAssertEqual([rent.reads.labels, rent.reads.board, rent.reads.optedIn], [1, 0, 0], "its labels, and nothing else")
+
+        repeating.filterLabelNames = ["flipboard"]
+        repeating.filterSwitchOptedIn = true
+        let aSwitch = Counting(base: repeating, reads: .init())
+        XCTAssertEqual(FlipboardSwitch.listing(for: aSwitch, now: now, calendar: cal), .today, "a switch is judged as before")
+    }
+
     func testPriorityComesBeforeDueDate() {
         let tasks = [
             PlainTask(title: "p4 today", priority: 4, dueDate: Fixed.date(2026, 10, 21)),

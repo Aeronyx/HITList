@@ -27,8 +27,12 @@ public enum FlipboardSwitch {
         isRecurring && !isCompleted && hasLabel(labelNames)
     }
 
+    /// In this order and no further than needed: a task that does not repeat is no switch, and its labels are never
+    /// asked for. Every list asks this of every task it holds, and on a stored task the labels are a relationship to
+    /// follow: asked of all 1,500 tasks of a store, they were most of what the Inbox spent choosing its rows (round
+    /// 34, measured on George's phone as 0.4 s to show the Inbox).
     public static func isMember<T: FilterableTask>(_ task: T) -> Bool {
-        isMember(isRecurring: task.filterIsRecurring, isCompleted: task.filterIsCompleted, labelNames: task.filterLabelNames)
+        task.filterIsRecurring && !task.filterIsCompleted && hasLabel(task.filterLabelNames)
     }
 
     // MARK: - Sides
@@ -113,9 +117,12 @@ extension FlipboardSwitch {
         return .today
     }
 
+    /// A task that is no switch (nearly all) is `unchanged` at once: its Switchboard, its repeat and its toggles
+    /// are read only for a switch.
     public static func listing<T: FilterableTask>(for task: T, now: Date, calendar: Calendar = .current) -> Listing {
-        listing(isSwitch: isMember(task), optedIn: task.filterSwitchOptedIn, due: task.filterDueDate,
-                hasTime: task.filterHasDueTime, board: task.filterSwitchboard, now: now, calendar: calendar)
+        guard isMember(task) else { return .unchanged }
+        return listing(isSwitch: true, optedIn: task.filterSwitchOptedIn, due: task.filterDueDate,
+                       hasTime: task.filterHasDueTime, board: task.filterSwitchboard, now: now, calendar: calendar)
     }
 
     /// The date a list files the task under: the start of today for a switch listed as today's, its own otherwise.
