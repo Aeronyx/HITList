@@ -77,6 +77,9 @@ struct WeekStripView: View {
         }
         .padding(.top, 8)
         .padding(.bottom, 6)
+        // The month, the arrows and seven days in a 64 pt strip: past the first accessibility size the days' numbers
+        // became "…" and the month broke in two (round 34, brief 173).
+        .dynamicTypeSize(...HITType.controlSizeCap)
         .background(Theme.surface, ignoresSafeAreaEdges: barColumn.stripBackgroundEdges)
     }
 

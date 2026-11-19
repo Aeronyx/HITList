@@ -29,6 +29,8 @@ struct UpcomingView: View {
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.appShell) private var shell
+    /// The person's text size, before the Week layout's cap: its Overdue list is rows to read, and grows with it.
+    @Environment(\.dynamicTypeSize) private var typeSize
     /// iPhone: the island's "+" is the only way to add; lists show no "Add task" row.
     private var isCompact: Bool { sizeClass == .compact }
     /// iPad at full width and the iPhone Duo's inner display: the board (`showsBoard(idiom:sizeClass:shell:)`).
@@ -263,7 +265,7 @@ struct UpcomingView: View {
     /// The Week layout: three days on an iPhone, the week's seven where the board would be.
     private var week: some View {
         UpcomingWeekView(entries: entries, now: now, calendar: calendar, strip: strip, wholeWeek: showsBoard,
-                         todayRequest: jumpToTodayRequest,
+                         todayRequest: jumpToTodayRequest, readingSize: typeSize,
                          phase: { completions.phase(of: $0) },
                          onToggleCompletion: { toggleCompletion($0) },
                          onOpen: { entry in
@@ -272,6 +274,9 @@ struct UpcomingView: View {
                              case .shared(let row): popouts.listSelection.wrappedValue = .shared(SharedTaskRef(row))
                              }
                          })
+        // Its header, day names, hours and chips are packed into columns a third of an iPhone wide: they stop at
+        // the cap (round 34, brief 173), its hours' height and gutter with them (`@ScaledMetric` reads the cap).
+        .dynamicTypeSize(...HITType.controlSizeCap)
     }
 
     // MARK: - Board
