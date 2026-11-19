@@ -732,8 +732,15 @@ yes; paused; limited to a later build: not yet; cleared); a Mac side store on th
 no zone; asked: not yet; waited), then with the word (the mirror agreed with iCloud, backup, "Moved to the new
 sync by itself"), reopened on the engine: 51 items sent, Check iCloud… the same 51, and the device's own "Checked
 after the move" line; a first send of 6,005 records in 24 batches, a minute and a half, the check the same 6,005.
-The phone's part (a second device that follows its account under a pause, and ends its own process in the
-background) is in `dev/briefs/ROUND-34.md`.
+**The Mac's own Development store, started plainly in the background**: no zone, the word yes, the mirror's
+comparison "6 only here" (which R1 counts as caught up), the backup, the move, "Finishing the move to the new
+sync: HITList starts again by itself", a new process fourteen seconds after the first began, 121 records sent,
+and "Checked after the move to the new sync: iCloud and this device hold the same 120 items." **George's iPhone
+as the second device**, the word paused: on the mirror it found the Mac's zone, moved all the same (R2), ended
+its own process with code 0 the moment another app came to the front, and reopened on the engine, where its
+stale copy met the Mac's: the task the Mac had deleted after moving was "M6 firstMeetingDeletedThere: deleted
+here", the tasks the Mac had completed, renamed and moved were written as the Mac had them, the 63 records only
+the phone held went up, and Check iCloud… said the same 114 items and one marker on both devices.
 
 **George's order of things**: deploy the schema (it gained one record type; `scripts/release.sh` stops until
 Production holds it); release 0.9.16; move his Mac by hand from the hidden group (his iPhone follows by itself:
