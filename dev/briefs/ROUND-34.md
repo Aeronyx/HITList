@@ -69,4 +69,70 @@ was wrong. No clock was set this time.
   both sides. Measured on a ruler now; three days where seven do not fit. A hosted test draws it wide, narrow
   and wide again and fails on the old measurement.
 - CI: the simulation's CPU bound allows for a slow runner (a push that changed nothing there had failed).
+- **From the sweep** (169's findings 1, 8, 9, 13, 15, 16, 19): "3 days ago", "2 weeks ago" and "last monday" are
+  dates in the past (they were saved ahead, with "ago" left in the name); the Mac toolbar's capsule is as wide as
+  its controls (Upcoming's third button hung out over the sync bolt); Account offers the sign-out row only where
+  an account may be signed in; the words that send a person to sync's Settings page name the page they have; the
+  iPad's "Add task" row has the list's own background; quick add's + menu says "Sub-tasks".
+- What's New for 0.9.16 is seven lines (the page had grown to nearly two screens; the iPhone suite's own bound
+  caught it).
+
+## The iPhone (brief 168, then the supervisor on the phone)
+
+Measured on George's iPhone 16 in a Release build by a probe that drives the app itself (`ResponseAutopilot`,
+compiled into a Release build with `-D RESPONSE_PROBE`; `-responseAutopilot YES`): main-thread work from a change
+to the frame that answers it.
+
+| Store | Inbox | Today | Upcoming | Flipboard | add or check off |
+|---|---|---|---|---|---|
+| The demo week (about 20 tasks, 5 switches), iCloud off | 130 ms | 118 | 185 | 206 | 50 |
+| 177 items and some forty switches, iCloud on, settled | 196 | 246 | 250 | 730 | 96 |
+| The same after the lights' fix | 196 | 290 | 250 | 563 | 93 |
+| 1,500 open tasks, iCloud off | 374 | 136 | 614 | 250 | 103 |
+
+Settings: a page pushes in about 54 ms (the worst 98), goes back in 31, and no frame while scrolling any page is
+longer than 21 ms; the sheet opens in about 180 ms the first time.
+
+- **Kept tabs were tried and taken back** (168): a visited tab kept alive behind the one on show halved a warm
+  switch (130 to 58–78 ms) and doubled every add and check-off (50 to 111–133), because the hidden lists redraw on
+  each save; closing Settings went from about 50 to 130 ms, memory from 53 to 96 MB, and the hidden screens stayed
+  in reach of VoiceOver and XCUITest. Nothing tried stopped the redraw. The shell builds the tab on show afresh,
+  as before.
+- **An overdue switch's light kept the phone busy** (found with iCloud on and a store that had grown some forty
+  switches): each overdue pill was redrawn thirty times a second, 29 s of main-thread work a minute while the
+  Flipboard was on show (4.7 s a minute with the demo's handful). Now the pill is drawn once dim and once lit and
+  only the lit one's opacity is animated, by an animation scoped to that modifier (`BreathingPill`): 0.7 s a
+  minute, and a warm switch to that Flipboard 730 ms to 563.
+- **A switch to a tab costs with what the tab holds**: about 15 ms a Flipboard tile, and Inbox and Upcoming grow
+  with the open tasks (the time is SwiftUI building the screen, not the app's own code: a sample of the simulator
+  put a seventh of it in the app). Two changes in core that read less of each task (only a switch is asked for
+  its board and toggles; a list's order reads each task once) cut the Inbox's choosing and ordering from 51 ms to
+  10 for 1,500 tasks on the Mac and **changed nothing measurable on the phone**; they stay because they are
+  proven the same and cost nothing.
+- **George's own store is small** (his newest daily backup, counted only: 59 tasks, 6 of them open, 5 switches),
+  so what he has is the first row of the table, and the 0.9.13 he is still on (nothing since was released) lacks
+  round 32's and 33's work on the lists and tab switches. Not measured: 0.9.13 itself the same way (it has no
+  probe), and his real store with the mirror running (a development build must not open it).
+
+## Left open, on purpose or for want of proof
+
+- **The engine has never run in iCloud's Production side.** George's own devices are its first: the Mac by hand,
+  the iPhone following by itself, then his word.
+- **Tab switches**: the structural fix is still owed. Two ways, neither small: Flipboard rows that build only the
+  tiles on screen (its rows and sections are plain stacks, with drag and drop measured on them), and lists whose
+  rows a rebuilt screen can take from a store kept above the tabs. Keeping whole tabs alive is not it (168).
+- **The way back after the app's own move** (`dev/SYNC-ENGINE.md` section 13): a device that never moved follows
+  its account into a zone everyone else left by hand; two devices that both came back with their own file hold
+  the items made on the engine twice. The row that moves a store back shows only after the seven taps.
+- 169's findings not acted on: an empty Today is one quiet line (a choice of an earlier round); a Group's long
+  name is cut in its own title; the `flipboard` label shows among a person's labels (it is how a switch is one);
+  the Claude page's words; a switch card's placeholder; Review Inbox's card on an iPad; the board's card with an
+  empty second line; "Nothing due" under every empty day; the Week layout's small title on an iPad; an hour's
+  name half under the band's edge when the grid opens between two hours.
+- 173: at the largest text sizes Settings' row titles and the day headers break or truncate (rows a person reads
+  should wrap there: a later round); the quick-add row cut at the first accessibility size could not be
+  reproduced and is held by a guarantee and a test.
+- 172's table of rules no test would catch: the query for the release record on CloudKit, the zone look's error
+  mapping and the finish's observers are still proven only by rehearsal.
+- Session "140 Sync engine: a pretend iCloud and its rig" holds unmerged work and stays open for George.
 

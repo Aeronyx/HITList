@@ -68,6 +68,19 @@ read by eye):
   to sync's settings name the page you have ("iCloud & data" on an iPhone). Quick add's + menu says "Sub-tasks",
   as a task's card does. On an iPad the "Add task" row no longer draws a band to the screen's edge.
 
+Lighter on iPhone (measured on George's phone in a Release build, by a probe that drives the app itself):
+
+- **An overdue switch's light no longer keeps the phone busy.** Each overdue light was redrawn thirty times a
+  second: with a handful of overdue switches the Flipboard cost 5 s of work a minute while it was open, with a few
+  dozen 29 s. Now 0.7 s. The light looks the same.
+- A switch to a tab takes 0.12 to 0.2 s of work with a small store, and a Settings page 0.05 s with no dropped
+  frame. Keeping visited tabs alive was tried: it halved a switch and doubled every add and check-off, so it was
+  taken back. A tab that holds a great deal (some forty switches, or hundreds of open tasks) still takes 0.4 to
+  0.7 s to show: the next round's work.
+- Text sizes above the largest standard one: dense controls (the week strip, the Week layout, Flipboard tiles,
+  theme names, a card's pills, quick add's chips and pickers) stop growing at the first accessibility size, where
+  they still fit; what you read (task names, notes, rows, Settings) keeps growing.
+
 From the afternoon's round (0.9.15, never released). 0.9.14 was prepared on 2026-11-17 and not released: George wanted the release to come at a time of his choosing, and
 wrote on the 18th with what he had seen meanwhile. "Several external testers are now also using HITList on 0.9.13,
 and as it takes a while to release a new build for them, I want to ensure this next one is incredibly solid … some of

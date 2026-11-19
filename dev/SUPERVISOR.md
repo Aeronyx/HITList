@@ -463,7 +463,20 @@ rules were broken. **A constant that is true for every build is true for every a
 `movesByItself` on, every side store on the mirror would have followed the zones the rehearsals left in
 Development. **CI's runner is slower than this Mac by more than twice on a bad day**: a test that bounds CPU
 time at twice the local figure fails a push that changed nothing (the simulation's bound is now for a rig grown
-several times dearer, not for a runner).
+several times dearer, not for a runner). **Measure the phone with iCloud on and with a store that has grown**:
+brief 168 measured the demo week with iCloud off, as it was told to for safety, and found nothing slow; the
+supervisor's own run on a synced side store with forty switches found the overdue lights eating half the main
+thread, and one with 1,500 tasks found tab switches of 0.4 to 0.7 s. `ResponseAutopilot` in a Release build
+(`-D RESPONSE_PROBE`) is the tool; `sample` on a simulator's app process says whose code the time is in
+(`xctrace list` shows the phone offline, and attaching by pid works all the same). **A faster number on the Mac
+is not a faster phone**: two changes in core cut a step from 51 ms to 10 in a Mac test and changed nothing the
+phone could measure, because the phone's time was SwiftUI's. Say which was measured where. **Know what he is
+running before reading his complaint**: nothing had been released since 0.9.13, so "still slow" was 0.9.13, not
+the round's work. **Count, do not read**: the size of his store came from his newest daily backup's counts
+(59 tasks, 6 open, 5 switches), and it changed what the measurements meant. **A simulator made fresh slides its
+keyboard away and back while XCUITest types**: taps aimed meanwhile miss (`waitUntilStill`), and Command-A
+never arrives; two "failures on the base too" were this, read from the test's own screen recording
+(`xcresulttool export attachments`, then frames with AVFoundation).
 
 Lessons from round 33 (seven agents at once in the two hours before a usage limit reset; 0.9.15):
 **Seven agents on one Mac finish, but their own proof thins out**: builds were slow, a Flipboard UI test ran past
@@ -1050,7 +1063,11 @@ quoted in section 7.
 
 **In 0.9.16**: everything 0.9.15 held; **the move to the engine made by the app itself, on, and waiting for his
 word** (section 3; `dev/SYNC-ENGINE.md` section 14, stage 6); the fixes from two reviews of the move and from a
-sweep of every screen in pictures; the iPhone's tab switches and Settings; the history rewritten.
+sweep of every screen in pictures; dense controls that stop growing at the first accessibility text size; the
+overdue lights' breathing made cheap (it kept the phone's main thread up to half busy on the Flipboard); the
+history rewritten. **The iPhone's tab switches were measured on his phone and not made faster** (`ROUND-34.md`,
+"The iPhone": 0.12 to 0.2 s with a store the size of his; keeping tabs alive doubled every save and was taken
+back; a tab that holds a great deal takes 0.4 to 0.7 s, and the structural fix is the next round's).
 
 **What he does, in order**: (1) CloudKit Console → `iCloud.com.trammells.hitlist.sync` → Development → Deploy
 Schema Changes… (the file gained one record type; `scripts/release.sh` stops until Production holds it);

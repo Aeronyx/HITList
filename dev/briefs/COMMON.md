@@ -878,6 +878,18 @@ phone; nobody talks to iCloud); what is new:
   Read the pictures.
 - **`scripts/test.sh ios` uses the simulator named in `SIMULATOR`** (default the stock "iPhone 17", which every
   agent shares): give it your own.
+- **Dense controls stop growing at `HITType.controlSizeCap`** (the first accessibility size): a new chip row, strip
+  or tile takes `.dynamicTypeSize(...HITType.controlSizeCap)` on its smallest container; what a person reads is
+  never capped.
+- **Nothing on a list or the Flipboard is redrawn on a clock while it rests.** The overdue light is one scoped
+  opacity animation (`BreathingPill`); a `TimelineView(.animation)` per row or tile is a finding. The phone's
+  measure is `ResponseAutopilot` (`-responseAutopilot YES`; in a Release build with `-D RESPONSE_PROBE`), with
+  iCloud on and a store that has grown, not only the demo week.
+- **The iPhone's shell builds the tab on show afresh**; kept tabs were measured and taken back (every save redrew
+  the hidden lists). `MobileTabsUITests` holds which list the "+" adds to.
+- **In a UI test, wait until the control is still before tapping it after typing** (`waitUntilStill`), and clear a
+  field with deletes, not Command-A: a fresh simulator has no hardware keyboard to send it and slides its
+  software one while XCUITest types.
 
 ## Round 33 record (2026-11-18; agents 161 to 167 merged for 0.9.15): what a session must know now
 
