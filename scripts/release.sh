@@ -184,10 +184,19 @@ if (( SCHEMA_CHECK && UPLOAD )); then
       MISSING=$(comm -23 "$TMP/$CID-file.fields" "$TMP/$CID-prod.fields")
       if [[ -n "$MISSING" ]]; then
         echo "$MISSING" | sed 's/^/  missing in Production: /'
-        print -P "%F{yellow}Three steps, in this order (the first two touch only the sync engine's test side, never anyone's tasks):%f"
-        print -P "%F{yellow}  1. xcrun cktool reset-schema --team-id $TEAM_ID --container-id $CID%f"
-        print -P "%F{yellow}  2. xcrun cktool import-schema --team-id $TEAM_ID --container-id $CID --environment development --file $SYNC_SCHEMA_FILE%f"
-        print -P "%F{yellow}  3. icloud.developer.apple.com → CloudKit Database → $CID → Development → Deploy Schema Changes… → Production%f"
+        # Development already holds exactly the file (the supervisor imported it): one click is left.
+        if xcrun cktool export-schema --team-id "$TEAM_ID" --container-id "$CID" \
+             --environment development --output-file "$TMP/$CID-dev.ckdb" >/dev/null 2>&1 \
+           && schema_fields "$TMP/$CID-dev.ckdb" > "$TMP/$CID-dev.fields" \
+           && cmp -s "$TMP/$CID-file.fields" "$TMP/$CID-dev.fields"; then
+          print -P "%F{yellow}One step (its test side already holds exactly $SYNC_SCHEMA_FILE):%f"
+          print -P "%F{yellow}  icloud.developer.apple.com → CloudKit Database → $CID → Development → Deploy Schema Changes… → Deploy%f"
+        else
+          print -P "%F{yellow}Three steps, in this order (the first two touch only the sync engine's test side, never anyone's tasks):%f"
+          print -P "%F{yellow}  1. xcrun cktool reset-schema --team-id $TEAM_ID --container-id $CID%f"
+          print -P "%F{yellow}  2. xcrun cktool import-schema --team-id $TEAM_ID --container-id $CID --environment development --file $SYNC_SCHEMA_FILE%f"
+          print -P "%F{yellow}  3. icloud.developer.apple.com → CloudKit Database → $CID → Development → Deploy Schema Changes… → Production%f"
+        fi
         fail "$CID: Production lacks what the sync engine sends (above). Then run this again (nothing was changed here). Or pass --skip-schema-check."
       fi
       echo "$CID: Production holds every record type and field of $SYNC_SCHEMA_FILE."
