@@ -62,6 +62,15 @@ public struct DateExpressionParser: Sendable {
         return day(diff, from: d)
     }
 
+    /// The latest date with the given calendar weekday before `date` (seven days back when `date` is one).
+    public func previousWeekday(_ weekday: Int, before date: Date) -> Date {
+        let d = startOfDay(date)
+        let wd = calendar.component(.weekday, from: d)
+        var diff = (wd - weekday + 7) % 7
+        if diff == 0 { diff = 7 }
+        return day(-diff, from: d)
+    }
+
     public func lastDayOfMonth(containing date: Date) -> Date {
         let range = calendar.range(of: .day, in: .month, for: date)!
         var comps = calendar.dateComponents([.year, .month], from: date)
@@ -282,6 +291,13 @@ public struct DateExpressionParser: Sendable {
             return nil
         case "weekend":
             return (d(spanWeekend().start), 1)
+        case "last":
+            // "last monday": the latest Monday before today (a week ago when today is one). Only a weekday: "last
+            // week" and "last month" are words people put in a task's name. Without this, "last" stayed in the
+            // name and the weekday read as the coming one (round 34, brief 169: a date in the future for something
+            // typed as past). After "every", a repeat has already taken "last fri" (the month's last Friday).
+            guard let n = next, let wd = Self.weekdayNames[n] else { return nil }
+            return (d(previousWeekday(wd, before: today)), 2)
         default:
             break
         }
@@ -290,8 +306,12 @@ public struct DateExpressionParser: Sendable {
             return (d(nextWeekday(wd, after: today, inclusive: false)), 1)
         }
 
-        // "3 days", "2 weeks"
+        // "3 days", "2 weeks"; and "3 days ago", "2 weeks ago", which are that long before today (they used to read
+        // as that long ahead, with "ago" left in the name: round 34, brief 169).
         if let count = Int(w), let n = next, let unit = Self.unitDays(n), count > 0, Self.relativeCounts.contains(count) {
+            if next2 == "ago" {
+                return (d(calendar.date(byAdding: unit.component, value: -count, to: today)!), 3)
+            }
             return (d(calendar.date(byAdding: unit.component, value: count, to: today)!), 2)
         }
 

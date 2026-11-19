@@ -29,13 +29,23 @@ enum ToolbarPillMetrics {
     static let buttonGlyph = Color.white.opacity(0.9)
 }
 
-/// The view-options control and the "…" in one capsule of ours.
+/// The view-options control and the "…" in one capsule of ours. **As wide as its controls**: two make 26.7.1's 67.5 pt
+/// (each is `ScreenControlMetrics.width` wide and they overlap by half a point); Upcoming has three since its Layout
+/// button (round 33), and in a capsule fixed at two controls' width the first hung out over the sync bolt and the
+/// last touched the "+" (round 34, brief 169's pictures).
 struct ToolbarPill<Content: View>: View {
     @ViewBuilder var content: Content
 
+    /// The capsule's width for `controls` controls.
+    static func width(controls: Int) -> CGFloat {
+        CGFloat(controls) * ScreenControlMetrics.width - CGFloat(max(0, controls - 1)) * ToolbarPillMetrics.controlSpacing
+    }
+
     var body: some View {
         HStack(spacing: -ToolbarPillMetrics.controlSpacing) { content }
-            .frame(width: ToolbarPillMetrics.width, height: ToolbarPillMetrics.height)
+            .fixedSize(horizontal: true, vertical: false)
+            .frame(minWidth: ToolbarPillMetrics.width)
+            .frame(height: ToolbarPillMetrics.height)
             .overlay(Capsule().strokeBorder(Theme.separator, lineWidth: 1).allowsHitTesting(false))
             .contentShape(Capsule())
             .padding(.horizontal, ToolbarPillMetrics.outerMargin)

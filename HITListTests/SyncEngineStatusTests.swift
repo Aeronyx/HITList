@@ -184,13 +184,13 @@ final class SyncEngineStatusTests: XCTestCase {
         // Core keeps a refusal's words apart from `lastError` (`SyncStatus.refusal`).
         let status = idle(refused: keys, refusal: "TaskItem/A: too large")
         XCTAssertNil(SyncEngineMarks.syncError(status), "a refusal is not an error that keeps trying")
-        XCTAssertEqual(words(marks(status, errorSince: ago(600))), "2 items couldn't go to iCloud; Settings → iCloud names them")
+        XCTAssertEqual(words(marks(status, errorSince: ago(600))), "2 items couldn't go to iCloud; Settings → \(SyncWords.settingsPage) names them")
         XCTAssertEqual(look(marks(status)), hollow)
         // Another error while items are refused is still an error.
         let both = idle(lastError: "network unavailable", refused: keys, refusal: "TaskItem/A: too large")
         XCTAssertEqual(SyncEngineMarks.syncError(both), "network unavailable")
         XCTAssertEqual(words(marks(idle(refused: [keys[0]], refusal: "TaskItem/A: too large"))),
-                       "1 item couldn't go to iCloud; Settings → iCloud names it")
+                       "1 item couldn't go to iCloud; Settings → \(SyncWords.settingsPage) names it")
     }
 
     // MARK: Every demo state
@@ -205,7 +205,7 @@ final class SyncEngineStatusTests: XCTestCase {
             "update": "Update HITList to sync: iCloud holds data from a newer version.",
             "full12": "iCloud is full: 12 changes are waiting.",
             "failed": "Sync stopped: this device's sync records could not be read",
-            "refused2": "2 items couldn't go to iCloud; Settings → iCloud names them",
+            "refused2": "2 items couldn't go to iCloud; Settings → \(SyncWords.settingsPage) names them",
             "signedout": "Not signed in to iCloud",
         ]
         XCTAssertEqual(Set(expected.keys), Set(SyncEngineDemo.names))

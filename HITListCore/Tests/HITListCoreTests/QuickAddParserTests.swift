@@ -125,6 +125,43 @@ final class QuickAddParserTests: XCTestCase {
         XCTAssertEqual(parser.parse("Call mum every day in 2 hours").recurrence?.encoded, "daily;1;;;16:30")
     }
 
+    /// Round 34, brief 169's first finding: "3 days ago", "2 weeks ago" and "last monday" were saved as dates ahead
+    /// (in three days, in two weeks, next Monday) with "ago" or "last" left in the name. Something typed as past is
+    /// saved as past, as "yesterday" always was, and nothing of the phrase stays in the name.
+    func testAgoAndLastWeekdayAreInThePast() {
+        // Today is Wednesday 21 October 2026.
+        var r = parser.parse("Return the library books 3 days ago")
+        XCTAssertEqual(r.title, "Return the library books")
+        assertDate(r.dueDate, 2026, 10, 18)
+        XCTAssertEqual(r.tokens.map(\.text), ["3 days ago"])
+        r = parser.parse("Return the library books 2 weeks ago")
+        XCTAssertEqual(r.title, "Return the library books")
+        assertDate(r.dueDate, 2026, 10, 7)
+        assertDate(parser.parse("Send the form 1 month ago").dueDate, 2026, 9, 21)
+        r = parser.parse("Return the library books last monday")
+        XCTAssertEqual(r.title, "Return the library books")
+        assertDate(r.dueDate, 2026, 10, 19)
+        assertDate(parser.parse("Report last wednesday").dueDate, 2026, 10, 14) // today's own weekday: a week ago
+        r = parser.parse("Call back last fri 3pm")
+        XCTAssertEqual(r.title, "Call back")
+        assertDate(r.dueDate, 2026, 10, 16, 15, 0)
+        // Ahead as before.
+        assertDate(parser.parse("Renew passport 3 days").dueDate, 2026, 10, 24)
+        assertDate(parser.parse("Renew passport in 3 days").dueDate, 2026, 10, 24)
+        assertDate(parser.parse("Report monday").dueDate, 2026, 10, 26)
+        // "last" with anything but a weekday stays a word, and so does "ago" alone.
+        for words in ["Summarise last week", "The last straw", "Chase last month's invoice", "Long ago"] {
+            let plain = parser.parse(words)
+            XCTAssertEqual(plain.title, words)
+            XCTAssertNil(plain.dueDate, words)
+        }
+        // After "every", "last fri" is the month's last Friday, as before.
+        let club = parser.parse("Book club every last fri")
+        XCTAssertEqual(club.title, "Book club")
+        XCTAssertNotNil(club.recurrence)
+        XCTAssertEqual(club.tokens.map(\.kind), [.recurrence])
+    }
+
     func testAnExplicitPastDateOnARepeatingTaskIsKeptAsTyped() {
         assertDate(parser.parse("Standup every day yesterday 9am").dueDate, 2026, 10, 20, 9, 0)
         assertDate(parser.parse("Standup every weekday today 9am").dueDate, 2026, 10, 21, 9, 0)

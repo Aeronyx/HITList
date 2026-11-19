@@ -62,9 +62,18 @@ enum SyncWords {
                               : "Offline: HITList checks with iCloud when you are back online"
     }
 
-    /// Items iCloud refused for good (too large, or rejected): Settings → iCloud names them.
+    /// The name of the Settings page that holds sync, as the person sees it: one page on an iPhone and an iPad, a
+    /// page of its own on the Mac (round 34, brief 169: the words sent an iPhone's person to "Settings → iCloud",
+    /// a page that is not there).
+    #if os(macOS)
+    static let settingsPage = "iCloud"
+    #else
+    static let settingsPage = "iCloud & data"
+    #endif
+
+    /// Items iCloud refused for good (too large, or rejected): the Settings page names them.
     static func engineRefused(_ count: Int) -> String {
-        "\(count == 1 ? "1 item" : "\(count) items") couldn't go to iCloud; Settings → iCloud names \(count == 1 ? "it" : "them")"
+        "\(count == 1 ? "1 item" : "\(count) items") couldn't go to iCloud; Settings → \(settingsPage) names \(count == 1 ? "it" : "them")"
     }
 
     /// A hold's words for the status line, in a person's words: what happened and, for the red ones, that nothing was

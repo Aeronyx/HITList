@@ -273,7 +273,7 @@ struct QuickAddPopout: View {
             Button("Location", systemImage: "mappin.and.ellipse") { reveal(.location) }
             Button("Deadline", systemImage: "scope") { reveal(.deadline) }
             Button("Repeat", systemImage: "repeat") { reveal(.repeating) }
-            Button("Subtasks", systemImage: "checklist") { reveal(.subtasks) }
+            Button("Sub-tasks", systemImage: "checklist") { reveal(.subtasks) }
         } label: {
             HITChipLabel("", systemImage: "plus", tint: Theme.accent, size: .compact)
         }

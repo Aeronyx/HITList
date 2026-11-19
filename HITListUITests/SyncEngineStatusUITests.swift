@@ -89,7 +89,7 @@ final class SyncEngineStatusUITests: XCTestCase {
               holdButtons: ["settings-engine-try-again"])
     }
     func testRefused() {
-        check("refused2", words: "2 items couldn't go to iCloud; Settings → iCloud names them",
+        check("refused2", words: "2 items couldn't go to iCloud; Settings → iCloud & data names them",
               extra: ["settings-engine-refused", "settings-engine-refused-names"])
     }
     func testSignedOut() { check("signedout", words: "Not signed in to iCloud") }

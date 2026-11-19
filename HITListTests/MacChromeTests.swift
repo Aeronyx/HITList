@@ -32,6 +32,25 @@ final class MacChromeTests: XCTestCase {
         XCTAssertLessThanOrEqual(speaker.height, ScreenControlMetrics.height)
     }
 
+    /// Round 34, brief 169's pictures: Upcoming's pill holds three controls since its Layout button, and in a capsule
+    /// fixed at two controls' width the Layout button hung out over the sync bolt and the gear touched the "+". The
+    /// capsule is as wide as its controls: two are still 67.5 pt, three 101.
+    func testThePillIsAsWideAsItsControls() {
+        XCTAssertEqual(ToolbarPill<EmptyView>.width(controls: 2), ToolbarPillMetrics.width)
+        XCTAssertEqual(ToolbarPill<EmptyView>.width(controls: 3), 101)
+        let three = ToolbarPill {
+            Menu { Button("x") {} } label: { Image(systemName: "calendar.day.timeline.left") }
+            Menu { Button("x") {} } label: { Image(systemName: "line.3.horizontal.decrease") }
+            SettingsGearButton {}
+        }
+        .menuStyle(.button)
+        .buttonStyle(ToolbarPillControlStyle())
+        let size = NSHostingView(rootView: three).fittingSize
+        XCTAssertEqual(size.width, 101 + 2 * ToolbarPillMetrics.outerMargin, accuracy: 0.5,
+                       "three controls no longer share two controls' room")
+        XCTAssertEqual(size.height, ToolbarPillMetrics.height)
+    }
+
     /// Brief 70: the pill is our capsule at the size the toolbar's glass had on 26.7.1 (67.5 × 36 pt, measured), each
     /// control its full height (outside the shared glass nothing scales an item down), with the glass's margins.
     func testThePillIsTheGlasssSizeOn26() {

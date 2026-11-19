@@ -47,6 +47,16 @@ enum AccountState: Equatable {
         }
     }
 
+    /// Whether the page offers "Sign out in the Settings app": only while an account is, or may be, signed in. With
+    /// none (never one, signed out, restricted) or with sync off on this device there is nothing to sign out of
+    /// (round 34, brief 169: the row sat under "iCloud: Not in use").
+    var offersSignOut: Bool {
+        switch self {
+        case .signedIn, .switched, .needsSignInAgain, .checking, .couldNotDetermine: true
+        case .signedOut, .neverSignedIn, .restricted, .localOnly: false
+        }
+    }
+
     /// The live state, from `CloudSyncMonitor` and `AccountWatch`'s memory in the app group.
     @MainActor
     static var current: AccountState {
@@ -104,7 +114,7 @@ enum AccountState: Equatable {
         case .needsSignInAgain:
             "iCloud needs your Apple account password again before it can sync: \(Self.accountPath)."
         case .couldNotDetermine:
-            "HITList couldn't get the iCloud account's status. Nothing is lost; it checks again when you come back to the app. Settings → iCloud → Check iCloud… tells more."
+            "HITList couldn't get the iCloud account's status. Nothing is lost; it checks again when you come back to the app. Settings → \(SyncWords.settingsPage) → Check iCloud… tells more."
         case .localOnly(let reason):
             "Sync is off on this device: \(reason). Tasks stay on this device."
         }
@@ -189,13 +199,15 @@ struct AccountSettingsSection: View {
 
         HITGroup("iCloud account", footer: AccountCopy.storage) {
             AccountStatusRow(state: AccountState.current)
-            HITMenuRow(AccountCopy.signOutTitle, systemImage: "rectangle.portrait.and.arrow.right",
-                       accessory: .expand(isExpanded: showSignOut)) {
-                withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { showSignOut.toggle() }
-            }
-            .accessibilityIdentifier("settings-account-sign-out")
-            if showSignOut {
-                SettingsNote(text: AccountCopy.signOut)
+            if AccountState.current.offersSignOut {
+                HITMenuRow(AccountCopy.signOutTitle, systemImage: "rectangle.portrait.and.arrow.right",
+                           accessory: .expand(isExpanded: showSignOut)) {
+                    withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { showSignOut.toggle() }
+                }
+                .accessibilityIdentifier("settings-account-sign-out")
+                if showSignOut {
+                    SettingsNote(text: AccountCopy.signOut)
+                }
             }
         }
 

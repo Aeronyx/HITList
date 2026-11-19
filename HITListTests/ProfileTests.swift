@@ -385,6 +385,17 @@ final class ProfileTests: XCTestCase {
 
     // MARK: Account state
 
+    /// Round 34, brief 169: "Sign out in the Settings app" is offered only while an account is, or may be, signed in.
+    /// It sat under "iCloud: Not in use" for a person with no account at all.
+    func testSignOutIsOfferedOnlyWhereAnAccountMayBeSignedIn() {
+        for state in [AccountState.signedIn, .switched, .needsSignInAgain, .checking, .couldNotDetermine] {
+            XCTAssertTrue(state.offersSignOut, "\(state)")
+        }
+        for state in [AccountState.signedOut, .neverSignedIn, .restricted, .localOnly("iCloud sync turned off")] {
+            XCTAssertFalse(state.offersSignOut, "\(state)")
+        }
+    }
+
     private func state(_ status: CKAccountStatus?, notice: AccountWatch.Notice? = nil, ever: Bool = true,
                        cloudKit: Bool = true) -> AccountState {
         AccountState.derive(cloudKitEnabled: cloudKit, localOnlyReason: "store opened without CloudKit",
