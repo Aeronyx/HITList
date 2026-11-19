@@ -599,10 +599,16 @@ final class StrangerSweepUITests: XCTestCase {
         chooseLayout(nil)
     }
 
-    /// The largest and the smallest Dynamic Type sizes.
+    /// The largest and the smallest Dynamic Type sizes; or the sizes named in `HITLIST_SWEEP_SIZES` (the system's
+    /// own names without their prefix, comma-separated: `AccessibilityM,AccessibilityL` are the first two
+    /// accessibility sizes), each saved as `type-<name>`.
     func test12DynamicType() throws {
-        for (size, name) in [("UICTContentSizeCategoryAccessibilityXXXL", "type-ax5"), ("UICTContentSizeCategoryXS", "type-xs"),
-                             ("UICTContentSizeCategoryXXXL", "type-xxxl")] {
+        var sizes = [("UICTContentSizeCategoryAccessibilityXXXL", "type-ax5"), ("UICTContentSizeCategoryXS", "type-xs"),
+                     ("UICTContentSizeCategoryXXXL", "type-xxxl")]
+        if let asked = ProcessInfo.processInfo.environment["HITLIST_SWEEP_SIZES"], !asked.isEmpty {
+            sizes = asked.split(separator: ",").map { ("UICTContentSizeCategory\($0)", "type-\($0.lowercased())") }
+        }
+        for (size, name) in sizes {
             walk = name
             number = 0
             launch(seed: true, extra: ["-UIPreferredContentSizeCategoryName", size])

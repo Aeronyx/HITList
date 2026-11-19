@@ -151,7 +151,74 @@ final class UpcomingWeekTests: XCTestCase {
         XCTAssertEqual(UpcomingLayout.week.title(showsBoard: true), "Week")
     }
 
+    /// Seven days only where there is room for them: a window too narrow shows three, as an iPhone does.
+    func testAWindowTooNarrowForSevenDaysShowsThree() {
+        XCTAssertFalse(UpcomingWeekView.showsWholeWeek(wanted: false, width: 1200, gutter: 66), "an iPhone never does")
+        XCTAssertTrue(UpcomingWeekView.showsWholeWeek(wanted: true, width: 0, gutter: 66), "not measured yet")
+        XCTAssertTrue(UpcomingWeekView.showsWholeWeek(wanted: true, width: 765, gutter: 66), "a Mac's window with its sidebar")
+        XCTAssertTrue(UpcomingWeekView.showsWholeWeek(wanted: true, width: 665, gutter: 66), "800 wide with the sidebar")
+        XCTAssertFalse(UpcomingWeekView.showsWholeWeek(wanted: true, width: 420, gutter: 66), "the Mac's smallest window")
+        let edge = 7 * UpcomingWeekView.narrowestDay + 66 + HITSpacing.m
+        XCTAssertTrue(UpcomingWeekView.showsWholeWeek(wanted: true, width: edge, gutter: 66))
+        XCTAssertFalse(UpcomingWeekView.showsWholeWeek(wanted: true, width: edge - 1, gutter: 66))
+    }
+
     #if os(macOS)
+    /// Round 34, from brief 169's pictures of the Mac's smaller windows: the week kept the width it had first been
+    /// given, so a window made narrower cut it off on both sides, the month's name among them ("r 2026"). The
+    /// columns' widths came from a measurement of the stack that held them, which their own fixed widths kept as wide
+    /// as it had ever been. Drawn wide, then narrow: the week must come back to the window's width (and to three
+    /// days), and wide again to seven. Pictures are saved for the hand-over.
+    func testAWindowMadeNarrowerNarrowsTheWeek() throws {
+        let now = Date()
+        TaskActions.seedDemoDataIfRequested(in: context, arguments: ["-seedDemoData"], storeName: "HITList-169.store",
+                                            now: now)
+        try context.save()
+        let strip = WeekStrip(weekStart: Preferences.weekStartWeekday())
+        let items = try entries()
+        // No frame of the test's own round the view: the hosting view offers its own width, as a window does, and
+        // the view's own width (what it would take if it could: `fittingSize`) is then what its columns add up to.
+        let root = UpcomingWeekView(entries: items, now: now, strip: strip, wholeWeek: true)
+            .environment(PopoutController())
+            .modelContainer(container)
+            .font(HITType.body)
+            .preferredColorScheme(.dark)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1280, height: 620), styleMask: [.borderless],
+                              backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.appearance = NSAppearance(named: .darkAqua)
+        let host = NSHostingView(rootView: root)
+        host.frame = NSRect(x: 0, y: 0, width: 1280, height: 620)
+        window.contentView = host
+        defer { window.close() }
+        func settle() {
+            let deadline = Date().addingTimeInterval(0.8)
+            while Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.02)) }
+            host.layoutSubtreeIfNeeded()
+        }
+        func picture(_ name: String) throws {
+            let rep = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+            host.cacheDisplay(in: host.bounds, to: rep)
+            let png = try XCTUnwrap(rep.representation(using: .png, properties: [:]))
+            let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(name)
+            try png.write(to: url)
+            print("UPCOMING_WEEK_PNG \(url.path)")
+        }
+        settle()
+        XCTAssertGreaterThan(host.fittingSize.width, 1200, "seven columns across the wide window")
+        XCTAssertLessThanOrEqual(host.fittingSize.width, 1281)
+        for (width, name) in [(CGFloat(420), "upcoming-week-mac-420.png"), (700, "upcoming-week-mac-700.png"),
+                              (1280, "upcoming-week-mac-1280.png")] {
+            window.setContentSize(NSSize(width: width, height: 620))
+            host.frame = NSRect(x: 0, y: 0, width: width, height: 620)
+            settle()
+            XCTAssertLessThanOrEqual(host.fittingSize.width, width + 1,
+                                     "at \(Int(width)) pt the week is still as wide as an earlier window")
+            XCTAssertGreaterThan(host.fittingSize.width, width - 40, "and it fills the window it has")
+            try picture(name)
+        }
+    }
+
     /// The Mac's seven days, drawn offscreen in a window of the board's size with the demo week, two tasks at one time
     /// and a crowded all-day band: for the hand-over picture (`upcoming-week-mac.png` in the test host's temporary
     /// folder, and attached), and a check that the grid and the chips drew.

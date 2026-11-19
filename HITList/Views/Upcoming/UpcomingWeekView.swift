@@ -19,7 +19,7 @@ struct UpcomingWeekView: View {
     let now: Date
     var calendar: Calendar = .current
     let strip: WeekStrip
-    /// Seven days (iPad, the Mac); three otherwise.
+    /// Seven days where there is room for them (iPad, the Mac: `showsWholeWeek`); three otherwise.
     let wholeWeek: Bool
     /// Bumped by the screen's "Jump to today".
     var todayRequest = 0
@@ -53,7 +53,19 @@ struct UpcomingWeekView: View {
     static let bandRows = 2
     /// The grid's text stays this far from the screen's trailing edge and the chips' edges.
     private static let edge: CGFloat = HITSpacing.m
-    private var dayCount: Int { wholeWeek ? 7 : 3 }
+    /// Where the whole week is wanted, a day's column is never narrower than this: a window too narrow for seven
+    /// such columns (a Mac's window made small, an iPad beside another app) shows three days, as an iPhone does.
+    static let narrowestDay: CGFloat = 76
+
+    /// Whether seven days are shown: wanted, and wide enough for them (a width not yet measured counts as wide).
+    static func showsWholeWeek(wanted: Bool, width: CGFloat, gutter: CGFloat) -> Bool {
+        guard wanted else { return false }
+        guard width > 0 else { return true }
+        return (width - gutter - edge) / 7 >= narrowestDay
+    }
+
+    private var showsWeek: Bool { Self.showsWholeWeek(wanted: wholeWeek, width: gridWidth, gutter: gutter) }
+    private var dayCount: Int { showsWeek ? 7 : 3 }
     private var today: Date { calendar.startOfDay(for: now) }
     private var shownDays: [Date] { window.days(count: dayCount, strip: strip, now: now) }
     private var columnWidth: CGFloat {
@@ -64,15 +76,23 @@ struct UpcomingWeekView: View {
         let days = shownDays
         let model = UpcomingWeekModel(items: entries, days: days, now: now, calendar: calendar)
         VStack(spacing: 0) {
+            // The width there is to share, measured on a ruler that holds nothing: it takes exactly the width the
+            // screen offers. Measured on the stack itself (as it was), the columns' own fixed widths kept the stack
+            // as wide as it had ever been, so a Mac window made narrower (or an iPad turned, or put beside another
+            // app) left the week at its old width with both sides cut off, the month's name among them (round 34,
+            // brief 169's picture of the smallest window).
+            Color.clear
+                .frame(maxWidth: .infinity)
+                .frame(height: 0)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { gridWidth = $0 }
             header(days: days, overdue: model.overdue)
             dayHeaders(days)
             band(model.days)
             Rectangle().fill(Theme.separator).frame(height: 1)
             grid(model.days)
         }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { gridWidth = $0 }
         .background(Theme.background)
-        .modifier(SidewaysSwipe(isOn: !wholeWeek) { swiped(by: $0) })
+        .modifier(SidewaysSwipe(isOn: !showsWeek) { swiped(by: $0) })
         .onChange(of: todayRequest) { _, _ in goToToday() }
         .accessibilityIdentifier("upcomingWeek")
     }
@@ -125,7 +145,7 @@ struct UpcomingWeekView: View {
                                       onToggleCompletion: onToggleCompletion, onOpen: onOpen))
             }
             HStack(spacing: 2) {
-                navButton("chevron.left", label: wholeWeek ? "Previous week" : "Previous days") {
+                navButton("chevron.left", label: showsWeek ? "Previous week" : "Previous days") {
                     move(by: -dayCount)
                 }
                 .disabled(window.offset == 0)
@@ -139,7 +159,7 @@ struct UpcomingWeekView: View {
                     .frame(minHeight: 28)
                     .background(Theme.surface, in: RoundedRectangle(cornerRadius: HITRadius.chip, style: .continuous))
                     .disabled(isAtToday)
-                navButton("chevron.right", label: wholeWeek ? "Next week" : "Next days") { move(by: dayCount) }
+                navButton("chevron.right", label: showsWeek ? "Next week" : "Next days") { move(by: dayCount) }
             }
         }
         .padding(.horizontal, HITSpacing.l)
