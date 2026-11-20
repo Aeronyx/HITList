@@ -512,7 +512,21 @@ on** (it has been since round 34): `xcodebuild test -scheme HITListUITests -dest
 build.noindex/round-33/phone.udid)" -derivedDataPath build.noindex/<r>/dd-phone -only-testing:…` while it is
 unlocked (`devicectl device info lockState`: `passcodeRequired: false`), on side stores with iCloud off; leave
 out the classes that meet a system question (location, calendar), the Duo's, the companions', widgets and the
-share sheet. It replaces the app on his phone with a test build: tell him, and that TestFlight puts his back.
+share sheet, **and `SweepPolishUITests`**: its summary test switches on Settings → Reminders → Morning summary,
+and iOS then asked his phone whether HITList may send notifications (he had never been asked). Nobody may answer
+a system question, so it stayed on his screen and every test after it failed (the log says "Interrupting element
+Alert … springboard"); he was told it is there and that his answer is the real app's too (one bundle id). Before
+a phone run, grep the chosen classes for anything that asks the system (`requestPermission`, a summary or
+reminder switch, a calendar or location row). The Flipboard's tests take a minute for every step there ("App
+animations complete notification not received": the overdue lights never rest), so give them a run of their
+own or leave them to the simulator. Three failures on the phone are the phone's, not the app's: a tap aimed at
+the middle of a row that lies under the screen's bottom edge does nothing on the device and works on a simulator
+of the same size (About, the last row of Settings' first screen on a 6.1-inch phone; the Move row on a Debug
+side store); and a side store's settings start from what a build before the app group left in `.standard` on
+that phone ("the default filters are seeded"), so `testBrowseTakesFiltersInTheSearchField` finds no chips.
+Next round: do not carry `.standard` into a side store's suite; scroll a row clear of the edge before a tap; and
+make Settings' first screen fit a 6.1-inch phone, as brief 86 meant. It replaces the app on his phone with a test
+build: tell him, and that TestFlight puts his back.
 
 Lessons from round 33 (seven agents at once in the two hours before a usage limit reset; 0.9.15):
 **Seven agents on one Mac finish, but their own proof thins out**: builds were slow, a Flipboard UI test ran past
