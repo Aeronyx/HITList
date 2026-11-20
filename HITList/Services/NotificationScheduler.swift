@@ -41,9 +41,25 @@ enum NotificationScheduler {
     /// fire. So the first time a task with a reminder of its own is saved, on a device where reminders were never
     /// switched on or off and iOS was never asked, HITList asks; a yes switches reminders on. Once only: any answer,
     /// here or in Settings, ends it.
+    ///
+    /// Only while a person can see the question (`inFront`): a pass that runs with the app woken in the background (a
+    /// push, a widget) cannot show it, and an answer of "no" that nobody gave would have switched reminders off for
+    /// good, the question marked as asked (round 35). Such a pass asks nothing and marks nothing; the next one in
+    /// front asks.
     static func shouldAskAtFirstReminder(everChosen: Bool, alreadyAsked: Bool, authorization: UNAuthorizationStatus,
-                                         hasOwnReminder: Bool) -> Bool {
-        !everChosen && !alreadyAsked && authorization == .notDetermined && hasOwnReminder
+                                         hasOwnReminder: Bool, inFront: Bool = true) -> Bool {
+        inFront && !everChosen && !alreadyAsked && authorization == .notDetermined && hasOwnReminder
+    }
+
+    /// Whether the app is where a person can answer a system question: on iOS, not in the background. The Mac asks
+    /// with a banner that shows over whatever is in front.
+    @MainActor
+    static var isInFront: Bool {
+        #if os(iOS)
+        UIApplication.shared.applicationState != .background
+        #else
+        true
+        #endif
     }
 
     /// Whether any open task has a reminder of its own ("!15m", a reminder moment), as against the default offset
@@ -65,10 +81,12 @@ enum NotificationScheduler {
         guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
         let everChosen = defaults.object(forKey: enabledKey) != nil
         let alreadyAsked = defaults.bool(forKey: askedAtFirstReminderKey)
-        guard !everChosen, !alreadyAsked else { return }
+        guard !everChosen, !alreadyAsked, isInFront else { return }
         guard await authorizationStatus() == .notDetermined else { return }
+        // Asked again after the wait above: the app may have been left meanwhile.
         guard shouldAskAtFirstReminder(everChosen: everChosen, alreadyAsked: alreadyAsked,
-                                       authorization: .notDetermined, hasOwnReminder: hasOwnReminder(in: context)) else { return }
+                                       authorization: .notDetermined, hasOwnReminder: hasOwnReminder(in: context),
+                                       inFront: isInFront) else { return }
         defaults.set(true, forKey: askedAtFirstReminderKey)
         let granted = await requestPermission()
         isEnabled = granted

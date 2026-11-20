@@ -58,6 +58,21 @@ final class SidebarCountsModelTests: XCTestCase {
         for hours: Double in [3, 30, 216] { try assertSameAsTheRules(now: now.addingTimeInterval(hours * 3600)) }
     }
 
+    /// Round 35: a count can move with nothing saved (a switch that becomes a task when overdue falls due at its
+    /// board's hour), so the counts sleep to the soonest such moment, as the lists do; with none pending, no clock.
+    func testTheCountsSleepToTheNextMomentAListChangesByItself() throws {
+        let model = SidebarCountsModel()
+        model.start(context)
+        XCTAssertNil(model.wakesAt, "an empty store: nothing pending, nothing runs")
+        let later = Date().addingTimeInterval(2 * 3600)
+        context.insert(TaskItem(title: "call at four", dueDate: later, hasDueTime: true))
+        try context.save()
+        model.recompute()
+        XCTAssertEqual(model.wakesAt, later)
+        model.recompute(now: later.addingTimeInterval(-60))
+        XCTAssertEqual(model.wakesAt, later, "a test that names its moment starts no clock and stops none")
+    }
+
     /// A save counts again by itself, after the debounce.
     func testASaveCountsAgain() async throws {
         let home = Project(name: "Home")

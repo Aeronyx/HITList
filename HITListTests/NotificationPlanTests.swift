@@ -293,6 +293,9 @@ final class NotificationPlanTests: XCTestCase {
         XCTAssertFalse(ask(reminder: false), "no task has a reminder of its own: nothing to ask for")
         XCTAssertFalse(ask(chosen: true), "switched on or off in Settings: the person chose")
         XCTAssertFalse(ask(asked: true), "asked once already")
+        XCTAssertFalse(NotificationScheduler.shouldAskAtFirstReminder(
+            everChosen: false, alreadyAsked: false, authorization: .notDetermined, hasOwnReminder: true, inFront: false),
+            "woken in the background nobody can answer: a 'no' nobody gave must not switch reminders off (round 35)")
         XCTAssertFalse(ask(.denied), "iOS was asked and said no: Settings is the way")
         XCTAssertFalse(ask(.authorized))
     }

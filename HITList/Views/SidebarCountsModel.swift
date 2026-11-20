@@ -86,12 +86,37 @@ final class SidebarCountsModel {
         debounce.schedule { [weak self] in self?.recompute() }
     }
 
-    /// One fetch and one loop.
-    func recompute(now: Date = Date()) {
+    /// One fetch and one loop. With no `now` given (the app's own calls) it also sleeps to the next moment a count
+    /// moves by itself; a test that names its `now` gets the counts for that moment and no clock.
+    func recompute(now given: Date? = nil) {
         guard let container else { return }
+        let now = given ?? Date()
         let open = (try? container.mainContext.fetch(Self.openTopLevel)) ?? []
         let next = Self.counts(open, labels: includesLabels, now: now)
         if next != counts { counts = next }
+        if given == nil { wake(at: ListClock.next(after: now, tasks: open)) }
+    }
+
+    /// When the counts are next worked out with nothing saved; nil when nothing is pending.
+    @ObservationIgnored private(set) var wakesAt: Date?
+    @ObservationIgnored private var waking: Task<Void, Never>?
+
+    /// A count can move with nothing saved: a switch that becomes a task when overdue falls due at its board's hour
+    /// and joins Today, a board resets. The lists sleep to those moments (`ListClock`); until round 35 the counts did
+    /// not, so the sidebar stood one short of the list beside it until the next save (0.9.13 worked the counts out in
+    /// the sidebar's body, where any redraw put them right). One sleep, to the soonest moment; none when none is
+    /// pending.
+    private func wake(at moment: Date?) {
+        guard moment != wakesAt || waking == nil else { return }
+        waking?.cancel()
+        wakesAt = moment
+        guard let moment else { waking = nil; return }
+        waking = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(max(0, moment.timeIntervalSinceNow)))
+            guard !Task.isCancelled, let self else { return }
+            self.waking = nil
+            self.recompute()
+        }
     }
 
     /// The open top-level tasks: sub-tasks live inside their parent, so the counts skip them (brief 32). Their labels come

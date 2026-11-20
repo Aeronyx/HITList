@@ -44,8 +44,8 @@ struct TaskEditorDraft: Equatable {
     /// arriving), and a field nobody typed in must not be written back over that with what the editor happened to
     /// be showing (round 28, the sync review's finding 5: a title-only Confirm put the old notes back on every
     /// device).
-    private let openedTitle: String
-    private let openedNotes: String
+    private var openedTitle: String
+    private var openedNotes: String
 
     init(task: TaskItem) {
         title = task.title
@@ -150,6 +150,47 @@ struct TaskEditorDraft: Equatable {
         }
         // What is stored now is where a further edit starts, as if the editor had just opened.
         self = TaskEditorDraft(task: task)
+        return changed
+    }
+
+    /// Leaving the app with the editor open (iOS may end it there; the data review's B9): what was typed is stored
+    /// as typed, so nothing is lost, and the editor stays exactly as the person left it. Nothing is read as a phrase
+    /// and no field is reset. Until round 35 a full Confirm ran here: someone who typed "Meeting at 1", looked at
+    /// another app for the hour and came back to type the "0" found a meeting at one o'clock named "Meeting0"; a
+    /// title left at "Call Sam " came back without the space its next word needed. Confirm reads the phrases, as
+    /// ever, when the person presses it: what was typed in this session is still marked as typed (`untouched`).
+    ///
+    /// What is stored now is where the "did they change it" questions start (`openedTitle`, `openedNotes`), as after
+    /// Confirm: typing put back to how the editor opened is then a change to save, not "nothing typed". A sub-task
+    /// typed and not yet entered is added, as Confirm adds it, and its field empties. True if anything was stored.
+    @MainActor
+    @discardableResult
+    mutating func storeTyping(on task: TaskItem, in context: ModelContext) throws -> Bool {
+        var changed = false
+        if titleWasEdited, let title = Self.titleToSave(title, current: task.title) {
+            task.title = title
+            changed = true
+        }
+        if let notes = notesToSave(for: task) {
+            task.notes = notes
+            changed = true
+        }
+        if let rename = renameToSave(for: task) {
+            rename.subtask.title = rename.title
+            rename.subtask.touch()
+            changed = true
+        }
+        if changed {
+            task.touch()
+            try context.save()
+        }
+        if !Self.trimmed(newSubtask).isEmpty {
+            try TaskActions.addSubtask(newSubtask, to: task, in: context)
+            newSubtask = ""
+            changed = true
+        }
+        openedTitle = task.title
+        openedNotes = task.notes
         return changed
     }
 

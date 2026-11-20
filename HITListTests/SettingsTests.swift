@@ -253,6 +253,26 @@ final class SettingsTests: XCTestCase {
         XCTAssertFalse(WhatsNew.isNewer("0.2.0", than: "0.2.0"))
     }
 
+    /// Round 35: from 0.9.16 every device is moved to the app's own sync, so nothing may still call it early access
+    /// (Details did, on every moved device). The app's own sources are read: a word in a view no test draws is the
+    /// kind that stays behind.
+    func testNothingCallsTheNewSyncEarlyAccess() throws {
+        XCTAssertEqual(ICloudCheckGroup.engineName, "the new sync")
+        let app = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("HITList")
+        let files = try XCTUnwrap(FileManager.default.enumerator(at: app, includingPropertiesForKeys: nil))
+        var read = 0
+        for case let file as URL in files where file.pathExtension == "swift" {
+            let source = try String(contentsOf: file, encoding: .utf8)
+            read += 1
+            for line in source.split(separator: "\n") where line.localizedCaseInsensitiveContains("early access") {
+                let code = line.trimmingCharacters(in: .whitespaces)
+                XCTAssertTrue(code.hasPrefix("//"), "\(file.lastPathComponent) still says: \(code)")
+            }
+        }
+        XCTAssertGreaterThan(read, 200, "the app's sources were found")
+    }
+
     /// The version stays 0.9.0 and each release is a new build (George, 2026-11-10): entries are told apart by build.
     func testWhatsNewTellsBuildsOfOneVersionApart() {
         let build21 = WhatsNew.Entry(version: "0.9.0", build: 21, items: ["a"])

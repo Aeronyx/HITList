@@ -92,6 +92,10 @@ struct ICloudCheckGroup: View {
         }
     }
 
+    /// What Details calls the app's own sync. It said "(early access)" until round 35: from 0.9.16 every device is
+    /// moved to it, so the words told a person their tasks were on something unfinished.
+    static let engineName = "the new sync"
+
     @ViewBuilder
     private var syncDetails: some View {
         let monitor = CloudSyncMonitor.shared
@@ -99,7 +103,7 @@ struct ICloudCheckGroup: View {
         detailRow("Network", monitor.isOnline.map { $0 ? "reachable" : "unreachable" } ?? "checking")
         if monitor.isOnEngine {
             let status = SyncEngineBoard.shared.status
-            detailRow("Syncs through", "the new sync (early access)")
+            detailRow("Syncs through", Self.engineName)
             detailRow("Last fetch", timestamp(status?.lastFetchEnded))
             detailRow("Last accepted send", timestamp(status?.lastSendEnded))
             if let error = status?.lastError { detailBlock("Last error", error) }

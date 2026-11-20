@@ -156,3 +156,52 @@ the Console looked like when the schema was deployed, not seen this round); 0.9.
 0.9.16's was; the iPad's and the Mac's pictures after 173's caps and the sweep's fixes beyond the ones named
 (the Mac toolbar and Week layout were looked at in the running app, the iPad's "Add task" row in a picture).
 
+
+## Before release (2026-11-20, the night after)
+
+George: "Most of my friends' devices auto-update. Can I release this version safely? Test using my connected
+iPhone if you haven't yet … I really want to ensure this build is a true precursor to a 1.0 release and that we've
+performed rigorous regression testing for both UI/UX and backend purposes. Don't feel the need to redo any testing
+you've already done, but I also don't want to lose my friends' trust in this app because we missed something
+obvious before releasing this major build. Refresh your confidence and then tell me to deploy."
+
+What "auto-update" changes: his friends' devices get the build before he has opened it on his own. So the
+question is what an updated device does on its first day, with no move asked for. What was done, none of it a
+repeat of the round's own proof:
+
+- **The update itself.** The stored-data models and the way the store is opened are the same files as at
+  `v0.9.13` (`git diff v0.9.13..HEAD -- HITList/Models`: only how long a set-aside copy is kept), so nothing is
+  migrated. Then for real: 0.9.13 built from its tag in a worktree, a demo week seeded, the same store given to
+  the simulator's ordinary store (`HITList-Development.store`, no test flags), opened by 0.9.13, every row of
+  every table written out with `sqlite3`; this build installed over it and opened; the rows written out again:
+  none differs (19 tasks, 5 Groups, 4 filters, 2 boards, 4 labels, 12 label links). The widget's snapshot and
+  both extensions are unchanged since the tag, so a widget reads what 0.9.13 left until the app is next opened.
+- **Three read-only reviews by Opus agents, each with one lens, on the diff since the last build friends have**
+  (not since the last round): (1) everything that runs on a mirror device with no move asked for; (2) what the
+  build says about itself (What's New, the notes) against what the code does, and logic in what changed; (3)
+  whether the faster lists, counts and widgets can show something old. None found a reason to hold the release.
+  (1) proved from the code that no record, a paused one, an error or an unknown type all mean "wait", that the
+  word is never kept on disk, that the patience counters cannot run before the word, that the zone look reads
+  the engine's own container and that nothing on a mirror device makes that zone; and that 0.9.13 could not have
+  left a preference that reads as "moved". What they found and what became of it:
+
+| Found | By | Became |
+|---|---|---|
+| Leaving the app with a card open ran a full Confirm: half-typed words read as dates ("Meeting at 1" → 01:00, then "Meeting0"), the space before the next word dropped | 2 | `TaskEditorDraft.storeTyping`: stored as typed, the draft untouched, `openedTitle`/`openedNotes` moved to what is stored; five tests, four of which fail on the old code |
+| Week on iPad and Mac: "Previous week" live and dead on any day but the week's first | 2 | `UpcomingWeekWindow.canMoveBack(count:)` |
+| Week: the open all-day band grew without limit and pushed the hours away | 2 | `UpcomingWeekView.openBandHeight`: six rows and a half (four at accessibility sizes), then it scrolls |
+| The notifications question could be "asked" in the background and record a no nobody gave | 2 | asked only in front (`NotificationScheduler.isInFront`); a pass in the background marks nothing |
+| Sidebar counts missed a switch falling due between saves (new since 0.9.13: the counts left the body) | 3 | `SidebarCountsModel` sleeps to `ListClock.next`, as the lists do |
+| Details still said "the new sync (early access)" | 2 | gone; a test reads the app's sources for the words |
+| Show completed might not rebuild a list's query (the switch is only passed down as a binding) | 2, unsure | it does: `testShowCompletedBringsBackWhatWasCompleted` on Today and the Inbox; no test had switched it on |
+| The notifications question comes at the first launch after the update for someone with a reminder who was never asked | 1, 2 | left: it is the question round 32 meant; George is told |
+| "Asked iCloud whether this device may move…: not yet" in the sync log every half hour of use | 1 | left |
+| Reset local cache's backup overwrites the day's daily backup (as in 0.9.13) | 1 | left; next round: a file of its own |
+| An account switched while the app was suspended keeps the earlier account's zone answer up to 30 minutes | 1, unsure | left: it is how a store moves (two reviews first), and it needs the word and a changed account |
+| "this monday" on a Friday is the Monday just gone (as in 0.9.13, pinned by two tests) | 2 | left for George's taste |
+| "last monday" and "2 weeks ago" read inside a longer name; "three days ago" not read | 2 | left |
+| Week: a tap on an empty day does nothing; twenty tasks at one minute are slivers | 2 | left |
+| "Week starts on" does not regroup an open list; the Mac's search does not take a task whose time passes | 3 | left (rare; next save or redraw) |
+| Nested `Predicate` evaluation never run on iOS 18 or macOS 15 (the suites run on 26 and 27) | 1 | not proven; no older runtime is installed |
+
+Lessons are in `dev/SUPERVISOR.md` (section 3's rules and "Lessons from round 34").

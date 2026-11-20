@@ -96,6 +96,49 @@ final class UpcomingWeekUITests: XCTestCase {
         shot("week-overdue")
     }
 
+    /// Round 35: a day with more tasks that have a date and no time than the open band shows (six rows and a half).
+    /// Open, the band is held to that height and scrolls: the hours keep their place below it, the day's last chip
+    /// is reached by a finger in the band, and the chevron beside it (outside the scroll) closes it again. With no
+    /// limit the band ran down the whole screen.
+    func testAFullDayOfAllDayTasksLeavesTheHoursOnScreen() throws {
+        app.launchArguments += ["-upcomingLayout", "week"]
+        try launch()
+        for n in 1...9 { addTask("Errand \(n) tomorrow") }
+        openUpcoming()
+        XCTAssertTrue(element("upcomingWeek").waitForExistence(timeout: 5))
+        let more = bandMore
+        XCTAssertTrue(more.waitForExistence(timeout: 5), "the band's \"N more\"")
+        hit(more)
+        pause()
+        // The layout's two scrolling parts carry its identifier: the open band first, the hours below it.
+        let scrolls = app.scrollViews.matching(identifier: "upcomingWeek")
+        XCTAssertEqual(scrolls.count, 2, "the open band scrolls by itself, above the hours")
+        let band = scrolls.element(boundBy: 0), hours = scrolls.element(boundBy: 1)
+        shot("week-band-full")
+        let screen = app.frame
+        XCTAssertLessThan(band.frame.height, 260, "six rows and a half")
+        XCTAssertGreaterThanOrEqual(hours.frame.minY, band.frame.maxY, "the hours begin under the band")
+        XCTAssertGreaterThan(hours.frame.height, screen.height * 0.3, "and keep a good part of the screen")
+        let errands = app.descendants(matching: .any).matching(NSPredicate(format: "identifier == 'weekChip' AND label BEGINSWITH %@",
+                                                                           "Errand"))
+        #if os(iOS)
+        // A finger in the band brings its last chips up; the hours below do not move with it.
+        let from = band.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8))
+        let to = band.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1))
+        from.press(forDuration: 0.05, thenDragTo: to, withVelocity: .default, thenHoldForDuration: 0.3)
+        pause()
+        shot("week-band-full-scrolled")
+        let reached = (0..<errands.count).map { errands.element(boundBy: $0) }.filter(\.isHittable)
+        XCTAssertFalse(reached.isEmpty, "chips under a finger in the band")
+        XCTAssertTrue(reached.allSatisfy { $0.frame.maxY <= band.frame.maxY + 1 && $0.frame.minY >= band.frame.minY - 1 },
+                      "and none drawn outside it")
+        #endif
+        hit(app.buttons["Show fewer all-day tasks"].firstMatch)
+        pause()
+        XCTAssertTrue(bandMore.waitForExistence(timeout: 5), "closed again from the chevron beside the band")
+        XCTAssertEqual(scrolls.count, 1, "closed, the band is two rows and does not scroll")
+    }
+
     /// The hours scroll under a finger (round 33: the sideways swipe is a gesture on the same view, and the first
     /// pictures showed the grid where it had opened after three swipes).
     func testTheHoursScrollAndASidewaysSwipeMovesTheDays() throws {

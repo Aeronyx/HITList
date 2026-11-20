@@ -59,6 +59,17 @@ struct UpcomingWeekView: View {
     }
 
     static let bandRows = 2
+
+    /// The height the open band is held to (it scrolls for the rest), or nil when it needs no limit. With none, a day
+    /// of twenty tasks that have a date and no time (an import leaves such days) grew the band down the whole
+    /// screen: the hours shrank to nothing and the band's last chips lay past the edge, out of reach (round 35).
+    /// Six rows (four at the accessibility text sizes, where a row is taller) and half a row more, so the cut chip
+    /// says there is more to scroll to.
+    static func openBandHeight(rows: Int, open: Bool, row: CGFloat, gap: CGFloat, largeText: Bool) -> CGFloat? {
+        let most = largeText ? 4 : 6
+        guard open, rows > most else { return nil }
+        return CGFloat(most) * (row + gap) + row / 2
+    }
     /// The grid's text stays this far from the screen's trailing edge and the chips' edges.
     private static let edge: CGFloat = HITSpacing.m
     /// Where the whole week is wanted, a day's column is never narrower than this: a window too narrow for seven
@@ -166,7 +177,7 @@ struct UpcomingWeekView: View {
                 navButton("chevron.left", label: showsWeek ? "Previous week" : "Previous days") {
                     move(by: -dayCount)
                 }
-                .disabled(window.offset == 0)
+                .disabled(!window.canMoveBack(count: dayCount))
                 Button("Today") { goToToday() }
                     .buttonStyle(.plain)
                     .font(HITType.control)
@@ -263,10 +274,19 @@ struct UpcomingWeekView: View {
                     }
                 }
                 .frame(width: gutter)
-                ForEach(days, id: \.date) { day in
-                    bandColumn(day).frame(width: columnWidth, alignment: .top)
+                let columns = HStack(alignment: .top, spacing: 0) {
+                    ForEach(days, id: \.date) { day in
+                        bandColumn(day).frame(width: columnWidth, alignment: .top)
+                    }
+                    Color.clear.frame(width: Self.edge, height: 1)
                 }
-                Color.clear.frame(width: Self.edge, height: 1)
+                if let limit = Self.openBandHeight(rows: tallest, open: bandOpen, row: hourHeight / 2,
+                                                   gap: HITSpacing.xs, largeText: typeSize.isAccessibilitySize) {
+                    ScrollView(.vertical) { columns.frame(maxWidth: .infinity, alignment: .leading) }
+                        .frame(height: limit)
+                } else {
+                    columns
+                }
             }
             .padding(.bottom, HITSpacing.s)
         }

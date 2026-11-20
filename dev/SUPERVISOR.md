@@ -478,6 +478,37 @@ keyboard away and back while XCUITest types**: taps aimed meanwhile miss (`waitU
 never arrives; two "failures on the base too" were this, read from the test's own screen recording
 (`xcresulttool export attachments`, then frames with AVFoundation).
 
+Lessons from the night before 0.9.16 went out (2026-11-20; George: "Most of my friends' devices auto-update …
+Refresh your confidence and then tell me to deploy"; `ROUND-34.md`, "Before release"):
+**Auto-update means friends run the build before George does, so the question is the first day, not the round.**
+Three things answered it that the round's own proof had not. **Run the update for real, from the last tag
+friends have**: `git worktree add --detach build.noindex/<r>/wt-<tag> v<tag>`, `xcodegen generate` there, build
+it for a simulator of your own, seed a side store (`SIMCTL_CHILD_HITLIST_STORE_SUFFIX=… simctl launch …
+-seedDemoData YES -disableCloudKit YES`), copy that store's three files over `HITList-Development.store` in the
+app group's folder (`simctl get_app_container <sim> com.trammells.hitlist groups`), open it once in the old
+build, write every `Z…` table out with `sqlite3` (the join table has no `Z_PK`: `ORDER BY 1,2`), install the new
+build over it, open it with no arguments, write the tables out again and `diff`. First `git diff <tag>..HEAD --
+HITList/Models`: if the models did not change there is nothing to migrate, and say so. **Three read-only Opus
+reviewers, one lens each, on the diff since the last build friends have (three rounds, here), found six real
+things in six minutes each after every suite had passed**: day one with nothing asked for; what the build says
+about itself against what the code does; whether the faster screens can show something old. Tell each what the
+others cover and that a wrong finding costs as much as a missed one; ask for the failing input and CERTAIN /
+LIKELY / UNSURE. Verify each finding yourself and run its new test once against the old code (four of five
+card tests failed there, as they should). **A reviewer's "unsure, worth one tap" is a test to write**: Show
+completed is passed to the lists only as a binding, nothing had switched it on since round 32 moved it, and it
+took a UI test to learn that it works. **A thing done "on the way to the background" is done to half-typed
+words**: the card's full Confirm there read "at 1" as one o'clock. Store as typed; let the person's own Confirm
+read it. **A count taken out of a view's body no longer puts itself right on a redraw**: give it the lists'
+clock (`ListClock.next`). **The version in `project.yml` is the last release's until `scripts/release.sh` bumps
+it**, and nothing in the app acts on a change of version, so a build of master stands in for the update.
+**`simctl openurl` stops at "Open in HITList?"**; the Simulator tool needs George's grant for each new
+simulator and he may not be there: drive with XCUITest. **His phone runs XCUITest once Enable UI Automation is
+on** (it has been since round 34): `xcodebuild test -scheme HITListUITests -destination "platform=iOS,id=$(cat
+build.noindex/round-33/phone.udid)" -derivedDataPath build.noindex/<r>/dd-phone -only-testing:…` while it is
+unlocked (`devicectl device info lockState`: `passcodeRequired: false`), on side stores with iCloud off; leave
+out the classes that meet a system question (location, calendar), the Duo's, the companions', widgets and the
+share sheet. It replaces the app on his phone with a test build: tell him, and that TestFlight puts his back.
+
 Lessons from round 33 (seven agents at once in the two hours before a usage limit reset; 0.9.15):
 **Seven agents on one Mac finish, but their own proof thins out**: builds were slow, a Flipboard UI test ran past
 ten minutes on two agents' simulators, two agents' Debug Mac apps opened no window (a third's did), and three of

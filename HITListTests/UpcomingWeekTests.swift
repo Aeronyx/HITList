@@ -143,6 +143,37 @@ final class UpcomingWeekTests: XCTestCase {
     }
 
     /// Nobody's Upcoming changes until they choose: today's layout is the default and an unknown value reads as it.
+    /// Round 35: a whole week opened on any day but the week's first has an offset and shows this week, so
+    /// "Previous week" changed nothing on the screen and was live all the same. Three days at a time can go back to
+    /// the week's first day.
+    func testAWholeWeekHasNoStepBackFromThisWeek() {
+        var window = UpcomingWeekWindow(offset: 4)
+        XCTAssertFalse(window.canMoveBack(count: 7), "this week is showing: nothing earlier to show")
+        XCTAssertTrue(window.canMoveBack(count: 3), "three days at a time: the week's earlier days")
+        window.move(by: 7)
+        XCTAssertTrue(window.canMoveBack(count: 7), "next week is showing")
+        window.move(by: -7)
+        XCTAssertEqual(window, UpcomingWeekWindow(offset: 4))
+        XCTAssertFalse(window.canMoveBack(count: 7))
+        XCTAssertFalse(UpcomingWeekWindow(offset: 0).canMoveBack(count: 3))
+        XCTAssertFalse(UpcomingWeekWindow(offset: 6).canMoveBack(count: 7))
+        XCTAssertTrue(UpcomingWeekWindow(offset: 7).canMoveBack(count: 7))
+    }
+
+    /// Round 35: the open all-day band is held to six rows and a half (four at the accessibility sizes) and scrolls
+    /// for the rest; with no limit, twenty tasks on a day pushed the hours off the screen.
+    func testTheOpenBandIsHeldToAHeight() {
+        func height(_ rows: Int, open: Bool = true, large: Bool = false) -> CGFloat? {
+            UpcomingWeekView.openBandHeight(rows: rows, open: open, row: 28, gap: 4, largeText: large)
+        }
+        XCTAssertNil(height(6), "six rows fit: no limit")
+        XCTAssertEqual(height(7), 6 * 32 + 14)
+        XCTAssertEqual(height(40), 6 * 32 + 14, "however many")
+        XCTAssertNil(height(40, open: false), "closed, it shows two rows")
+        XCTAssertNil(height(4, large: true))
+        XCTAssertEqual(height(5, large: true), 4 * 32 + 14)
+    }
+
     func testTodaysLayoutIsTheDefault() {
         XCTAssertEqual(UpcomingLayout.defaultValue, .tasks)
         XCTAssertNil(UpcomingLayout(rawValue: "board"))

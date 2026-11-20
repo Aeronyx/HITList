@@ -579,4 +579,88 @@ final class TaskPopoutTitleTests: XCTestCase {
         XCTAssertEqual(task.reminderDate, now.addingTimeInterval(15 * 60))
         XCTAssertEqual(task.title, "Call mom")
     }
+
+    // MARK: Leaving the app with the editor open (round 35)
+
+    /// Typed "Meeting at 1", looked at another app for the hour, came back and typed the "0": the words are stored as
+    /// typed when the app is left (nothing is lost if iOS ends it), nothing is read as a phrase then, and Confirm
+    /// reads the finished phrase. A full Confirm used to run on leaving: a meeting at one o'clock named "Meeting0".
+    func testLeavingTheAppStoresWhatWasTypedAndReadsNoHalfTypedPhrase() throws {
+        let (task, context) = task("Meeting")
+        var draft = TaskEditorDraft(task: task)
+        draft.title += " at 1"
+        XCTAssertTrue(try draft.storeTyping(on: task, in: context))
+        XCTAssertEqual(task.title, "Meeting at 1", "stored as typed")
+        XCTAssertNil(task.dueDate, "nothing read as a phrase")
+        XCTAssertEqual(draft.title, "Meeting at 1", "the field is as the person left it")
+        XCTAssertFalse(draft.hasPendingChanges(for: task), "what is stored is what is typed: × closes, asking nothing")
+
+        draft.title += "0"
+        XCTAssertTrue(draft.hasPendingChanges(for: task))
+        try draft.commit(to: task, in: context, parser: parser())
+        XCTAssertEqual(task.title, "Meeting")
+        XCTAssertEqual(task.dueDate.map { calendar.component(.hour, from: $0) }, 10)
+        XCTAssertTrue(task.hasDueTime)
+    }
+
+    /// The space before the next word stays in the field (the stored title has none): "Call Sam about " came back as
+    /// "Call Sam about" and the next word ran into it.
+    func testLeavingTheAppKeepsTheSpaceBeforeTheNextWord() throws {
+        let (task, context) = task("Call Sam")
+        var draft = TaskEditorDraft(task: task)
+        draft.title += " about "
+        try draft.storeTyping(on: task, in: context)
+        XCTAssertEqual(task.title, "Call Sam about")
+        XCTAssertEqual(draft.title, "Call Sam about ")
+        draft.title += "the lease"
+        try draft.commit(to: task, in: context, parser: parser())
+        XCTAssertEqual(task.title, "Call Sam about the lease")
+    }
+
+    /// A whole phrase typed before leaving is still typed in this session: Confirm, pressed after coming back with
+    /// nothing more typed, reads it.
+    func testAPhraseTypedBeforeLeavingIsReadByConfirmAfterComingBack() throws {
+        let (task, context) = task("Lunch")
+        var draft = TaskEditorDraft(task: task)
+        draft.title += " tomorrow"
+        try draft.storeTyping(on: task, in: context)
+        XCTAssertEqual(task.title, "Lunch tomorrow")
+        XCTAssertNil(task.dueDate)
+        XCTAssertEqual(lit(draft, task), ["tomorrow"], "still lit in the title")
+        XCTAssertTrue(try draft.commit(to: task, in: context, parser: parser()))
+        XCTAssertEqual(task.title, "Lunch")
+        XCTAssertEqual(task.dueDate, day(1))
+    }
+
+    /// Typing put back to how the editor opened, after the app was left in between, is a change to save: what was
+    /// stored on leaving must not outlive it.
+    func testTypingPutBackAfterLeavingIsSaved() throws {
+        let (task, context) = task("Lunch")
+        var draft = TaskEditorDraft(task: task)
+        draft.title = "Lunch with Sam"
+        draft.notes = "Bring the papers"
+        try draft.storeTyping(on: task, in: context)
+        XCTAssertEqual(task.title, "Lunch with Sam")
+        XCTAssertEqual(task.notes, "Bring the papers")
+        draft.title = "Lunch"
+        draft.notes = ""
+        XCTAssertTrue(draft.hasPendingChanges(for: task))
+        try draft.commit(to: task, in: context, parser: parser())
+        XCTAssertEqual(task.title, "Lunch")
+        XCTAssertEqual(task.notes, "")
+    }
+
+    /// A sub-task typed and not yet entered is added, as Confirm adds it; a title nobody typed in is not written.
+    func testLeavingTheAppAddsTheSubtaskBeingTyped() throws {
+        let (task, context) = task("Pack")
+        var draft = TaskEditorDraft(task: task)
+        draft.isAddingSubtask = true
+        draft.newSubtask = "Socks"
+        XCTAssertTrue(try draft.storeTyping(on: task, in: context))
+        XCTAssertEqual((task.subtasks ?? []).map(\.title), ["Socks"])
+        XCTAssertEqual(draft.newSubtask, "")
+        XCTAssertTrue(draft.isAddingSubtask, "the field stays open, as the person left it")
+        XCTAssertEqual(task.title, "Pack")
+        XCTAssertFalse(try draft.storeTyping(on: task, in: context), "nothing more to store")
+    }
 }

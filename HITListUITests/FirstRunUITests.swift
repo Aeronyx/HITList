@@ -104,6 +104,9 @@ final class FirstRunUITests: XCTestCase {
 
         let about = app.descendants(matching: .any)["settings-page-about"].firstMatch
         XCTAssertTrue(about.waitForExistence(timeout: 5))
+        // Account is still sliding away: on George's iPhone (round 35) the tap landed while the list moved and
+        // opened nothing; a simulator had always been still by then.
+        about.waitUntilStill()
         about.tap()
         let version = app.descendants(matching: .any)["settings-version"].firstMatch
         XCTAssertTrue(version.waitForExistence(timeout: 5) && version.isHittable, "About, with the version")

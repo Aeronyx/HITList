@@ -620,6 +620,42 @@ final class HITListUITests: XCTestCase {
         XCTAssertFalse(app.buttons["Date"].exists, "Today sorts by Priority or Group only")
     }
 
+    /// Round 35: the lists' queries are built from Show completed (round 32 moved the switch above each list so its
+    /// query could follow it, and no test had switched it on since). A task completed on Today leaves it, comes back
+    /// when Show completed is switched on and goes when it is switched off; the Inbox, a screen of its own, the same.
+    func testShowCompletedBringsBackWhatWasCompleted() throws {
+        app.launch()
+        XCTAssertTrue(app.buttons["tab-today"].waitForExistence(timeout: 15))
+        tab("today")
+        addFromTheCard("Water the fern today ")
+        let row = app.cells.containing(NSPredicate(format: "label == %@", "Water the fern")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "the new task on Today")
+        row.buttons["Complete task"].firstMatch.tap()
+        XCTAssertTrue(row.waitForNonExistence(timeout: 10), "completed: it leaves Today")
+        snapshot("1 Completed, gone from Today")
+
+        toggleShowCompleted()
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "Show completed on Today: it is listed again")
+        snapshot("2 Today showing completed")
+        toggleShowCompleted()
+        XCTAssertTrue(row.waitForNonExistence(timeout: 5), "switched off: gone again")
+
+        tab("inbox")
+        XCTAssertFalse(row.waitForExistence(timeout: 2), "not in the Inbox either")
+        toggleShowCompleted()
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "Show completed on the Inbox: it is listed")
+        snapshot("3 Inbox showing completed")
+    }
+
+    /// View options → Show completed.
+    private func toggleShowCompleted() {
+        app.buttons["viewOptions"].firstMatch.tap()
+        let item = app.buttons["Show completed"].firstMatch
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "Show completed in the view options")
+        item.tap()
+        XCTAssertTrue(item.waitForNonExistence(timeout: 5), "the menu closes")
+    }
+
     /// View options → Sort by → `name`.
     private func sort(by name: String) {
         app.buttons["viewOptions"].firstMatch.tap()

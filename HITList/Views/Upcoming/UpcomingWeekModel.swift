@@ -130,6 +130,12 @@ struct UpcomingWeekWindow: Equatable {
 
     mutating func move(by days: Int) { offset = max(0, offset + days) }
 
+    /// Whether there are earlier days to show `count` at a time. A whole week (`count` 7) opened on a Thursday has
+    /// an offset of four and shows this week: a step back would change the offset and not one day on the screen, so
+    /// "Previous week" was a live button that did nothing until it had been pressed once (round 35). Three days at
+    /// a time can step back to the week's first day.
+    func canMoveBack(count: Int) -> Bool { count == 7 ? offset >= 7 : offset > 0 }
+
     /// The shown days: `count` from the first; for a whole week (`count` 7) the first is always a week's first day.
     func days(count: Int, strip: WeekStrip, now: Date) -> [Date] {
         let base = strip.startOfWeek(containing: now)

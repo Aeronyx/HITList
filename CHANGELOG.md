@@ -210,6 +210,31 @@ The sync engine (switched on only where it is moved to):
   (it downloads a fresh copy), so nothing is saved twice.
 - The move was rehearsed with two real devices on iCloud's test side, with a copy of George's own tasks.
 
+Before release (2026-11-20; George: "I don't want to lose my friends' trust in this app because we missed something
+obvious"). A store made by 0.9.13 was opened by this build on the simulator and compared row by row (the stored
+data's shape has not changed since 0.9.13, so nothing is migrated). Three reviews read what the suites cannot: what
+an updated device does on its first day with no move asked for, what the build says about itself against what the
+code does, and whether the faster lists can show something old. None found a reason to hold the release; they found
+these, each fixed with a test:
+
+- **A task's card no longer acts on half-typed words when you leave HITList.** What you typed is still stored the
+  moment the app goes to the background (so nothing is lost if iOS ends it there), but as typed: the card comes
+  back exactly as you left it and reads dates and times when you press Confirm. Before, "Meeting at 1", a look at
+  another app, and the "0" typed on coming back made a meeting at one o'clock named "Meeting0", and the space
+  before your next word was gone.
+- **Week: "Previous week" is greyed out while this week is showing.** On an iPad or a Mac it was a live button
+  that changed nothing until it had been pressed once.
+- **Week: the open all-day row scrolls after six tasks.** A day with twenty tasks that have a date and no time
+  pushed the hours off the screen and its own last tasks out of reach.
+- **The question about notifications is asked only while HITList is in front.** A pass that ran while the system
+  had woken the app in the background could have recorded a "no" nobody gave, and reminders would have stayed off.
+- **The Mac's and iPad's sidebar counts follow a switch that becomes a task when overdue** at the moment it falls
+  due, as the list beside them does; they waited for the next change.
+- Settings → iCloud → Details no longer calls the new sync "early access".
+
+Known and left as they are: "this monday" typed on a Friday means the Monday of this week (as in 0.9.13); a tap on
+an empty day of the Week layout does nothing; a sub-task typed and not entered is added when you leave the app.
+
 ## 0.9.13 — build 30, 2026-11-16
 
 0.9.12 was released on the evening of 2026-11-15. George the next day: "currently, when you group Switches on Flipboard, they all
