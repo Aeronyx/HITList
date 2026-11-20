@@ -20,6 +20,11 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
+        Entry(version: "0.9.17", items: [
+            "The sync bolt keeps still. On HITList's new sync it stays filled while your changes come and go as usual; it empties when something is still waiting after a few seconds, and when you come back after a minute away, until HITList has caught up.",
+            "Back online after a while offline, what you changed is sent at once.",
+            "Settings → iCloud & data is shorter: sync, backups, export and import, and what to do if something doesn't sync. Send sync log… there hands the file to whoever is helping you.",
+        ]),
         // Seven lines for three rounds' work (0.9.14 and 0.9.15 were never released): the page was nearly two
         // screens long, and `SettingsTidyTests` holds every page under 1,400 pt. The whole of it is in the changelog.
         Entry(version: "0.9.16", items: [

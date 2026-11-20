@@ -5,6 +5,62 @@ until the version has a section here, then stamps the heading with the build num
 per release. A second build of one version (0.9.0 had builds 20 and 21) is released with `scripts/release.sh --quick`
 and needs a section headed `## X.Y.Z (N)`, which the script stamps with the date.
 
+## 0.9.17
+
+0.9.16 went out on the morning of 2026-11-20, and that day George moved his own Mac and iPhone to HITList's own
+sync: the first devices on it in iCloud's Production side. It took 4.2 seconds from the Mac's relaunch to a filled
+bolt (68 records sent, fetched back and found the same), his iPhone followed by itself, Check iCloud… found no
+difference, and tasks made on each arrived on the other. His friends' devices carry 0.9.16 and stay on the earlier
+sync until he gives the word. His words after: "Looks like it worked! … My only issue is that the bolt still goes
+hollow for a moment whenever a task is added on either device; remember, the bolt is supposed to indicate to the
+user only when there's a pending problem or when there's a successful resync after a long period away … Let's run
+some tests to confirm everything landed how we expected and then start cleaning up all these dev sync settings and
+logs so they won't be as easily visible to other users going forward." (`dev/briefs/ROUND-35.md`.)
+
+The bolt on the new sync:
+
+- **It keeps still while HITList syncs as usual.** A task added, its send, and the fetch when another device
+  changes something no longer empty it. Before, every add emptied it for the second and a half the change took.
+- **It empties for a pending problem**: a change still waiting after eight seconds with nothing under way; a send
+  or a fetch that has gone on for half a minute; the network gone, or a sync that keeps failing, for half a
+  minute. A hold, an item iCloud refused and being signed out show at once, as before.
+- **It empties when you come back** after a minute away (or open HITList), until a sync made then has ended; then
+  it fills and its strike plays. A quick look at another app changes nothing. On a Mac, coming back to HITList
+  after a minute in another app, or waking the Mac, now asks for that sync (it used to wait for a push).
+- **At a launch it no longer says "Synced just now" before it has asked iCloud anything** (it did, for half a
+  second, then "Checking with iCloud…").
+- Two reviewers were set to break this before it was believed, and did, twice: fourteen findings, each fixed
+  with a test (`ROUND-35.md`).
+
+Sync:
+
+- **Back online, what waited goes at once.** On the new sync a task added in airplane mode was sent at the next
+  retry, up to ten minutes after the network returned, or when HITList next came forward.
+
+Settings:
+
+- **iCloud & data shows what a person needs**: whether it is syncing (and Sync now), backups, export and import,
+  and under "If something doesn't sync" Check iCloud… and a new **Send sync log…**, which hands the log's file to
+  the share sheet (a save panel on the Mac) for whoever is helping. Reset local cache and Delete all data from
+  iCloud stay at the foot.
+- **What was there for building the sync is behind a gesture**: the environment row, Details, the Sync log's own
+  page, the times of the last fetch and send, and the whole group that moves a device between the two syncs.
+  Seven taps on Settings → About → Version show them, under the heading "For troubleshooting"; About then has a
+  row that hides them again. George's Mac, already shown the old way, stays shown.
+- A device the app moved by itself says so in the Sync group for fourteen days (its other devices need the
+  update), then says nothing.
+- In that hidden group, two things George misread on the day are reworded: "Everyone's move: Not released" is
+  "Friends' devices: Not moving yet: you have not given the word", and the question before a move no longer says
+  "wait for the bolt" when the truth is that nothing has been compared since the app was opened.
+- Nothing a person can reach without the gesture says CloudKit, environment, engine, zone or mirror.
+
+Under the hood:
+
+- The unit tests have settings of their own. On a Mac they ran inside a Debug copy of HITList that shares the real
+  app's settings, so the day George's Mac moved a test saw his store's preference. None wrote it (it was read
+  back: as he left it), and none can now.
+- A test store's settings start empty instead of inheriting what very old builds left on the device.
+
 ## 0.9.16 — build 31, 2026-11-20
 
 0.9.15 was prepared on the afternoon of 2026-11-18 and not released either. George that evening: "I haven't released
