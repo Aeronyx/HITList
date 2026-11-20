@@ -208,6 +208,8 @@ struct SyncBolt: View {
         .onAppear { LaunchTiming.firstFrame() }
         // Brief 95: "good to go" is a confirmation from iCloud itself, so the strike plays as the bolt fills.
         .onChange(of: monitor.confirmedAt) { old, new in strikeIfDue(from: old, to: new) }
+        // Filled with no sync behind it: no strike now, and none saved up for a later fill.
+        .onChange(of: monitor.filledQuietlyAt) { _, _ in Self.strikeGate.filledQuietly() }
         // What arms the next strike: coming back to the front after a while, and sync trouble that lasted.
         .onChange(of: scenePhase) { _, _ in Self.strikeGate.appActive(isActive, now: Date()) }
         #if os(macOS)

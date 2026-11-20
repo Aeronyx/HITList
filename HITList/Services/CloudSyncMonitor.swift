@@ -105,6 +105,9 @@ final class CloudSyncMonitor {
     /// import or export that finished well after it. Each advance may play the bolt's "good to go" (`BoltStrikeGate`
     /// decides whether it does).
     private(set) var confirmedAt: Date?
+    /// When the bolt last filled on the engine with no sync behind it (`SyncEngineSteadiness.filledWithoutASync`):
+    /// the bolt's strike gate hears it and spends the strike it had armed.
+    private(set) var filledQuietlyAt: Date?
     @ObservationIgnored private var container: ModelContainer?
     /// The app is in front (iPhone, iPad): the process runs and the marks can be seen.
     @ObservationIgnored private var isInFront = false
@@ -405,6 +408,7 @@ final class CloudSyncMonitor {
         observers.append(workspace.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.write(.scene, "Mac going to sleep", fields: self?.inFlightFields() ?? [:])
+                self?.engineSteady.left(at: Date())
                 self?.watch(.suspended(at: Date()))
                 self?.sessionGate.suspend(true, at: Date())
                 self?.recordCheck.suspend(true)
@@ -417,6 +421,9 @@ final class CloudSyncMonitor {
                 self?.sessionGate.suspend(false, at: Date())
                 self?.recordCheck.suspend(false)
                 self?.recordCheck.returned(at: Date())
+                // On the engine: a Mac that slept in front of its person is back as from any time away (a session
+                // and its sync after a minute); one asleep behind other apps only stops counting the sleep.
+                if NSApplication.shared.isActive { self?.macCameForward() } else { self?.engineSteady.resumed(at: Date()) }
                 self?.publishShown(Date())
                 self?.refreshAccountStatus(force: true)
             }
@@ -487,15 +494,11 @@ final class CloudSyncMonitor {
             refreshAccountStatus()
         case .inactive:
             if inactiveSince == nil { inactiveSince = now }
-            #if os(iOS)
             engineSteady.left(at: now)
-            #endif
             write(.scene, "App inactive")
         case .background:
             if inactiveSince == nil { inactiveSince = now }
-            #if os(iOS)
             engineSteady.left(at: now)
-            #endif
             write(.scene, "App in background", fields: inFlightFields())
             #if os(iOS)
             watch(.suspended(at: now))
@@ -1208,8 +1211,11 @@ final class CloudSyncMonitor {
             engineState = next
         }
         // The bolt fills: the moment its "good to go" may play (`BoltStrikeGate` decides whether it does). Not when it
-        // fills at the end of a session's grace, with no sync behind it: nothing was confirmed.
-        if next.isSynced, !wasSynced, !engineSteady.filledWithoutASync { confirmedAt = now }
+        // fills at the end of a session's grace, with no sync behind it: nothing was confirmed, and the strike armed
+        // for this fill is spent.
+        if next.isSynced, !wasSynced {
+            if engineSteady.filledWithoutASync { filledQuietlyAt = now } else { confirmedAt = now }
+        }
         let key = "engine \(SyncSteadiness.kind(next))"
         if key != loggedMarks {
             loggedMarks = key

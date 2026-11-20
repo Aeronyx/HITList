@@ -248,6 +248,13 @@ struct BoltStrikeGate {
     mutating func armForDemo() { armed = true }
     #endif
 
+    /// The bolt filled with no sync behind it (on the engine, a session whose own sync never ran:
+    /// `SyncEngineSteadiness.filledWithoutASync`). The strike armed for that fill is spent: left armed, it played at
+    /// the next fill of any kind, hours later, for nothing the person was waiting on.
+    mutating func filledQuietly() {
+        armed = false
+    }
+
     /// Every sync state change: `healthy` for synced or syncing, false for offline, errors, signed out.
     mutating func syncState(healthy: Bool, now: Date) {
         if healthy {
@@ -368,12 +375,13 @@ struct SyncEngineMarks: Hashable {
         if syncError(status) != nil { return .trouble }
         switch status.state {
         case .off, .starting: return .routine
+        case .fetching, .sending: return .working
         default: break
         }
         if !status.firstFetchDone { return .routine }
         if status.waiting > 0 { return .routine }
         if !status.refused.isEmpty { return .showNow }
-        if status.isSynced, let at = lastSynced(status) { return .synced(at) }
+        if status.isSynced { return lastSynced(status).map { .synced($0) } ?? .unstamped }
         return .routine
     }
 

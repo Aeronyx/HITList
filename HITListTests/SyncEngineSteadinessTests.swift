@@ -164,6 +164,7 @@ final class SyncEngineSteadinessTests: XCTestCase {
         var steady = inSession()
         let status = idle(lastSync: 2)
         XCTAssertEqual(feed(&steady, status, 200, online: false), .synced(at(2)), "the network gone: nothing yet")
+        XCTAssertEqual(deadline(steady, status, 200, online: false), at(230))
         XCTAssertEqual(look(steady, status, 229, online: false), .synced(at(2)))
         guard case .engine(let marks) = feed(&steady, status, 230, online: false) else { return XCTFail("offline shows") }
         XCTAssertEqual(marks.look, .offline)
@@ -221,7 +222,9 @@ final class SyncEngineSteadinessTests: XCTestCase {
         let failing = idle(lastSync: 2, waiting: 1, error: "iCloud didn't answer")
         XCTAssertEqual(feed(&steady, failing, 100, errorSince: 100), .synced(at(2)), "the engine tries again by itself")
         XCTAssertEqual(look(steady, failing, 129, errorSince: 100), .synced(at(2)))
+        XCTAssertEqual(deadline(steady, failing, 100), at(130))
         XCTAssertEqual(feed(&steady, failing, 130, errorSince: 100), .retrying(since: at(100)), "then the calm words")
+        XCTAssertFalse(steady.isCurrent, "trouble that lasted ends the session")
         XCTAssertEqual(feed(&steady, failing, 221, errorSince: 100), .error("iCloud didn't answer", at(100)), "then its own")
         XCTAssertEqual(feed(&steady, idle(lastSync: 240), 240), .synced(at(240)))
     }
@@ -237,7 +240,10 @@ final class SyncEngineSteadinessTests: XCTestCase {
 
         let refused = idle(lastSync: 162, refused: [SyncKey(type: "TaskItem", name: UUID().uuidString)])
         XCTAssertTrue(isHollow(feed(&steady, refused, 170)), "an item iCloud refused")
-        XCTAssertEqual(feed(&steady, idle(lastSync: 162), 180, account: .noAccount), .notSignedIn)
+        XCTAssertFalse(steady.isCurrent, "and it ends the session")
+        XCTAssertEqual(feed(&steady, idle(lastSync: 171), 171), .synced(at(171)))
+        XCTAssertEqual(feed(&steady, idle(lastSync: 171), 180, account: .noAccount), .notSignedIn)
+        XCTAssertFalse(steady.isCurrent, "as signing out does")
     }
 
     /// A hold lifted with nothing left to do: the sync from before it does not fill the bolt. If no sync follows, it
@@ -261,7 +267,69 @@ final class SyncEngineSteadinessTests: XCTestCase {
         XCTAssertFalse(other.filledWithoutASync)
     }
 
+    /// Work under way is not a problem while it is going on: five hundred tasks changed at once, a slow connection.
+    /// Half a minute of it shows.
+    func testASyncUnderWayForNineSecondsShowsNothing() {
+        var steady = inSession()
+        let fetching = busy(.fetching, lastSync: 2)
+        XCTAssertEqual(feed(&steady, fetching, 100), .synced(at(2)))
+        XCTAssertEqual(look(steady, fetching, 109), .synced(at(2)), "past the eight seconds a waiting change gets")
+        XCTAssertEqual(deadline(steady, fetching, 100), at(130))
+        XCTAssertEqual(feed(&steady, idle(lastSync: 109.2), 109.2), .synced(at(109.2)))
+
+        let sending = busy(.sending, lastSync: 109.2, waiting: 500)
+        feed(&steady, sending, 200)
+        XCTAssertTrue(look(steady, sending, 229).isSynced)
+        XCTAssertEqual(feed(&steady, sending, 230).summary(now: at(230)), "500 changes waiting to go to iCloud")
+    }
+
+    /// A sync stamped a moment before a window's end, and not yet heard of when the window ended, is the sync that
+    /// fills the bolt: it ended after the work began.
+    func testASyncThatEndedJustBeforeTheWindowDidStillFillsTheBolt() {
+        var steady = inSession()
+        let stuck = idle(lastSync: 2, waiting: 1)
+        feed(&steady, stuck, 100)
+        XCTAssertTrue(isHollow(feed(&steady, stuck, 108.02)), "the deadline's feeding, on the status as the board still had it")
+        XCTAssertEqual(feed(&steady, idle(lastSync: 107.99), 108.05), .synced(at(107.99)), "no eight seconds of hollow for it")
+        XCTAssertFalse(steady.filledWithoutASync)
+    }
+
+    /// The safety net under "never a hollow bolt with no reason": an engine that reads synced and has no sync of
+    /// this launch to name (it should have one a second after any launch) does not leave the bolt hollow for good.
+    func testAnEngineThatNeverNamesItsSyncDoesNotStayHollow() {
+        var steady = SyncEngineSteadiness(at: at(0))
+        steady.cameForward(at: at(0.5))
+        let unstamped = SyncStatus(state: .idle, waiting: 0, firstFetchDone: true)
+        XCTAssertEqual(feed(&steady, unstamped, 1), checking)
+        XCTAssertEqual(deadline(steady, unstamped, 1), at(9))
+        XCTAssertEqual(look(steady, unstamped, 8.9), checking)
+        XCTAssertEqual(feed(&steady, unstamped, 9), .synced(at(1)), "it names the moment the engine first said so")
+        XCTAssertTrue(steady.filledWithoutASync, "and that is no confirmation")
+        XCTAssertNil(deadline(steady, unstamped, 9))
+        // From there it is a session like any other.
+        XCTAssertEqual(feed(&steady, SyncStatus(state: .idle, waiting: 1, firstFetchDone: true), 20), .synced(at(1)))
+    }
+
     // MARK: Away and back
+
+    /// Time the app spent away from the front counts for nothing: a task added as the phone is locked, its send not
+    /// yet accepted when iOS suspends the app, and the phone unlocked half a minute later. The bolt does not empty
+    /// for the second the send then takes.
+    func testTimeAwayDoesNotCountAgainstWhatWasUnderWay() {
+        var steady = inSession()
+        let waiting = idle(lastSync: 2, waiting: 1)
+        feed(&steady, waiting, 100)
+        steady.left(at: at(100.4))
+        steady.cameForward(at: at(130))
+        XCTAssertTrue(steady.isCurrent, "under a minute: the same session")
+        XCTAssertEqual(feed(&steady, waiting, 130), .synced(at(2)), "nothing shows")
+        XCTAssertEqual(deadline(steady, waiting, 130), at(138), "its window starts again")
+        XCTAssertEqual(feed(&steady, idle(lastSync: 131), 131), .synced(at(131)))
+        // The Mac asleep behind other apps: the same, with no coming forward.
+        feed(&steady, waiting, 200)
+        steady.resumed(at: at(900))
+        XCTAssertEqual(feed(&steady, waiting, 900), .synced(at(131)))
+    }
 
     func testBackAfterAMinuteAwayIsHollowUntilItsOwnSyncEnds() {
         var steady = inSession()
@@ -347,7 +415,8 @@ final class SyncEngineSteadinessTests: XCTestCase {
                     let fits: Bool
                     switch (activity, state) {
                     case (.synced(let a), .synced(let b)): fits = a == b
-                    case (.routine, .engine(let marks)): fits = marks.look == .hollow
+                    case (.routine, .engine(let marks)), (.working, .engine(let marks)): fits = marks.look == .hollow
+                    case (.unstamped, .engine(let marks)): fits = marks == SyncEngineMarks.checking
                     case (.offline, .engine(let marks)): fits = marks.look == .offline
                     case (.trouble, .retrying), (.trouble, .error): fits = true
                     case (.showNow, .notSignedIn), (.showNow, .restricted): fits = true
@@ -368,6 +437,7 @@ final class SyncEngineSteadinessTests: XCTestCase {
         XCTAssertEqual(windows.trouble, SyncSteadiness.Windows().error)
         XCTAssertLessThan(windows.routine, windows.trouble)
         XCTAssertGreaterThan(windows.routine, 5, "the pump's second try comes five seconds after the first")
+        XCTAssertEqual(windows.working, SyncSteadiness.Windows().error, "work under way gets what a retry gets")
         XCTAssertEqual(windows.longest, 38)
     }
 
@@ -384,15 +454,30 @@ final class SyncEngineSteadinessTests: XCTestCase {
                      "return engineSteady.shown(raw, activity, at: now)",
                      "engineSteady.note(activity, at: now)",
                      "let next = engineShown(raw, activity, at: now)",
-                     "!engineSteady.filledWithoutASync { confirmedAt = now }",
+                     "if engineSteady.filledWithoutASync { filledQuietlyAt = now } else { confirmedAt = now }",
+                     "if NSApplication.shared.isActive { self?.macCameForward() } else { self?.engineSteady.resumed(at: Date()) }",
                      "if NSApplication.shared.isActive { engineSteady.cameForward(at: now) }",
                      "NSApplication.didBecomeActiveNotification",
                      "if engineSteady.sessionFrom != session { SyncEngine.shared?.cameForward() }",
                      "if cameBack, isOnEngine { SyncEngine.shared?.networkReturned() }"] {
             XCTAssertTrue(monitor.contains(line), "CloudSyncMonitor no longer has: \(line)")
         }
-        XCTAssertEqual(monitor.components(separatedBy: "engineSteady.left(at:").count - 1, 3,
-                       "the app leaving the front: the scene's two phases and the Mac's own notification")
+        XCTAssertEqual(monitor.components(separatedBy: "engineSteady.left(at:").count - 1, 4,
+                       "the app leaving the front: the scene's two phases, the Mac's own notification, the Mac going to sleep")
+        guard let bolt = try? String(contentsOf: root.appending(path: "HITList/Support/SyncStatusViews.swift"), encoding: .utf8)
+        else { throw XCTSkip("the sources are out of this process's reach") }
+        XCTAssertTrue(bolt.contains(".onChange(of: monitor.filledQuietlyAt) { _, _ in Self.strikeGate.filledQuietly() }"))
+    }
+
+    /// A fill with no sync behind it spends the strike that was armed for it (a launch, a return, trouble that
+    /// lasted): left armed, it played at the next fill of any kind, hours later.
+    func testAQuietFillSpendsTheArmedStrike() {
+        var armed = BoltStrikeGate()
+        XCTAssertEqual(armed.advance(from: nil, to: at(10), now: at(10), isActive: true, reduceMotion: false), .strike,
+                       "a launch arms it")
+        var spent = BoltStrikeGate()
+        spent.filledQuietly()
+        XCTAssertEqual(spent.advance(from: nil, to: at(10), now: at(10), isActive: true, reduceMotion: false), .none)
     }
 
     /// The network coming back sends what waited on the engine (round 35): only a return, never the first path of a
