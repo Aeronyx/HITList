@@ -650,6 +650,37 @@ final class TaskPopoutTitleTests: XCTestCase {
         XCTAssertEqual(task.notes, "")
     }
 
+    /// An edit from another device that arrived under the open card is as safe after the app was left as before
+    /// (round 28, the sync review's finding 5): a title and a description nobody typed in are not claimed as typed,
+    /// so Confirm does not write the words the editor opened with back over it, and × asks nothing.
+    func testLeavingTheAppDoesNotClaimAFieldNobodyTypedIn() throws {
+        let (task, context) = task("Call mom")
+        var draft = TaskEditorDraft(task: task)
+        task.title = "Call mom tonight"
+        task.notes = "From the other device"
+        try context.save()
+        XCTAssertFalse(try draft.storeTyping(on: task, in: context), "nothing was typed: nothing to store")
+        XCTAssertFalse(draft.hasPendingChanges(for: task))
+        XCTAssertFalse(try draft.commit(to: task, in: context, parser: parser()))
+        XCTAssertEqual(task.title, "Call mom tonight")
+        XCTAssertEqual(task.notes, "From the other device")
+    }
+
+    /// Only the description typed, the title that arrived stands, through leaving the app and Confirm.
+    func testLeavingTheAppStoresOnlyTheFieldThatWasTyped() throws {
+        let (task, context) = task("Call mom")
+        var draft = TaskEditorDraft(task: task)
+        draft.notes = "Ask about Sunday"
+        task.title = "Call mom tonight"
+        try context.save()
+        XCTAssertTrue(try draft.storeTyping(on: task, in: context))
+        XCTAssertEqual(task.title, "Call mom tonight")
+        XCTAssertEqual(task.notes, "Ask about Sunday")
+        try draft.commit(to: task, in: context, parser: parser())
+        XCTAssertEqual(task.title, "Call mom tonight")
+        XCTAssertEqual(task.notes, "Ask about Sunday")
+    }
+
     /// A sub-task typed and not yet entered is added, as Confirm adds it; a title nobody typed in is not written.
     func testLeavingTheAppAddsTheSubtaskBeingTyped() throws {
         let (task, context) = task("Pack")

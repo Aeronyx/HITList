@@ -160,19 +160,24 @@ struct TaskEditorDraft: Equatable {
     /// title left at "Call Sam " came back without the space its next word needed. Confirm reads the phrases, as
     /// ever, when the person presses it: what was typed in this session is still marked as typed (`untouched`).
     ///
-    /// What is stored now is where the "did they change it" questions start (`openedTitle`, `openedNotes`), as after
-    /// Confirm: typing put back to how the editor opened is then a change to save, not "nothing typed". A sub-task
-    /// typed and not yet entered is added, as Confirm adds it, and its field empties. True if anything was stored.
+    /// A field stored here is, from now, what "did they change it" is asked against (`openedTitle`, `openedNotes`),
+    /// as after Confirm: typing put back to how the editor opened is then a change to save, not "nothing typed".
+    /// Only a field stored here: one nobody typed in keeps the words the editor opened with, so an edit that arrived
+    /// from another device under the open card is still not written over (round 28, the sync review's finding 5).
+    /// A sub-task typed and not yet entered is added, as Confirm adds it, and its field empties. True if anything
+    /// was stored.
     @MainActor
     @discardableResult
     mutating func storeTyping(on task: TaskItem, in context: ModelContext) throws -> Bool {
         var changed = false
         if titleWasEdited, let title = Self.titleToSave(title, current: task.title) {
             task.title = title
+            openedTitle = title
             changed = true
         }
         if let notes = notesToSave(for: task) {
             task.notes = notes
+            openedNotes = notes
             changed = true
         }
         if let rename = renameToSave(for: task) {
@@ -189,8 +194,6 @@ struct TaskEditorDraft: Equatable {
             newSubtask = ""
             changed = true
         }
-        openedTitle = task.title
-        openedNotes = task.notes
         return changed
     }
 
