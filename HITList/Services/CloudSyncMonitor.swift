@@ -175,8 +175,9 @@ final class CloudSyncMonitor {
     /// as it is now, so a view sees a change at once), and nothing of the above runs.
     var state: SyncState {
         if isOnEngine {
-            _ = engineTick  // the error's moment (`engineChanged`) redraws what reads this
-            return engineMarks(now: Date())
+            _ = engineTick  // a deadline or a new session (`engineChanged`) redraws what reads this
+            let now = Date()
+            return engineSteady.shown(engineMarks(now: now), engineActivity(now: now), at: now)
         }
         return displayState ?? shownState ?? rawState
     }
@@ -196,8 +197,8 @@ final class CloudSyncMonitor {
     /// What the signals say this instant (`SyncState.derive`): the sync log's "Sync state:" lines and the strike
     /// gate read it, unchanged.
     var rawState: SyncState {
-        // HITList's own engine says exactly what is so: there is no raw state to steady.
-        if isOnEngine { return state }
+        // HITList's own engine says exactly what is so; `state` is what a session's ordinary work shows of it.
+        if isOnEngine { return engineMarks(now: Date()) }
         #if DEBUG
         if let replayed = SyncReplayPlayer.shared.state { return replayed }
         #endif
@@ -407,6 +408,15 @@ final class CloudSyncMonitor {
                 self?.refreshAccountStatus(force: true)
             }
         })
+        // A Mac app left for another and come back to keeps its scene's phase (it stays "active"), so nothing above
+        // hears of it. On the engine, back after a minute away is a new session, as on the iPhone: hollow until a
+        // sync asked for now has ended (round 35).
+        observers.append(center.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.engineSteady.left(at: Date()) }
+        })
+        observers.append(center.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.macCameForward() }
+        })
         let terminate = NSApplication.willTerminateNotification
         #else
         let terminate = UIApplication.willTerminateNotification
@@ -415,6 +425,19 @@ final class CloudSyncMonitor {
             MainActor.assumeIsolated { self?.recordQuit() }
         })
     }
+
+    #if os(macOS)
+    /// HITList is the active app again. After `SyncEngineSteadiness.Windows.away` that is a new session on the
+    /// engine, and its own sync is asked for here (the iPhone's comes from the scene's phase, `HITListApp`).
+    private func macCameForward() {
+        let now = Date()
+        let session = engineSteady.sessionFrom
+        engineSteady.cameForward(at: now)
+        guard isOnEngine else { return }
+        if engineSteady.sessionFrom != session { SyncEngine.shared?.cameForward() }
+        engineChanged()
+    }
+    #endif
 
     /// From `HITListApp`'s `scenePhase`: logged, and on activation the account is checked again and the
     /// watchdog measures whether an import follows. On iOS the background suspends the process, so the
@@ -437,14 +460,19 @@ final class CloudSyncMonitor {
             #endif
             // Back in the app: the mirror imports now by itself; a comparison follows it if the last one is old.
             recordCheck.returned(at: now)
+            // On the engine, back after a minute away is a new session: hollow until its own sync has ended.
+            engineSteady.cameForward(at: now)
+            if isOnEngine { engineChanged() }
             publishShown(now)
             watch(.activated(at: now, idle: idle))
             refreshAccountStatus()
         case .inactive:
             if inactiveSince == nil { inactiveSince = now }
+            engineSteady.left(at: now)
             write(.scene, "App inactive")
         case .background:
             if inactiveSince == nil { inactiveSince = now }
+            engineSteady.left(at: now)
             write(.scene, "App in background", fields: inFlightFields())
             #if os(iOS)
             watch(.suspended(at: now))
@@ -1052,9 +1080,11 @@ final class CloudSyncMonitor {
     private(set) var engineTick = 0
     /// When the engine's current sync error (`SyncEngineMarks.syncError`) was first seen; nil while there is none.
     @ObservationIgnored private var engineErrorSince: Date?
-    /// Its one timer: the moment "will keep trying" gives way to the error's own words, armed when an error appears,
-    /// cancelled when it clears.
+    /// Its one timer, armed for the sooner of two moments and cancelled when neither is pending: "will keep trying"
+    /// giving way to the error's own words, and the steadiness's next deadline.
     @ObservationIgnored private var engineErrorTimer: Task<Void, Never>?
+    /// What a session's ordinary work shows on the engine: nothing (`SyncEngineSteadiness`, round 35).
+    @ObservationIgnored private var engineSteady = SyncEngineSteadiness(at: Date())
     /// The moment the engine's status first read synced without a time of its own (`lastSyncedFallback`).
     @ObservationIgnored private var engineSyncedSeenAt: Date?
     @ObservationIgnored private var wasOnEngine = false
@@ -1068,6 +1098,16 @@ final class CloudSyncMonitor {
         #endif
         return SyncEngineMarks.state(status: SyncEngineBoard.shared.status, account: account, isOnline: isOnline ?? true,
                                      errorSince: engineErrorSince, lastSyncedFallback: engineSyncedSeenAt ?? now, now: now)
+    }
+
+    /// What the board's status is about (pure: `SyncEngineMarks.activity`).
+    private func engineActivity(now: Date) -> SyncEngineSteadiness.Activity {
+        var account = rawAccountStatus
+        #if DEBUG
+        if SyncEngineDemo.requested != nil { account = nil }
+        #endif
+        return SyncEngineMarks.activity(status: SyncEngineBoard.shared.status, account: account, isOnline: isOnline ?? true,
+                                        lastSyncedFallback: engineSyncedSeenAt ?? now)
     }
 
     /// Watches the board for a change of engine or status, once per change (Observation: nothing polls).
@@ -1132,9 +1172,16 @@ final class CloudSyncMonitor {
         } else {
             engineSyncedSeenAt = nil
         }
-        let next = engineMarks(now: now)
+        let raw = engineMarks(now: now)
+        let activity = engineActivity(now: now)
+        engineSteady.note(activity, at: now)
+        let next = engineSteady.shown(raw, activity, at: now)
         let wasSynced = engineState?.isSynced ?? false
-        if next != engineState { engineState = next }
+        if next != engineState {
+            // What is shown moved with nothing on the board moving (a deadline, a new session): draw again.
+            if engineState != nil { engineTick &+= 1 }
+            engineState = next
+        }
         // The bolt fills: the moment its "good to go" may play (`BoltStrikeGate` decides whether it does).
         if next.isSynced, !wasSynced { confirmedAt = now }
         let key = "engine \(SyncSteadiness.kind(next))"
@@ -1144,10 +1191,16 @@ final class CloudSyncMonitor {
         }
         engineErrorTimer?.cancel()
         engineErrorTimer = nil
-        if let since = engineErrorSince, case .retrying = next {
-            let delay = max(0.01, since.addingTimeInterval(SyncEngineMarks.errorWordsAfter).timeIntervalSince(now)) + 0.02
+        // One sleep, to the sooner of the error's own words and the steadiness's deadline; none when neither waits.
+        var wake = engineSteady.nextDeadline(activity, after: now)
+        if let since = engineErrorSince, case .retrying = raw {
+            let words = since.addingTimeInterval(SyncEngineMarks.errorWordsAfter)
+            wake = wake.map { min($0, words) } ?? words
+        }
+        if let wake {
+            let delay = max(0.01, wake.timeIntervalSince(now)) + 0.02
             engineErrorTimer = Task { @MainActor [weak self] in
-                try? await Task.sleep(for: .seconds(delay), tolerance: .milliseconds(200))
+                try? await Task.sleep(for: .seconds(delay), tolerance: .milliseconds(100))
                 guard !Task.isCancelled, let self else { return }
                 self.engineTick &+= 1
                 self.engineChanged()
@@ -1334,6 +1387,8 @@ final class CloudSyncMonitor {
     #if DEBUG
     /// Tests: the check as it stands.
     var recordCheckForTests: SyncRecordCheck { recordCheck }
+    /// Tests: the board changed. The app hears of it through `observeBoard`, which a hosted test never starts.
+    func boardChangedForTests() { boardChanged() }
     #endif
 
     /// Nothing can sync at all right now, known without asking: no network, or no usable iCloud account. "Could not

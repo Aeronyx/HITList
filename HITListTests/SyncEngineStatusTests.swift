@@ -295,9 +295,10 @@ final class SyncEngineStatusTests: XCTestCase {
         board.show(SyncStatus(state: .idle, waiting: 3, firstFetchDone: true))
         XCTAssertTrue(monitor.isOnEngine)
         XCTAssertEqual(monitor.statusWords(), "3 changes waiting to go to iCloud")
-        XCTAssertEqual(monitor.rawState, monitor.state, "nothing to steady on the engine")
+        XCTAssertEqual(monitor.rawState, monitor.state, "before a sync has ended in the session the marks are the engine's own")
 
-        let fetched = Date().addingTimeInterval(-10)
+        // A sync that ended in this session (one that ended before it began is not this session's: `SyncEngineSteadiness`).
+        let fetched = Date()
         board.show(SyncStatus(state: .idle, waiting: 0, firstFetchDone: true, lastFetchEnded: fetched))
         XCTAssertEqual(monitor.state, .synced(fetched))
         XCTAssertEqual(monitor.lastSyncedAt, fetched)
@@ -308,5 +309,49 @@ final class SyncEngineStatusTests: XCTestCase {
         board.show(nil, engine: .mirror)
         XCTAssertFalse(monitor.isOnEngine)
         XCTAssertEqual(monitor.state, before, "back on the mirror, the mirror's state as it was")
+    }
+
+    /// Round 35 (George: "if HITList is currently syncing regularly and has been during that session, there's no need
+    /// for the bolt to change"): through the monitor itself, a change waiting to go and the fetch after it leave the
+    /// bolt filled once a sync has ended in the session; what the engine says is still there to read (`rawState`),
+    /// and a hold shows at once.
+    func testASessionsOrdinaryWorkLeavesTheMonitorsBoltFilled() throws {
+        let board = SyncEngineBoard.shared
+        let monitor = CloudSyncMonitor.shared
+        if monitor.rawAccountStatus == .noAccount || monitor.rawAccountStatus == .restricted {
+            throw XCTSkip("this Mac has no usable iCloud account")
+        }
+        defer {
+            board.show(nil, engine: .mirror)
+            monitor.boardChangedForTests()
+        }
+        /// The board says `status`, and the monitor hears it as the app's own observation tells it.
+        func show(_ status: SyncStatus) {
+            board.show(status)
+            monitor.boardChangedForTests()
+        }
+
+        let fetched = Date()
+        show(SyncStatus(state: .idle, waiting: 0, firstFetchDone: true, lastFetchEnded: fetched))
+        XCTAssertEqual(monitor.state, .synced(fetched), "the session's first sync: filled")
+
+        // The marks are read the moment the board changes, before the monitor has heard of it: nothing shows then
+        // either.
+        board.show(SyncStatus(state: .idle, waiting: 1, firstFetchDone: true, lastFetchEnded: fetched))
+        XCTAssertEqual(monitor.state, .synced(fetched), "a task added: nothing shows, at the very moment")
+        XCTAssertEqual(monitor.rawState.summary(), "1 change waiting to go to iCloud", "what the engine says is still there to read")
+        monitor.boardChangedForTests()
+        XCTAssertEqual(monitor.state, .synced(fetched))
+        XCTAssertEqual(monitor.statusWords(), "Synced just now")
+
+        show(SyncStatus(state: .sending, waiting: 1, firstFetchDone: true, lastFetchEnded: fetched))
+        show(SyncStatus(state: .fetching, waiting: 0, firstFetchDone: true, lastFetchEnded: fetched))
+        XCTAssertEqual(monitor.state, .synced(fetched), "the send and the fetch after it")
+        let sent = Date()
+        show(SyncStatus(state: .idle, waiting: 0, firstFetchDone: true, lastFetchEnded: fetched, lastSendEnded: sent))
+        XCTAssertEqual(monitor.state, .synced(sent), "and the bolt names the newer sync")
+
+        show(SyncStatus(state: .held(.storageFull), waiting: 7, firstFetchDone: true))
+        XCTAssertEqual(monitor.statusWords(), "iCloud is full: 7 changes are waiting.", "what a person must see shows at once")
     }
 }

@@ -25,8 +25,8 @@ enum SyncState: Equatable {
     /// (`SyncRecordCheck.Rules.patience`): drawn as trouble, and Check iCloud… settles it; before that, as waiting.
     case differs(String, stuck: Bool)
     /// Only on HITList's own engine (round 28: `SyncEngineBoard.engine == .own`), never on the mirror: the engine's
-    /// exact status as the marks draw it, look and words (`SyncEngineMarks.state`). Never steadied or gated: the engine
-    /// knows what is waiting, so there is nothing to second-guess.
+    /// exact status as the marks draw it, look and words (`SyncEngineMarks.state`). Nothing is second-guessed: the
+    /// engine knows what is waiting. What a session's ordinary work shows is steadied (`SyncEngineSteadiness`, 0.9.17).
     case engine(SyncEngineMarks)
 
     /// The one-line status, e.g. "Synced 2 min ago".
@@ -349,6 +349,29 @@ struct SyncEngineMarks: Hashable {
     }
 
     static let checking = SyncEngineMarks(look: .hollow, words: SyncWords.engineChecking)
+
+    /// What the same status is about, for the steadiness (`SyncEngineSteadiness`): in `state`'s own order, so the two
+    /// never disagree about which case a status is (a test holds them together).
+    static func activity(status: SyncStatus?, account: CKAccountStatus?, isOnline: Bool,
+                         lastSyncedFallback: Date) -> SyncEngineSteadiness.Activity {
+        switch account {
+        case .noAccount, .restricted: return .showNow
+        default: break
+        }
+        guard let status else { return .routine }
+        if status.hold != nil { return .showNow }
+        if !isOnline { return .offline }
+        if syncError(status) != nil { return .trouble }
+        switch status.state {
+        case .off, .starting: return .routine
+        default: break
+        }
+        if !status.firstFetchDone { return .routine }
+        if status.waiting > 0 { return .routine }
+        if !status.refused.isEmpty { return .showNow }
+        if status.isSynced { return .synced(lastSynced(status) ?? lastSyncedFallback) }
+        return .routine
+    }
 
     /// A hold's marks: signed out as today; red for the ones the person must act on; tidying up hollow.
     static func held(_ hold: SyncHold, waiting: Int) -> SyncState {
