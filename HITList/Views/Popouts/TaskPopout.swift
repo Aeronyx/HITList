@@ -175,10 +175,11 @@ struct TaskPopout: View {
         } message: {
             Text(TaskActions.sharedMoveMessage(TaskActions.sharedMoveLosses(of: task)))
         }
-        // iOS may end the app while it is in the background: what was typed is stored first, as typed, the editor
-        // staying open exactly as it was and asking nothing (the data review's B9; `TaskEditorDraft.storeTyping`).
+        // iOS may end the app while it is in the background: what was typed lands first, the editor staying open as it
+        // was, asking nothing (the data review's B9), the space typed last still in its field
+        // (`TaskEditorDraft.commitOnLeaving`).
         .onChange(of: scenePhase) { _, phase in
-            if phase == .background, !isClosing { storeTyping() }
+            if phase == .background, !isClosing { commitOnLeaving() }
         }
         #if os(macOS)
         .onExitCommand(perform: requestClose)
@@ -713,9 +714,10 @@ struct TaskPopout: View {
         }
     }
 
-    private func storeTyping() {
+    private func commitOnLeaving() {
+        // Closed because the task was deleted elsewhere: leave it alone (a write would bring it back).
         guard let taskID, PopoutController.taskExists(taskID, in: context) else { return }
-        if (try? draft.storeTyping(on: task, in: context)) == true { rescheduleNotifications() }
+        if (try? draft.commitOnLeaving(to: task, in: context, parser: parser())) == true { rescheduleNotifications() }
     }
 
     /// A reminder phrase stored in the title is set the moment the task has a time, as a pick lands (brief 127).

@@ -497,8 +497,13 @@ LIKELY / UNSURE. Verify each finding yourself and run its new test once against 
 card tests failed there, as they should). **A reviewer's "unsure, worth one tap" is a test to write**: Show
 completed is passed to the lists only as a binding, nothing had switched it on since round 32 moved it, and it
 took a UI test to learn that it works. **A thing done "on the way to the background" is done to half-typed
-words**: the card's full Confirm there read "at 1" as one o'clock. Store as typed; let the person's own Confirm
-read it. **A count taken out of a view's body no longer puts itself right on a redraw**: give it the lists'
+words**: the card's full Confirm there reads "at 1" as one o'clock (still so; see above). **A fix made the night before a release is new code the night before a release.** For the half-typed word the
+supervisor replaced the card's save-on-leaving with one that stored the words unread; every suite was green; its
+own second reading an hour later found it wrote an unedited title back over another device's edit (round 28's
+finding 5, named in the comments of the code around it), and a reviewer given only that function found a whole
+"tomorrow" left as plain undated words after ×. It was taken back and the smallest thing kept (the last space
+put back in the field). So: the night before, mend what is small and certain, name the rest as known, and give
+any change to how typing is saved to a reviewer who did not write it before believing it. **A count taken out of a view's body no longer puts itself right on a redraw**: give it the lists'
 clock (`ListClock.next`). **The version in `project.yml` is the last release's until `scripts/release.sh` bumps
 it**, and nothing in the app acts on a change of version, so a build of master stands in for the update.
 **`simctl openurl` stops at "Open in HITList?"**; the Simulator tool needs George's grant for each new

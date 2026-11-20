@@ -44,8 +44,8 @@ struct TaskEditorDraft: Equatable {
     /// arriving), and a field nobody typed in must not be written back over that with what the editor happened to
     /// be showing (round 28, the sync review's finding 5: a title-only Confirm put the old notes back on every
     /// device).
-    private var openedTitle: String
-    private var openedNotes: String
+    private let openedTitle: String
+    private let openedNotes: String
 
     init(task: TaskItem) {
         title = task.title
@@ -153,48 +153,29 @@ struct TaskEditorDraft: Equatable {
         return changed
     }
 
-    /// Leaving the app with the editor open (iOS may end it there; the data review's B9): what was typed is stored
-    /// as typed, so nothing is lost, and the editor stays exactly as the person left it. Nothing is read as a phrase
-    /// and no field is reset. Until round 35 a full Confirm ran here: someone who typed "Meeting at 1", looked at
-    /// another app for the hour and came back to type the "0" found a meeting at one o'clock named "Meeting0"; a
-    /// title left at "Call Sam " came back without the space its next word needed. Confirm reads the phrases, as
-    /// ever, when the person presses it: what was typed in this session is still marked as typed (`untouched`).
+    /// Leaving the app with the editor open (iOS may end it there; the data review's B9): Confirm's own save
+    /// (`commit`, not confirming), so nothing typed is lost and ×, Discard and the phrases mean afterwards what they
+    /// always mean. One thing differs from Confirm: the person may come back to go on typing, so the space they had
+    /// typed last (in the description, the line break too) stays in the field. Without it "Call Sam about " came
+    /// back as "Call Sam about" and the next word ran into it (round 35).
     ///
-    /// A field stored here is, from now, what "did they change it" is asked against (`openedTitle`, `openedNotes`),
-    /// as after Confirm: typing put back to how the editor opened is then a change to save, not "nothing typed".
-    /// Only a field stored here: one nobody typed in keeps the words the editor opened with, so an edit that arrived
-    /// from another device under the open card is still not written over (round 28, the sync review's finding 5).
-    /// A sub-task typed and not yet entered is added, as Confirm adds it, and its field empties. True if anything
-    /// was stored.
+    /// Round 35 also tried storing the title as typed and leaving the draft alone, so that a half-typed "at 1" was
+    /// not read as one o'clock. A review of that showed worse: a whole phrase typed before leaving ("tomorrow")
+    /// ended up stored as plain words with no date when the card was then closed with ×, and the lists, widgets
+    /// and reminders showed the raw words meanwhile. Taken back; the half-typed word is the known price.
     @MainActor
     @discardableResult
-    mutating func storeTyping(on task: TaskItem, in context: ModelContext) throws -> Bool {
-        var changed = false
-        if titleWasEdited, let title = Self.titleToSave(title, current: task.title) {
-            task.title = title
-            openedTitle = title
-            changed = true
-        }
-        if let notes = notesToSave(for: task) {
-            task.notes = notes
-            openedNotes = notes
-            changed = true
-        }
-        if let rename = renameToSave(for: task) {
-            rename.subtask.title = rename.title
-            rename.subtask.touch()
-            changed = true
-        }
-        if changed {
-            task.touch()
-            try context.save()
-        }
-        if !Self.trimmed(newSubtask).isEmpty {
-            try TaskActions.addSubtask(newSubtask, to: task, in: context)
-            newSubtask = ""
-            changed = true
-        }
+    mutating func commitOnLeaving(to task: TaskItem, in context: ModelContext, parser: QuickAddParser? = nil) throws -> Bool {
+        let titleTail = Self.trailingWhitespace(title), notesTail = Self.trailingWhitespace(notes)
+        let changed = try commit(to: task, in: context, parser: parser, confirming: false)
+        if !title.isEmpty { title += titleTail }
+        if !notes.isEmpty { notes += notesTail }
         return changed
+    }
+
+    /// The spaces and line breaks `text` ends with.
+    static func trailingWhitespace(_ text: String) -> String {
+        String(text.reversed().prefix { $0.isWhitespace || $0.isNewline }.reversed())
     }
 
     // MARK: Quick-add phrases in the title (brief 65)

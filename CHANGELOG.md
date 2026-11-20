@@ -217,11 +217,10 @@ an updated device does on its first day with no move asked for, what the build s
 code does, and whether the faster lists can show something old. None found a reason to hold the release; they found
 these, each fixed with a test:
 
-- **A task's card no longer acts on half-typed words when you leave HITList.** What you typed is still stored the
-  moment the app goes to the background (so nothing is lost if iOS ends it there), but as typed: the card comes
-  back exactly as you left it and reads dates and times when you press Confirm. Before, "Meeting at 1", a look at
-  another app, and the "0" typed on coming back made a meeting at one o'clock named "Meeting0", and the space
-  before your next word was gone.
+- **A task's card keeps the space you typed last when you leave HITList and come back.** What you typed is saved
+  the moment the app goes to the background (so nothing is lost if iOS ends it there); the space, or the line
+  break in the description, was dropped with it, so "Call Sam about " came back as "Call Sam about" and the next
+  word, or what you pasted from the other app, ran into it.
 - **Week: "Previous week" is greyed out while this week is showing.** On an iPad or a Mac it was a live button
   that changed nothing until it had been pressed once.
 - **Week: the open all-day row scrolls after six tasks.** A day with twenty tasks that have a date and no time
@@ -232,8 +231,11 @@ these, each fixed with a test:
   due, as the list beside them does; they waited for the next change.
 - Settings → iCloud → Details no longer calls the new sync "early access".
 
-Known and left as they are: "this monday" typed on a Friday means the Monday of this week (as in 0.9.13); a tap on
-an empty day of the Week layout does nothing; a sub-task typed and not entered is added when you leave the app.
+Known and left as they are: leaving HITList in the middle of a date or time word in a card's title saves it as
+read so far ("Meeting at 1" is a meeting at one o'clock; a change that stored the words unread instead was written
+that night, reviewed, found to leave a whole "tomorrow" as plain words in other cases, and taken back); "this
+monday" typed on a Friday means the Monday of this week (as in 0.9.13); a tap on an empty day of the Week layout
+does nothing; a sub-task typed and not entered is added when you leave the app.
 
 ## 0.9.13 — build 30, 2026-11-16
 
