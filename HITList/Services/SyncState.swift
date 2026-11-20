@@ -314,10 +314,14 @@ struct SyncEngineMarks: Hashable {
 
     /// The marks for the engine's status. `status` nil: the engine has not said anything yet this launch. `account` is
     /// iCloud's own answer (`CloudSyncMonitor.rawAccountStatus`), `isOnline` the network path, `errorSince` when the
-    /// monitor first saw the current `syncError`, `lastSyncedFallback` the moment to quote when the engine is synced
-    /// but has no time of its own yet. Pure, so every status can be tested.
+    /// monitor first saw the current `syncError`. Pure, so every status can be tested.
+    ///
+    /// A status that reads synced with no fetch or send of this launch behind it is not one yet (0.9.17): the engine
+    /// remembers across launches that its first whole fetch was made, so its first status of a launch is "idle,
+    /// nothing waiting" before it has asked iCloud anything, and the marks said "Synced just now" for the half
+    /// second before the launch's fetch began (George's Mac, 2026-11-20 11:31:33.244). It is checking.
     static func state(status: SyncStatus?, account: CKAccountStatus?, isOnline: Bool, errorSince: Date?,
-                      lastSyncedFallback: Date, now: Date) -> SyncState {
+                      now: Date) -> SyncState {
         // The account first, as on the mirror: without one nothing can sync, whatever the engine last said.
         switch account {
         case .noAccount: return .notSignedIn
@@ -343,8 +347,9 @@ struct SyncEngineMarks: Hashable {
         if !status.firstFetchDone { return .engine(checking) }
         if status.waiting > 0 { return .engine(SyncEngineMarks(look: .hollow, words: SyncWords.engineWaiting(status.waiting))) }
         if !status.refused.isEmpty { return .engine(SyncEngineMarks(look: .hollow, words: SyncWords.engineRefused(status.refused.count))) }
-        if status.isSynced { return .synced(lastSynced(status) ?? lastSyncedFallback) }
-        // Fetching or sending with nothing waiting: the bolt is filled exactly when the engine says synced.
+        // Filled exactly when the engine says synced and has a sync of this launch to name.
+        if status.isSynced, let at = lastSynced(status) { return .synced(at) }
+        // Fetching or sending with nothing waiting, or nothing asked of iCloud yet this launch.
         return .engine(checking)
     }
 
@@ -352,8 +357,7 @@ struct SyncEngineMarks: Hashable {
 
     /// What the same status is about, for the steadiness (`SyncEngineSteadiness`): in `state`'s own order, so the two
     /// never disagree about which case a status is (a test holds them together).
-    static func activity(status: SyncStatus?, account: CKAccountStatus?, isOnline: Bool,
-                         lastSyncedFallback: Date) -> SyncEngineSteadiness.Activity {
+    static func activity(status: SyncStatus?, account: CKAccountStatus?, isOnline: Bool) -> SyncEngineSteadiness.Activity {
         switch account {
         case .noAccount, .restricted: return .showNow
         default: break
@@ -369,7 +373,7 @@ struct SyncEngineMarks: Hashable {
         if !status.firstFetchDone { return .routine }
         if status.waiting > 0 { return .routine }
         if !status.refused.isEmpty { return .showNow }
-        if status.isSynced { return .synced(lastSynced(status) ?? lastSyncedFallback) }
+        if status.isSynced, let at = lastSynced(status) { return .synced(at) }
         return .routine
     }
 

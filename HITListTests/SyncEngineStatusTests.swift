@@ -14,8 +14,7 @@ final class SyncEngineStatusTests: XCTestCase {
 
     private func marks(_ status: SyncStatus?, account: CKAccountStatus? = .available, online: Bool = true,
                        errorSince: Date? = nil) -> SyncState {
-        SyncEngineMarks.state(status: status, account: account, isOnline: online, errorSince: errorSince,
-                              lastSyncedFallback: now, now: now)
+        SyncEngineMarks.state(status: status, account: account, isOnline: online, errorSince: errorSince, now: now)
     }
 
     private func words(_ state: SyncState) -> String {
@@ -60,10 +59,15 @@ final class SyncEngineStatusTests: XCTestCase {
         }
     }
 
-    func testSyncedWithoutATimeQuotesWhenItWasFirstSeen() {
+    /// 0.9.17: the engine remembers across launches that its first whole fetch was made, so its first status of a
+    /// launch reads "idle, nothing waiting" before it has asked iCloud anything. That is not synced yet: the marks
+    /// said "Synced just now" for the half second before the launch's fetch began (George's Mac, 2026-11-20).
+    func testSyncedWithNoSyncOfThisLaunchBehindItIsChecking() {
         let status = SyncStatus(state: .idle, waiting: 0, firstFetchDone: true)
-        XCTAssertEqual(SyncEngineMarks.state(status: status, account: .available, isOnline: true, errorSince: nil,
-                                             lastSyncedFallback: ago(120), now: now), .synced(ago(120)))
+        XCTAssertTrue(status.isSynced, "as the engine itself reads it")
+        XCTAssertEqual(marks(status), .engine(SyncEngineMarks.checking))
+        XCTAssertEqual(look(marks(status)), hollow)
+        XCTAssertEqual(words(marks(status)), "Checking with iCloud…")
     }
 
     // MARK: Changes waiting

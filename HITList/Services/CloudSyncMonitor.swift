@@ -177,9 +177,22 @@ final class CloudSyncMonitor {
         if isOnEngine {
             _ = engineTick  // a deadline or a new session (`engineChanged`) redraws what reads this
             let now = Date()
-            return engineSteady.shown(engineMarks(now: now), engineActivity(now: now), at: now)
+            return engineShown(engineMarks(now: now), engineActivity(now: now), at: now)
         }
         return displayState ?? shownState ?? rawState
+    }
+
+    /// The engine's own marks on the engine, the marks as they are drawn on the mirror: what a report quotes (a
+    /// support report that said "Synced" while a change waited would mislead whoever reads it).
+    var stateForReports: SyncState { isOnEngine ? engineMarks(now: Date()) : state }
+
+    /// What the marks show of the engine's own `raw` marks (`SyncEngineSteadiness`). The Debug demo's made-up status
+    /// stands as it is: it is there to draw each look.
+    private func engineShown(_ raw: SyncState, _ activity: SyncEngineSteadiness.Activity, at now: Date) -> SyncState {
+        #if DEBUG
+        if SyncEngineDemo.requested != nil { return raw }
+        #endif
+        return engineSteady.shown(raw, activity, at: now)
     }
 
     /// `state`'s words, for the bolt's label and Settings (`SyncWords`): "Synced 3 min ago", "Last synced 3 min ago,
@@ -460,19 +473,29 @@ final class CloudSyncMonitor {
             #endif
             // Back in the app: the mirror imports now by itself; a comparison follows it if the last one is old.
             recordCheck.returned(at: now)
-            // On the engine, back after a minute away is a new session: hollow until its own sync has ended.
+            // On the engine, back after a minute away is a new session: hollow until its own sync has ended. A Mac's
+            // scene is "active" whenever its window shows, in front or not: there the app's own activation says it
+            // (`macCameForward`), and a launch behind other apps is not yet in front.
+            #if os(macOS)
+            if NSApplication.shared.isActive { engineSteady.cameForward(at: now) }
+            #else
             engineSteady.cameForward(at: now)
+            #endif
             if isOnEngine { engineChanged() }
             publishShown(now)
             watch(.activated(at: now, idle: idle))
             refreshAccountStatus()
         case .inactive:
             if inactiveSince == nil { inactiveSince = now }
+            #if os(iOS)
             engineSteady.left(at: now)
+            #endif
             write(.scene, "App inactive")
         case .background:
             if inactiveSince == nil { inactiveSince = now }
+            #if os(iOS)
             engineSteady.left(at: now)
+            #endif
             write(.scene, "App in background", fields: inFlightFields())
             #if os(iOS)
             watch(.suspended(at: now))
@@ -1094,8 +1117,6 @@ final class CloudSyncMonitor {
     @ObservationIgnored private var engineErrorTimer: Task<Void, Never>?
     /// What a session's ordinary work shows on the engine: nothing (`SyncEngineSteadiness`, round 35).
     @ObservationIgnored private var engineSteady = SyncEngineSteadiness(at: Date())
-    /// The moment the engine's status first read synced without a time of its own (`lastSyncedFallback`).
-    @ObservationIgnored private var engineSyncedSeenAt: Date?
     @ObservationIgnored private var wasOnEngine = false
 
     /// The marks for the board's status now (pure: `SyncEngineMarks.state`).
@@ -1106,7 +1127,7 @@ final class CloudSyncMonitor {
         if SyncEngineDemo.requested != nil { account = nil }
         #endif
         return SyncEngineMarks.state(status: SyncEngineBoard.shared.status, account: account, isOnline: isOnline ?? true,
-                                     errorSince: engineErrorSince, lastSyncedFallback: engineSyncedSeenAt ?? now, now: now)
+                                     errorSince: engineErrorSince, now: now)
     }
 
     /// What the board's status is about (pure: `SyncEngineMarks.activity`).
@@ -1115,8 +1136,7 @@ final class CloudSyncMonitor {
         #if DEBUG
         if SyncEngineDemo.requested != nil { account = nil }
         #endif
-        return SyncEngineMarks.activity(status: SyncEngineBoard.shared.status, account: account, isOnline: isOnline ?? true,
-                                        lastSyncedFallback: engineSyncedSeenAt ?? now)
+        return SyncEngineMarks.activity(status: SyncEngineBoard.shared.status, account: account, isOnline: isOnline ?? true)
     }
 
     /// Watches the board for a change of engine or status, once per change (Observation: nothing polls).
@@ -1155,6 +1175,7 @@ final class CloudSyncMonitor {
                 engineErrorSince = nil
                 engineErrorTimer?.cancel()
                 engineErrorTimer = nil
+                engineSteady = SyncEngineSteadiness(at: Date())
             }
         }
         stateChanged()
@@ -1176,23 +1197,19 @@ final class CloudSyncMonitor {
         let status = SyncEngineBoard.shared.status
         let error = status.flatMap(SyncEngineMarks.syncError)
         if error == nil { engineErrorSince = nil } else if engineErrorSince == nil { engineErrorSince = now }
-        if let status, status.isSynced, SyncEngineMarks.lastSynced(status) == nil {
-            if engineSyncedSeenAt == nil { engineSyncedSeenAt = now }
-        } else {
-            engineSyncedSeenAt = nil
-        }
         let raw = engineMarks(now: now)
         let activity = engineActivity(now: now)
         engineSteady.note(activity, at: now)
-        let next = engineSteady.shown(raw, activity, at: now)
+        let next = engineShown(raw, activity, at: now)
         let wasSynced = engineState?.isSynced ?? false
         if next != engineState {
             // What is shown moved with nothing on the board moving (a deadline, a new session): draw again.
             if engineState != nil { engineTick &+= 1 }
             engineState = next
         }
-        // The bolt fills: the moment its "good to go" may play (`BoltStrikeGate` decides whether it does).
-        if next.isSynced, !wasSynced { confirmedAt = now }
+        // The bolt fills: the moment its "good to go" may play (`BoltStrikeGate` decides whether it does). Not when it
+        // fills at the end of a session's grace, with no sync behind it: nothing was confirmed.
+        if next.isSynced, !wasSynced, !engineSteady.filledWithoutASync { confirmedAt = now }
         let key = "engine \(SyncSteadiness.kind(next))"
         if key != loggedMarks {
             loggedMarks = key
