@@ -822,6 +822,23 @@ holds (you are an agent; nobody answers a question; your final message is your r
 - **Changes in behaviour a person will notice** are listed in your report, each in one line: George asked to be
   told of every one.
 
+## Round 35 (2026-11-20; brief 174, an Opus 5.5 agent beside the supervisor; `ROUND-35.md` says why)
+
+0.9.16 was released on the morning of 2026-11-20 and George's own Mac and iPhone run the new sync in iCloud's
+Production side since 11:26 that day: the first devices to. His friends' devices carry 0.9.16 and stay on the
+earlier sync until he gives the word (he has not). The version is 0.9.17. Everything in the Round 34 block and
+record holds; what is new:
+
+- **The new sync is live for a real person.** Nothing a session does may reach iCloud's Production side, his
+  devices or his store: side stores with `-disableCloudKit YES` (or the pretend iCloud) only.
+- **The supervisor is working in** `HITList/Services/CloudSyncMonitor.swift`, `HITList/Services/SyncState.swift`,
+  `HITList/Services/SyncEngine/SyncEngine.swift`, `HITList/Support/AppGroup.swift` and the bolt's views (the bolt
+  is to stay still while a session syncs as usual): nobody else edits those.
+- **On the Flipboard a UI test's every step waits a minute** ("App animations complete notification not
+  received": an overdue switch's light never rests). Give those tests the time; do not read it as a hang.
+- **Read**: the two sections at the top of this file, this block, the Round 34 record, your brief, then what it
+  names.
+
 ## Round 34 (2026-11-18, evening; briefs 168–173, Opus 5.5 agents; `ROUND-34.md` says why)
 
 0.9.15 was prepared and not released. George that evening: "I want to be very confident in the next build we
