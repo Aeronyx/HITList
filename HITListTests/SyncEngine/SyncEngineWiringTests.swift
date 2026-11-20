@@ -71,16 +71,17 @@ final class SyncEngineWiringTests: XCTestCase {
         XCTAssertEqual(decide(store: "HITList.store", debug: false), .mirror)
     }
 
-    /// The group that moves a store is hidden until revealed on the device; a store on the engine always shows it
-    /// (the way back).
-    func testTheSwitchIsHiddenUntilRevealedAndAlwaysShownOnTheEngine() {
+    /// The rows that move a store are hidden until revealed on the device, on either sync (round 35: a store on the
+    /// engine no longer shows them unrevealed), and hidden again from About.
+    func testTheSwitchIsHiddenUntilRevealedOnEitherSync() {
         XCTAssertFalse(SyncEngineSwitch.isSwitchRevealed(defaults: defaults))
-        XCTAssertFalse(SyncEngineSwitchGroup.isShown(revealed: false, engine: .mirror, isDebugSideStore: false))
-        XCTAssertTrue(SyncEngineSwitchGroup.isShown(revealed: false, engine: .own, isDebugSideStore: false))
-        XCTAssertTrue(SyncEngineSwitchGroup.isShown(revealed: false, engine: .mirror, isDebugSideStore: true))
-        SyncEngineSwitch.revealSwitch(defaults: defaults)
+        XCTAssertFalse(Troubleshooting.isShown(revealed: false, isDebugSideStore: false))
+        XCTAssertTrue(Troubleshooting.isShown(revealed: false, isDebugSideStore: true))
+        Troubleshooting.reveal(defaults: defaults)
         XCTAssertTrue(SyncEngineSwitch.isSwitchRevealed(defaults: defaults))
-        XCTAssertTrue(SyncEngineSwitchGroup.isShown(revealed: true, engine: .mirror, isDebugSideStore: false))
+        XCTAssertTrue(Troubleshooting.isShown(revealed: true, isDebugSideStore: false))
+        Troubleshooting.hide(defaults: defaults)
+        XCTAssertFalse(SyncEngineSwitch.isSwitchRevealed(defaults: defaults))
     }
 
     func testSevenTapsInARowRevealAndASlowTapStartsAgain() {
@@ -297,10 +298,30 @@ final class SyncEngineWiringTests: XCTestCase {
                      "a Debug run on the engine by argument was never moved")
     }
 
-    func testMovingToTheNewSyncWarnsWhileTodaysSyncHasNotFinished() {
-        XCTAssertNil(SyncEngineWords.moveBlocker(mirrorRunning: false, isSynced: false), "today's sync is off: nothing to wait for")
-        XCTAssertNil(SyncEngineWords.moveBlocker(mirrorRunning: true, isSynced: true))
-        XCTAssertNotNil(SyncEngineWords.moveBlocker(mirrorRunning: true, isSynced: false))
+    /// Round 35: the question before a move says what is known, in three cases.
+    func testMovingToTheNewSyncSaysWhatIsKnown() {
+        let synced = SyncState.synced(Date())
+        XCTAssertNil(SyncEngineWords.moveBlocker(mirrorRunning: false, state: .syncing, difference: nil),
+                     "the earlier sync is off: nothing to wait for")
+        // Caught up: no warning.
+        XCTAssertNil(SyncEngineWords.moveBlocker(mirrorRunning: true, state: synced, difference: nil))
+        // Not compared since this launch: says so, and how to compare now; never "wait for the bolt".
+        for state in [SyncState.syncing, .retrying(since: Date()), .offline] {
+            let words = SyncEngineWords.moveBlocker(mirrorRunning: true, state: state, difference: nil)
+            XCTAssertEqual(words, SyncEngineWords.notComparedWarning, "\(state)")
+        }
+        XCTAssertTrue(SyncEngineWords.notComparedWarning.contains("Check iCloud…"))
+        XCTAssertFalse(SyncEngineWords.notComparedWarning.contains("bolt"))
+        // Compared, and iCloud holds what this device lacks: the warning, with the number.
+        let item = { (kind: SyncComparison.Difference.Kind) in SyncRecordCheck.Item(kind: kind, entity: "TaskItem", id: UUID()) }
+        let behind = SyncRecordCheck.Difference(items: [item(.onlyThere), item(.newerThere), item(.onlyHere)])
+        XCTAssertEqual(SyncEngineWords.moveBlocker(mirrorRunning: true, state: .differs("x", stuck: false), difference: behind),
+                       SyncEngineWords.leftBehindWarning(2))
+        XCTAssertTrue(SyncEngineWords.leftBehindWarning(2).contains("iCloud holds 2 items it has not received"))
+        XCTAssertTrue(SyncEngineWords.leftBehindWarning(1).contains("iCloud holds 1 item it"))
+        // Compared, and only what this device holds differs: caught up (the new sync sends it), no warning.
+        let ahead = SyncRecordCheck.Difference(items: [item(.onlyHere)])
+        XCTAssertNil(SyncEngineWords.moveBlocker(mirrorRunning: true, state: .differs("x", stuck: false), difference: ahead))
     }
 
     func testAMoveWhoseBackupFailsChangesNothing() async throws {

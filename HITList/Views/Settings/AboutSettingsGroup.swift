@@ -10,8 +10,8 @@ struct AboutSettingsGroup: View {
     var body: some View {
         AppLongName()
         HITGroup {
-            HITMenuRow("Version", systemImage: "info.circle", value: AppInfo.versionLabel)
-                .accessibilityIdentifier("settings-version")
+            // Seven taps reveal the troubleshooting rows in iCloud & data (round 35); a row then hides them again.
+            VersionAndTroubleshootingRows()
             HITMenuRow("What's New", systemImage: "sparkles") { pages(SettingsPage.whatsNew) }
                 .accessibilityIdentifier("settings-whats-new")
             PrivacyPolicyRow()

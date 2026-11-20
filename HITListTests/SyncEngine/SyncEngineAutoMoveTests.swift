@@ -479,8 +479,8 @@ final class SyncEngineAutoMoveTests: XCTestCase {
 
     /// The hidden group says what George's word is now, in a word a person reads at once.
     func testR4_theHiddenGroupSaysWhatTheWordIs() {
-        XCTAssertEqual(SyncEngineWords.everyoneValue(.go), "Released")
-        XCTAssertEqual(SyncEngineWords.everyoneValue(.notYet), "Not released")
+        XCTAssertEqual(SyncEngineWords.everyoneValue(.go), "Moving by themselves")
+        XCTAssertEqual(SyncEngineWords.everyoneValue(.notYet), "Not moving yet: you have not given the word")
         XCTAssertEqual(SyncEngineWords.everyoneValue(.paused), "Paused")
         XCTAssertEqual(SyncEngineWords.everyoneValue(.unknown), "Couldn't ask iCloud")
         XCTAssertEqual(SyncEngineWords.everyoneValue(.notAsked), "Asking iCloud…")
@@ -547,12 +547,13 @@ final class SyncEngineAutoMoveTests: XCTestCase {
     /// The rows that act show only where the group was revealed by hand (or a Debug side store, or a move that waits
     /// to be cancelled): a tester whose device moved by itself sees what happened, and no row that moves it back alone.
     func testR4_onlyARevealedGroupShowsTheRowsThatAct() {
-        XCTAssertFalse(SyncEngineSwitchGroup.showsTheSwitch(revealed: false, isDebugSideStore: false))
-        XCTAssertTrue(SyncEngineSwitchGroup.showsTheSwitch(revealed: true, isDebugSideStore: false))
-        XCTAssertTrue(SyncEngineSwitchGroup.showsTheSwitch(revealed: false, isDebugSideStore: true))
-        XCTAssertTrue(SyncEngineSwitchGroup.showsTheSwitch(revealed: false, isDebugSideStore: false, waiting: true))
-        XCTAssertTrue(SyncEngineSwitchGroup.isShown(revealed: false, engine: .own, isDebugSideStore: false),
-                      "the group itself still tells a moved device what happened")
+        XCTAssertFalse(SyncEngineSwitchRows.showsTheSwitch(revealed: false, isDebugSideStore: false))
+        XCTAssertTrue(SyncEngineSwitchRows.showsTheSwitch(revealed: true, isDebugSideStore: false))
+        XCTAssertTrue(SyncEngineSwitchRows.showsTheSwitch(revealed: false, isDebugSideStore: true))
+        XCTAssertTrue(SyncEngineSwitchRows.showsTheSwitch(revealed: false, isDebugSideStore: false, waiting: true))
+        // Round 35: a moved device that was never revealed shows none of the rows; what happened is said in the
+        // Sync group (`AutoMoveRows`).
+        XCTAssertFalse(Troubleshooting.isShown(revealed: false, isDebugSideStore: false))
     }
 
     // MARK: - The hand move's fresh copy (the way back only)

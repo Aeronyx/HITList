@@ -25,7 +25,8 @@ struct ICloudCheck: Equatable, Sendable {
     /// (TestFlight, App Store) never see, so the summary says so.
     var isDevelopmentEnvironment: Bool
 
-    /// "iCloud available · container reachable · sync zone found · 0.8 s", or what failed, in plain words.
+    /// "iCloud available · iCloud answered · HITList's data found · 0.8 s", or what failed, in plain words (round 35:
+    /// no container, zone or environment, which a friend reads after Check iCloud…).
     var summary: String {
         var parts: [String] = []
         switch account {
@@ -38,18 +39,18 @@ struct ICloudCheck: Equatable, Sendable {
         case let other?: parts.append("iCloud account status \(other.rawValue)")
         }
         switch reachable {
-        case true?: parts.append("container reachable")
-        case false?: parts.append("container unreachable")
+        case true?: parts.append("iCloud answered")
+        case false?: parts.append("iCloud didn't answer")
         case nil: break
         }
         switch zoneExists {
-        case true?: parts.append("sync zone found")
-        case false?: parts.append("sync zone not created yet")
+        case true?: parts.append("HITList's data found")
+        case false?: parts.append("no HITList data in iCloud yet")
         case nil: break
         }
         if let failure { parts.append(account == nil ? "Couldn't reach iCloud: \(failure)" : failure) }
         parts.append(Self.seconds(duration))
-        if isDevelopmentEnvironment { parts.append("Development environment") }
+        if isDevelopmentEnvironment { parts.append("test iCloud") }
         return parts.joined(separator: " · ")
     }
 

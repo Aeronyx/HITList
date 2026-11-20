@@ -316,7 +316,7 @@ enum SyncLogShareCopy {
 
 #if os(iOS)
 /// The system's share sheet for one file; `done` runs when the person shares or cancels.
-private struct SyncLogActivitySheet: UIViewControllerRepresentable {
+struct SyncLogActivitySheet: UIViewControllerRepresentable {
     let file: URL
     let done: () -> Void
 
@@ -332,6 +332,49 @@ private struct SyncLogActivitySheet: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
 #endif
+
+/// "Send sync log…" (round 35), in "If something doesn't sync": the whole log as a file, straight to the share sheet
+/// (iPhone, iPad) or a save panel (Mac), with no viewer in between: it is what George asks a friend for. The same file
+/// as the log page's Share… and Save… (`SyncLogShareCopy`, `SyncLogDocument`).
+struct SendSyncLogRow: View {
+    var log: SyncLog = .shared
+    @State private var sharedCopy: URL?
+    @State private var saveDocument: SyncLogDocument?
+
+    static let title = "Send sync log…"
+    static let subtitle = "What HITList did while syncing, to send to whoever is helping you"
+
+    var body: some View {
+        HITMenuRow(Self.title, subtitle: Self.subtitle, systemImage: "square.and.arrow.up", accessory: .none) { send() }
+            .accessibilityIdentifier("settings-send-sync-log")
+            #if os(iOS)
+            .sheet(isPresented: Binding(get: { sharedCopy != nil }, set: { if !$0 { sharedCopy = nil } }),
+                   onDismiss: { SyncLogShareCopy.remove() }) {
+                if let sharedCopy {
+                    SyncLogActivitySheet(file: sharedCopy) { self.sharedCopy = nil }
+                        .presentationDetents([.medium, .large])
+                        .ignoresSafeArea()
+                }
+            }
+            #else
+            .fileExporter(isPresented: Binding(get: { saveDocument != nil }, set: { if !$0 { saveDocument = nil } }),
+                          document: saveDocument, contentType: .plainText,
+                          defaultFilename: SyncLogText.fileName()) { result in
+                if case .success(let url) = result {
+                    CloudSyncMonitor.shared.write(.note, "Sync log saved", fields: ["file": url.lastPathComponent])
+                }
+            }
+            #endif
+    }
+
+    private func send() {
+        #if os(iOS)
+        sharedCopy = try? SyncLogShareCopy.write(SyncLogText.full(log))
+        #else
+        saveDocument = SyncLogDocument(text: SyncLogText.full(log))
+        #endif
+    }
+}
 
 #Preview("Sync log") {
     SyncLogSection()

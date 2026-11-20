@@ -1,14 +1,12 @@
 import SwiftUI
 import SwiftData
 
-/// Settings → iCloud & data → Sync: the status line, a warning while sync is stuck, and on the iPhone the Sync log
-/// (a page of its own, `SettingsPage.syncLog`; the Mac page shows the log inline, `SyncLogSection`). Shared by the
-/// iPhone's iCloud & data page and the Mac page's iCloud section, which adds the "Last change" row
-/// (`showsLastChange`). What only matters when something doesn't sync is in `ICloudCheckGroup`, further down.
+/// Settings → iCloud & data → Sync: the status line, a warning while sync is stuck, what a move the app made by itself
+/// says (`AutoMoveRows`), and on the new sync Sync now, what waits and what iCloud refused. Shared by the iPhone's
+/// iCloud & data page and the Mac page's iCloud section. Round 35: the Sync log and the times of the last fetch and
+/// send are for troubleshooting (`TroubleshootingGroup`); what only matters when something doesn't sync is in
+/// `ICloudCheckGroup`, further down.
 struct ICloudSyncGroup: View {
-    var showsLastChange = false
-    @Environment(\.hitPages) private var pages
-
     static let title = "Sync"
     static let footer = "Your tasks sync through your own iCloud to every device signed in to it. "
         + boltSentence
@@ -21,9 +19,10 @@ struct ICloudSyncGroup: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .hitRowPadding()
+            AutoMoveRows()
             if CloudSyncMonitor.shared.isOnEngine {
-                // HITList's own engine (round 28): Sync now, what is waiting, the last fetch and send, refusals. The
-                // record-check note and the stuck row are the mirror's and do not show.
+                // HITList's own engine (round 28): Sync now, what is waiting, refusals. The record-check note and the
+                // stuck row are the mirror's and do not show.
                 SyncEngineStatusRows()
             } else {
                 // Records that differ (0.9.11): the status line says what; this says where it is settled.
@@ -35,46 +34,23 @@ struct ICloudSyncGroup: View {
                 if let stall = CloudSyncMonitor.shared.stall {
                     SyncStuckRow(stall: stall)
                 }
-                if showsLastChange {
-                    LastSyncChangeRow()
-                }
             }
-            #if os(iOS)
-            HITMenuRow("Sync log", systemImage: "list.bullet.rectangle") { pages(SettingsPage.syncLog) }
-                .accessibilityIdentifier("settings-sync-log-row")
-            #endif
         }
     }
 }
 
-/// Settings → iCloud & data → "If something doesn't sync": which CloudKit environment this build uses, Details (the
-/// account, network, last import and export, push, the store) and Check iCloud…, near the page's foot because they
-/// matter only when something is wrong.
+/// Settings → iCloud & data → "If something doesn't sync": Check iCloud… and Send sync log…, near the page's foot
+/// because they matter only when something is wrong. (The environment row and Details are for troubleshooting from
+/// round 35, `TroubleshootingGroup`.)
 struct ICloudCheckGroup: View {
     @Environment(\.modelContext) private var context
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var showSyncDetails = false
     @State private var audit = SyncAuditModel()
-    @State private var taps = SevenTaps()
 
     static let title = "If something doesn't sync"
 
     var body: some View {
         HITGroup(Self.title) {
-            // Seven taps here reveal the group that moves this device between the two ways of syncing
-            // (`SyncEngineSwitch.revealSwitch`): George's own devices first, so nothing on the page speaks of it.
-            SyncEnvironmentRow()
-                .contentShape(Rectangle())
-                .onTapGesture { if taps.tap() { SyncEngineSwitch.revealSwitch() } }
-            HITMenuRow("Details", systemImage: "info.circle", accessory: .expand(isExpanded: showSyncDetails)) {
-                withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { showSyncDetails.toggle() }
-            }
-            .accessibilityIdentifier("settings-sync-details")
-            if showSyncDetails {
-                VStack(alignment: .leading, spacing: HITSpacing.s) { syncDetails }
-                    .padding(.horizontal, HITSpacing.l)
-                    .padding(.vertical, HITSpacing.m)
-            }
             // Check iCloud… compares the mirror's records with iCloud's: the mirror's own audit. On HITList's own
             // engine it is the engine's (`SyncEngineAudit`): its records are not the mirror's, and it repairs nothing.
             if CloudSyncMonitor.shared.isOnEngine {
@@ -89,61 +65,9 @@ struct ICloudCheckGroup: View {
                     .accessibilityIdentifier("settings-check-icloud")
                 ICloudAuditRows(audit: audit)
             }
+            // What George asks a friend for: the log's file, straight to the share sheet or a save panel.
+            SendSyncLogRow()
         }
-    }
-
-    /// What Details calls the app's own sync. It said "(early access)" until round 35: from 0.9.16 every device is
-    /// moved to it, so the words told a person their tasks were on something unfinished.
-    static let engineName = "the new sync"
-
-    @ViewBuilder
-    private var syncDetails: some View {
-        let monitor = CloudSyncMonitor.shared
-        detailRow("Account", "\(AccountState.current.label) (iCloud says \(CloudSyncMonitor.describe(monitor.rawAccountStatus)))")
-        detailRow("Network", monitor.isOnline.map { $0 ? "reachable" : "unreachable" } ?? "checking")
-        if monitor.isOnEngine {
-            let status = SyncEngineBoard.shared.status
-            detailRow("Syncs through", Self.engineName)
-            detailRow("Last fetch", timestamp(status?.lastFetchEnded))
-            detailRow("Last accepted send", timestamp(status?.lastSendEnded))
-            if let error = status?.lastError { detailBlock("Last error", error) }
-        } else {
-            detailRow("Last import", timestamp(monitor.lastImportAt))
-            detailRow("Last export", timestamp(monitor.lastExportAt))
-        }
-        detailRow("Push", monitor.pushRegistration ?? "not registered yet")
-        detailRow("CloudKit", "\(SyncEnvironment.current.cloudKit.rawValue), push \(SyncEnvironment.current.push ?? "unknown")")
-        if let err = ModelContainerFactory.startupError {
-            detailBlock("Startup error", err)
-        }
-        if let detail = monitor.lastErrorDetail {
-            detailBlock("Last error, \(timestamp(monitor.lastErrorAt))", detail)
-        }
-        detailBlock("Store", context.container.configurations.first?.url.path ?? "unknown")
-    }
-
-    private func timestamp(_ date: Date?) -> String {
-        date?.formatted(date: .abbreviated, time: .standard) ?? "never"
-    }
-
-    // LabeledContent wraps badly in this sheet; a plain HStack with fixedSize lays out reliably.
-    private func detailRow(_ title: String, _ value: String) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(title)
-            Spacer()
-            Text(value).foregroundStyle(Theme.secondaryText).multilineTextAlignment(.trailing)
-        }
-        .font(HITType.caption)
-        .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private func detailBlock(_ title: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-            Text(value).foregroundStyle(Theme.secondaryText).textSelection(.enabled)
-        }
-        .font(HITType.caption)
-        .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -229,10 +153,10 @@ struct SyncEnvironmentRow: View {
 }
 
 /// Settings → iCloud & data on iPhone and iPad: sync, backups, export and import, what to look at when something
-/// doesn't sync, then, last and apart, the two that throw something away. (The Mac splits it into its iCloud and
-/// Data sections.)
+/// doesn't sync, then, last and apart, the two that throw something away; and where the troubleshooting rows were
+/// revealed (Settings → About), their group at the foot. (The Mac splits it into its iCloud and Data sections.)
 struct ICloudDataPage: View {
-    @AppStorage(SyncEngineSwitch.revealedKey, store: AppGroup.defaults) private var switchRevealed = false
+    @AppStorage(SyncEngineSwitch.revealedKey, store: AppGroup.defaults) private var revealed = false
 
     var body: some View {
         ICloudSyncGroup()
@@ -242,7 +166,7 @@ struct ICloudDataPage: View {
         ExportImportGroup()
         ICloudCheckGroup()
         ResetLocalCacheGroup(includesDeleteAll: true)
-        if SyncEngineSwitchGroup.isShown(revealed: switchRevealed) { SyncEngineSwitchGroup() }
+        if Troubleshooting.isShown(revealed: revealed) { TroubleshootingGroup() }
     }
 }
 
@@ -455,7 +379,7 @@ final class SyncAuditModel {
             return sent.count == 1 ? "Sent: it is in iCloud now." : "Sent: all \(sent.count) are in iCloud now."
         }
         let still = missing.count == 1 ? "1 still isn't" : "\(missing.count) still aren't"
-        let why = exported ? "iCloud didn't take it; the Sync log has the export's answer." : "No export finished within a minute; try again in a moment."
+        let why = exported ? "iCloud didn't take it; Send sync log… sends its answer." : "iCloud didn't answer within a minute; try again in a moment."
         return "\(still) in iCloud. \(why)"
     }
 

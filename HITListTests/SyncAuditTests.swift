@@ -146,9 +146,9 @@ final class SyncAuditTests: XCTestCase {
         let one = [difference(.onlyHere)]
         XCTAssertEqual(SyncAuditModel.sendResult(sent: one, missing: [], exported: true), "Sent: it is in iCloud now.")
         XCTAssertEqual(SyncAuditModel.sendResult(sent: one + one, missing: one, exported: true),
-                       "1 still isn't in iCloud. iCloud didn't take it; the Sync log has the export's answer.")
+                       "1 still isn't in iCloud. iCloud didn't take it; Send sync log… sends its answer.")
         XCTAssertEqual(SyncAuditModel.sendResult(sent: one, missing: one, exported: false),
-                       "1 still isn't in iCloud. No export finished within a minute; try again in a moment.")
+                       "1 still isn't in iCloud. iCloud didn't answer within a minute; try again in a moment.")
     }
 }
 
