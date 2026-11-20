@@ -37,7 +37,7 @@ enum AppGroup {
     /// App settings shared with future extensions. Falls back to `.standard` without the entitlement.
     /// The first access copies settings written by builds that predate the app group.
     static let defaults: UserDefaults = {
-        let suffix = ProcessInfo.processInfo.environment["HITLIST_STORE_SUFFIX"]
+        let suffix = settingsSuffix(environment: ProcessInfo.processInfo.environment)
         let name = suiteName(suffix: suffix)
         guard containerURL != nil, let shared = UserDefaults(suiteName: name) else {
             log.error("App group \(id, privacy: .public) unavailable; using standard UserDefaults")
@@ -46,6 +46,19 @@ enum AppGroup {
         if carriesOldSettings(suffix: suffix) { migrateSettings(from: .standard, to: shared) }
         return shared
     }()
+
+    /// Which settings suite this process uses: its launcher's (`HITLIST_STORE_SUFFIX`), or, in a process that hosts
+    /// unit tests, one of the tests' own. On a Mac the Debug build that hosts the tests is in the real app's group, so
+    /// with no suffix it read and could write the real app's settings: on 2026-11-20, hours after George's own Mac
+    /// moved to the new sync, a test saw his store's preference and found "a move waiting", and any test that wrote a
+    /// preference without naming its own suite would have written his (one moved a store back in a test, with its
+    /// own suite, by care alone). No test can reach the real suite by default now.
+    static func settingsSuffix(environment: [String: String]) -> String? {
+        if let suffix = environment["HITLIST_STORE_SUFFIX"], !suffix.isEmpty { return suffix }
+        return environment["XCTestConfigurationFilePath"] != nil ? testsSuffix : nil
+    }
+
+    static let testsSuffix = "xctest"
 
     /// Only the real store's suite takes what builds before the app group left in `.standard`. A side store's suite
     /// starts empty: on George's iPhone `.standard` still says "the default filters are seeded", so every UI test's

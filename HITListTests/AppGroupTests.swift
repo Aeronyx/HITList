@@ -118,6 +118,23 @@ final class AppGroupTests: XCTestCase {
         XCTAssertTrue(AppGroup.carriesOldSettings(suffix: nil))
         XCTAssertTrue(AppGroup.carriesOldSettings(suffix: ""))
         XCTAssertFalse(AppGroup.carriesOldSettings(suffix: "s52"))
+    }
+
+    /// Round 35: a process that hosts unit tests has a settings suite of its own. On a Mac the Debug build that hosts
+    /// them is in the real app's group: with no suffix the tests read George's real settings (his store's move to the
+    /// new sync, the morning it happened) and could have written them.
+    func testTheTestsNeverUseTheRealAppsSettings() {
+        XCTAssertNil(AppGroup.settingsSuffix(environment: [:]), "the real app")
+        XCTAssertEqual(AppGroup.settingsSuffix(environment: ["XCTestConfigurationFilePath": "/x"]), AppGroup.testsSuffix)
+        XCTAssertEqual(AppGroup.settingsSuffix(environment: ["XCTestConfigurationFilePath": "/x", "HITLIST_STORE_SUFFIX": "s52"]),
+                       "s52", "a suffix its launcher named wins")
+        XCTAssertEqual(AppGroup.settingsSuffix(environment: ["HITLIST_STORE_SUFFIX": ""]), nil)
+        // And this very process: whatever these tests write through `AppGroup.defaults` lands in their own suite.
+        XCTAssertNotNil(ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"])
+        let key = "appGroupTests.probe.\(UUID().uuidString)"
+        AppGroup.defaults.set(true, forKey: key)
+        defer { AppGroup.defaults.removeObject(forKey: key) }
+        XCTAssertNil(UserDefaults(suiteName: AppGroup.id)?.object(forKey: key), "nothing reached the real app's suite")
         XCTAssertNotEqual(AppGroup.suiteName(suffix: "s52"), AppGroup.suiteName(suffix: nil))
     }
 }
