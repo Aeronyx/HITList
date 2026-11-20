@@ -797,10 +797,19 @@ final class CloudSyncMonitor {
 
     // MARK: - Network
 
+    /// The network was known to be gone and is there again. The first path of a launch (`was` nil) is not a return:
+    /// the engine's start syncs by itself.
+    nonisolated static func networkCameBack(was: Bool?, is online: Bool) -> Bool {
+        was == false && online
+    }
+
     private func networkChanged(online: Bool, description: String) {
         if isOnline != online {
+            let cameBack = Self.networkCameBack(was: isOnline, is: online)
             isOnline = online
             stateChanged()
+            // On the engine nothing else hears the network return: the engine sends what waited, now.
+            if cameBack, isOnEngine { SyncEngine.shared?.networkReturned() }
         }
         guard description != loggedNetwork else { return }
         let first = loggedNetwork == nil

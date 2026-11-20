@@ -323,6 +323,16 @@ final class SyncEngine {
         }
     }
 
+    /// The network came back: what waited goes now. Without this it went at the pump's next try, which after a
+    /// while offline is up to ten minutes away, or when the app next came forward (round 35; George, 2026-11-20:
+    /// "if a user adds a task while offline/in airplane mode, will it properly wait in local storage and sync when
+    /// next available?" It waited properly, and then went on waiting).
+    func networkReturned() {
+        guard isStarted else { return }
+        retryStep = 0 // what failed for want of a network is tried again from the top
+        Task { await self.syncNow(reason: "the network came back") }
+    }
+
     /// A fetch and a send now, for a push or the background refresh, bounded by `limit` (what the system gives).
     /// Returns whether it finished in time without an error.
     func syncWithin(_ limit: Duration, reason: String) async -> Bool {

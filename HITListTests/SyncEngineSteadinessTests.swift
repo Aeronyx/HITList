@@ -251,4 +251,35 @@ final class SyncEngineSteadinessTests: XCTestCase {
         XCTAssertLessThan(windows.routine, windows.trouble)
         XCTAssertGreaterThan(windows.routine, 5, "the pump's second try comes five seconds after the first")
     }
+
+    // MARK: The monitor's part, read in its source
+
+    /// The rules above are fed by three calls that could be deleted with every other test green (the app hears its
+    /// board and its scene's phase only when it runs): what is shown comes through the steadiness, the app coming
+    /// forward and leaving feed it on both platforms, and a Mac's return asks for the session's own sync.
+    func testTheMonitorFeedsTheSteadinessAndAsksForTheSyncsItPromises() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        guard let monitor = try? String(contentsOf: root.appending(path: "HITList/Services/CloudSyncMonitor.swift"), encoding: .utf8)
+        else { throw XCTSkip("the sources are out of this process's reach") }
+        for line in ["return engineSteady.shown(engineMarks(now: now), engineActivity(now: now), at: now)",
+                     "engineSteady.note(activity, at: now)",
+                     "engineSteady.cameForward(at: now)\n            if isOnEngine { engineChanged() }",
+                     "NSApplication.didBecomeActiveNotification",
+                     "if engineSteady.sessionFrom != session { SyncEngine.shared?.cameForward() }",
+                     "if cameBack, isOnEngine { SyncEngine.shared?.networkReturned() }"] {
+            XCTAssertTrue(monitor.contains(line), "CloudSyncMonitor no longer has: \(line)")
+        }
+        XCTAssertEqual(monitor.components(separatedBy: "engineSteady.left(at:").count - 1, 3,
+                       "the app leaving the front: the scene's two phases and the Mac's own notification")
+    }
+
+    /// The network coming back sends what waited on the engine (round 35): only a return, never the first path of a
+    /// launch, when the engine's own start syncs.
+    func testOnlyAReturnOfTheNetworkCountsAsOne() {
+        XCTAssertTrue(CloudSyncMonitor.networkCameBack(was: false, is: true))
+        XCTAssertFalse(CloudSyncMonitor.networkCameBack(was: nil, is: true), "the first path of a launch")
+        XCTAssertFalse(CloudSyncMonitor.networkCameBack(was: true, is: true))
+        XCTAssertFalse(CloudSyncMonitor.networkCameBack(was: true, is: false))
+        XCTAssertFalse(CloudSyncMonitor.networkCameBack(was: false, is: false))
+    }
 }

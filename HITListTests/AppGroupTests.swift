@@ -113,6 +113,11 @@ final class AppGroupTests: XCTestCase {
 
     func testASideStoreRunUsesASuiteOfItsOwn() {
         XCTAssertEqual(AppGroup.suiteName(suffix: "s52"), AppGroup.id + ".s52")
+        // Round 35: only the real store's suite takes what builds before the app group left behind; a side store's
+        // starts empty (on George's iPhone the old "default filters are seeded" kept a test's fresh store without them).
+        XCTAssertTrue(AppGroup.carriesOldSettings(suffix: nil))
+        XCTAssertTrue(AppGroup.carriesOldSettings(suffix: ""))
+        XCTAssertFalse(AppGroup.carriesOldSettings(suffix: "s52"))
         XCTAssertNotEqual(AppGroup.suiteName(suffix: "s52"), AppGroup.suiteName(suffix: nil))
     }
 }

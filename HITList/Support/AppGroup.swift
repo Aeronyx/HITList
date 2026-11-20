@@ -37,14 +37,22 @@ enum AppGroup {
     /// App settings shared with future extensions. Falls back to `.standard` without the entitlement.
     /// The first access copies settings written by builds that predate the app group.
     static let defaults: UserDefaults = {
-        let name = suiteName(suffix: ProcessInfo.processInfo.environment["HITLIST_STORE_SUFFIX"])
+        let suffix = ProcessInfo.processInfo.environment["HITLIST_STORE_SUFFIX"]
+        let name = suiteName(suffix: suffix)
         guard containerURL != nil, let shared = UserDefaults(suiteName: name) else {
             log.error("App group \(id, privacy: .public) unavailable; using standard UserDefaults")
             return .standard
         }
-        migrateSettings(from: .standard, to: shared)
+        if carriesOldSettings(suffix: suffix) { migrateSettings(from: .standard, to: shared) }
         return shared
     }()
+
+    /// Only the real store's suite takes what builds before the app group left in `.standard`. A side store's suite
+    /// starts empty: on George's iPhone `.standard` still says "the default filters are seeded", so every UI test's
+    /// fresh store there came up without its filters (round 35).
+    static func carriesOldSettings(suffix: String?) -> Bool {
+        suffix?.isEmpty ?? true
+    }
 
     /// Settings that moved from `UserDefaults.standard` into the app group. UI state stays in `.standard`.
     static let migratedSettingKeys = [
