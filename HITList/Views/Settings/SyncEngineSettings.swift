@@ -327,8 +327,8 @@ struct SyncEngineSwitchRows: View {
     }
 }
 
-/// Seven taps in a row, each within two seconds of the one before: the gesture that reveals the engine's switch
-/// (`SyncEngineSwitch.revealSwitch`). No timer: a tap that comes late starts the count again.
+/// Seven taps in a row, each within two seconds of the one before: the gesture on Settings → About → Version that
+/// reveals the troubleshooting rows (`Troubleshooting.reveal`; until round 35 it was on the environment row). No timer: a tap that comes late starts the count again.
 struct SevenTaps {
     static let needed = 7
     static let window: TimeInterval = 2
