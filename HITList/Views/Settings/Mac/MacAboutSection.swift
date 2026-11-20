@@ -9,8 +9,8 @@ struct MacAboutSection: View {
     var body: some View {
         AppLongName()
         HITGroup {
-            HITMenuRow("Version", systemImage: "info.circle", value: AppInfo.versionLabel)
-                .accessibilityIdentifier("settings-version")
+            // Seven clicks reveal the troubleshooting rows in iCloud (round 35); a row then hides them again.
+            VersionAndTroubleshootingRows()
             HITMenuRow("Built", systemImage: "hammer", value: AboutInfo.buildDate().map(AboutInfo.buildDateText) ?? "Unknown")
                 .accessibilityIdentifier("settings-build-date")
             HITMenuRow("Changelog", subtitle: "Every version's notes, on GitHub", systemImage: "list.bullet.rectangle",

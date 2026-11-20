@@ -2,13 +2,14 @@ import SwiftUI
 import SwiftData
 import HITListCore
 
-// Settings → iCloud on HITList's own engine (round 28, brief 144): the status, "Sync now", what is waiting and when
-// the last fetch and send ended, a hold's own group with its buttons, the items iCloud refused, and (Debug builds on
-// a side store only) the switch between the engines. Everything here reads `SyncEngineBoard` and asks it; nothing
+// Settings → iCloud on HITList's own engine (round 28, brief 144): the status, "Sync now", what is waiting, a hold's
+// own group with its buttons, the items iCloud refused, and (in the troubleshooting group only) when the last fetch
+// and send ended and the switch between the engines. Everything here reads `SyncEngineBoard` and asks it; nothing
 // here runs the engine. On the mirror none of it shows, except the Debug switch.
 
 /// The Sync group's rows under the status line while the engine syncs (`ICloudSyncGroup`): "Sync now", what is
-/// waiting, when the last fetch and accepted send ended, and the items iCloud refused for good.
+/// waiting while something is, and the items iCloud refused for good. When the last fetch and send ended is for
+/// troubleshooting (`SyncEngineTimesRows`, round 35).
 struct SyncEngineStatusRows: View {
     private var board: SyncEngineBoard { .shared }
     @State private var isSyncing = false
@@ -25,25 +26,19 @@ struct SyncEngineStatusRows: View {
                 .padding(.leading, HITRowMetrics.titleInset)
                 .accessibilityIdentifier("settings-engine-sync-now-message")
         }
-        HITMenuRow("Waiting to go", systemImage: "icloud.and.arrow.up", value: Self.waitingValue(status))
-            .accessibilityIdentifier("settings-engine-waiting")
-        // One row each, so the group draws its separator between them; each ages every 30 s, as "Last change" does.
-        TimelineView(.periodic(from: .now, by: 30)) { tick in
-            HITMenuRow("Last received", systemImage: "icloud.and.arrow.down",
-                       value: Self.when(status?.lastFetchEnded, now: tick.date))
+        if Self.showsWaiting(status) {
+            HITMenuRow("Waiting to go", systemImage: "icloud.and.arrow.up", value: Self.waitingValue(status))
+                .accessibilityIdentifier("settings-engine-waiting")
         }
-        .accessibilityIdentifier("settings-engine-last-fetch")
-        TimelineView(.periodic(from: .now, by: 30)) { tick in
-            HITMenuRow("Last sent", systemImage: "checkmark.icloud",
-                       value: Self.when(status?.lastSendEnded, now: tick.date))
-        }
-        .accessibilityIdentifier("settings-engine-last-send")
         if let status, !status.refused.isEmpty {
             SyncEngineRefusedRows(keys: status.refused)
         }
     }
 
     static let syncNowSubtitle = "Fetches what changed in iCloud, then sends this device's changes"
+
+    /// "Waiting to go" shows only while something waits (round 35: "Nothing" told a person nothing).
+    static func showsWaiting(_ status: SyncStatus?) -> Bool { (status?.waiting ?? 0) > 0 }
 
     /// "3 changes", "1 change", "Nothing".
     static func waitingValue(_ status: SyncStatus?) -> String {
@@ -69,6 +64,26 @@ struct SyncEngineStatusRows: View {
                 message = "Nothing was synced: \(SyncEngineWords.error(error))"
             }
         }
+    }
+}
+
+/// When the engine's last fetch and accepted send ended, in the troubleshooting group: one row each, so the group
+/// draws its separator between them; each ages every 30 s, as "Last change" does.
+struct SyncEngineTimesRows: View {
+    private var board: SyncEngineBoard { .shared }
+
+    var body: some View {
+        let status = board.status
+        TimelineView(.periodic(from: .now, by: 30)) { tick in
+            HITMenuRow("Last received", systemImage: "icloud.and.arrow.down",
+                       value: SyncEngineStatusRows.when(status?.lastFetchEnded, now: tick.date))
+        }
+        .accessibilityIdentifier("settings-engine-last-fetch")
+        TimelineView(.periodic(from: .now, by: 30)) { tick in
+            HITMenuRow("Last sent", systemImage: "checkmark.icloud",
+                       value: SyncEngineStatusRows.when(status?.lastSendEnded, now: tick.date))
+        }
+        .accessibilityIdentifier("settings-engine-last-send")
     }
 }
 
@@ -179,37 +194,25 @@ struct SyncEngineHoldGroup: View {
     }
 }
 
-/// The switch between the engines (`dev/SYNC-ENGINE.md` section 14, stage 5). From 0.9.14 it is in every build and
-/// hidden: it shows once it has been revealed on the device (seven taps on the environment row, `SevenTaps`), on a
-/// store that is already on the engine, and in a Debug build on a side store.
-///
-/// **On a device that was never revealed the group only tells** (round 34): which sync the device is on, that it
-/// moved by itself and that the other devices need the update, and the check it made of itself. The row that moves
-/// the store and the row for George's word show only where the seven taps were made (`showsTheSwitch`): one device
-/// moved back alone no longer syncs with the person's others, and from 0.9.16 every moved tester would have had
-/// that row one tap away.
-struct SyncEngineSwitchGroup: View {
+/// The switch between the engines (`dev/SYNC-ENGINE.md` section 14, stage 5), as rows of the "For troubleshooting"
+/// group (`TroubleshootingGroup`, round 35): which sync the device is on, George's word for his friends' devices, and
+/// the row that moves the store with its note. From 0.9.14 it is in every build and hidden: it shows only where the
+/// troubleshooting rows were revealed (seven taps on About's Version row, `SevenTaps`) and in a Debug build on a side
+/// store. A device on the new sync that was never revealed no longer shows any of it (round 35; round 34 had it
+/// "telling only"): what a friend needs of the move made by itself is in the Sync group (`AutoMoveRows`).
+struct SyncEngineSwitchRows: View {
     private var board: SyncEngineBoard { .shared }
     @State private var confirmMove = false
-    /// George's word, as iCloud answered when the group appeared.
+    /// George's word, as iCloud answered when the rows appeared.
     @State private var everyone: SyncEngineAutoMove.Word = .notAsked
     @State private var isMoving = false
     @State private var message: String?
     /// The engine the store opens on next, re-read after each move (a move on the iPhone waits for a reopen).
     @State private var next = SyncEngineSwitch.nextEngine()
 
-    @MainActor
-    static func isShown(revealed: Bool) -> Bool {
-        isShown(revealed: revealed, engine: SyncEngineBoard.shared.engine, isDebugSideStore: isDebugSideStore)
-    }
-
-    nonisolated static func isShown(revealed: Bool, engine: SyncEngineBoard.Engine, isDebugSideStore: Bool) -> Bool {
-        revealed || engine == .own || isDebugSideStore
-    }
-
-    /// Whether the group shows the rows that act (the move, its cancel, George's word): only where it was revealed
-    /// by hand, or a Debug build on a side store. A waiting move keeps its row whatever else, so it can be cancelled
-    /// where it was asked for.
+    /// Whether the rows that act (the move, its cancel, George's word) show: where the rows were revealed by hand, or
+    /// a Debug build on a side store. A waiting move keeps its row whatever else, so it can be cancelled where it was
+    /// asked for.
     nonisolated static func showsTheSwitch(revealed: Bool, isDebugSideStore: Bool, waiting: Bool = false) -> Bool {
         revealed || isDebugSideStore || waiting
     }
@@ -223,12 +226,19 @@ struct SyncEngineSwitchGroup: View {
         #endif
     }
 
-    static let title = "Sync engine"
-
-    /// Whether the group asks iCloud for George's word: never where nothing may talk to iCloud (a launch with iCloud
+    /// Whether the rows ask iCloud for George's word: never where nothing may talk to iCloud (a launch with iCloud
     /// switched off, as every UI test is; the in-memory fallback).
     static var asksForTheWord: Bool {
         !AppGroup.defaults.bool(forKey: "disableCloudKit") && !ModelContainerFactory.isRunningInMemory
+    }
+
+    /// Whether a move asked for by hand waits for the app to be reopened (one made by the app itself says so in the
+    /// Sync group): the troubleshooting group then stays, so it can be cancelled.
+    @MainActor
+    static var handMoveWaits: Bool {
+        let pending = SyncEngineSwitch.pendingMove(current: SyncEngineSwitch.current, preferred: SyncEngineSwitch.nextEngine(),
+                                                   byArgument: SyncEngineSwitch.launchedByArgument)
+        return pending != nil && SyncEngineAutoMove.Runner.shared?.line == nil
     }
 
     var body: some View {
@@ -244,73 +254,56 @@ struct SyncEngineSwitchGroup: View {
         let acts = Self.showsTheSwitch(revealed: revealed, isDebugSideStore: Self.isDebugSideStore, waiting: waiting)
         // A move made by hand that waits on a side store says how to finish it; everywhere else the app finishes it.
         let byItself = SyncEngineAutoMove.Runner.shared?.line != nil
-        HITGroup(Self.title, footer: SyncEngineWords.switchFooter) {
-            HITMenuRow("Syncs through", systemImage: "gearshape.2", value: SyncEngineWords.engineName(running))
-                .accessibilityIdentifier("settings-engine-switch")
-            if acts, !(waiting && byItself) {
-                SettingsNote(text: waiting ? SyncEngineWords.waitingNote(next) : SyncEngineWords.moveNote(to: target))
+        HITMenuRow("Syncs through", systemImage: "gearshape.2", value: SyncEngineWords.engineName(running))
+            .accessibilityIdentifier("settings-engine-switch")
+        // George's word as iCloud holds it now (`SyncEngineAutoMove` R0), asked when the rows appear: on his own
+        // device he sees that the record he made in the CloudKit Console reads as he meant it.
+        if Self.asksForTheWord, Self.showsTheSwitch(revealed: revealed, isDebugSideStore: Self.isDebugSideStore) {
+            HITMenuRow(SyncEngineWords.everyoneTitle, subtitle: SyncEngineWords.everyoneValue(everyone),
+                       systemImage: "person.3")
+                .accessibilityIdentifier("settings-engine-everyone")
+                .task { everyone = await CloudKitWord().ask() }
+        }
+        if acts, !(waiting && byItself) {
+            SettingsNote(text: waiting ? SyncEngineWords.waitingNote(next) : SyncEngineWords.moveNote(to: target))
+        }
+        if acts {
+            HITMenuRow(waiting ? SyncEngineWords.cancelTitle : SyncEngineWords.moveTitle(to: target),
+                       subtitle: board.actions == nil ? SyncEngineWords.notWired : nil,
+                       systemImage: "arrow.left.arrow.right", iconTint: Theme.accent, accessory: .none) {
+                if waiting { move(to: target, freshCopy: false) } else { confirmMove = true }
             }
-            // George's word as iCloud holds it now (`SyncEngineAutoMove` R0), asked when the group appears: on his own
-            // device he sees that the record he made in the CloudKit Console reads as he meant it.
-            if Self.asksForTheWord, Self.showsTheSwitch(revealed: revealed, isDebugSideStore: Self.isDebugSideStore) {
-                HITMenuRow(SyncEngineWords.everyoneTitle, systemImage: "person.3", value: SyncEngineWords.everyoneValue(everyone))
-                    .accessibilityIdentifier("settings-engine-everyone")
-                    .task { everyone = await CloudKitWord().ask() }
-            }
-            // The move made by the app itself (round 33, brief 167; on from 0.9.16): its one line while it waits, and
-            // on a device it moved, that the other devices need the update (a build before it cannot know).
-            if let line = SyncEngineAutoMove.Runner.shared?.line {
-                SettingsNote(text: line)
-                    .accessibilityIdentifier("settings-engine-auto-move")
-            }
-            if running == .own, SyncEngineAutoMove.movedByItself() {
-                SettingsNote(text: SyncEngineAutoMove.otherDevicesNote)
-                    .accessibilityIdentifier("settings-engine-auto-moved")
-                // The check the device made of itself once the engine was at rest (`SyncEngineMoveCheck`).
-                if let checked = SyncEngineMoveCheck.line() {
-                    SettingsNote(text: checked)
-                        .accessibilityIdentifier("settings-engine-auto-move-check")
+            .disabled(board.actions == nil || isMoving)
+            .accessibilityIdentifier("settings-engine-move")
+            // On the row, not on the rows: a modifier on a group of rows is applied to each of them.
+            .confirmationDialog("\(SyncEngineWords.moveTitle(to: target))?", isPresented: $confirmMove, titleVisibility: .visible) {
+                if target == .own {
+                    Button(blocker == nil ? SyncEngineWords.moveTitle(to: target) : "Move anyway") { move(to: target, freshCopy: false) }
+                } else {
+                    // The way back: the first device sends what it holds; every other device takes a fresh copy, or
+                    // each would send the items made meanwhile as its own and every device would hold them twice.
+                    Button(SyncEngineWords.backFirstTitle) { move(to: target, freshCopy: false) }
+                    Button(SyncEngineWords.backOtherTitle) { move(to: target, freshCopy: true) }
                 }
-            }
-            if acts {
-                HITMenuRow(waiting ? SyncEngineWords.cancelTitle : SyncEngineWords.moveTitle(to: target),
-                           subtitle: board.actions == nil ? SyncEngineWords.notWired : nil,
-                           systemImage: "arrow.left.arrow.right", iconTint: Theme.accent, accessory: .none) {
-                    if waiting { move(to: target, freshCopy: false) } else { confirmMove = true }
-                }
-                .disabled(board.actions == nil || isMoving)
-                .accessibilityIdentifier("settings-engine-move")
-            }
-            if let message {
-                SettingsMessage(text: message)
-                    .padding(.leading, HITRowMetrics.titleInset)
-                    .accessibilityIdentifier("settings-engine-move-message")
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text(target == .own ? (blocker ?? SyncEngineWords.moveNote(to: target)) : SyncEngineWords.backMessage)
             }
         }
-        .confirmationDialog("\(SyncEngineWords.moveTitle(to: target))?", isPresented: $confirmMove, titleVisibility: .visible) {
-            if target == .own {
-                Button(blocker == nil ? SyncEngineWords.moveTitle(to: target) : "Move anyway") { move(to: target, freshCopy: false) }
-            } else {
-                // The way back: the first device sends what it holds; every other device takes a fresh copy, or
-                // each would send the items made meanwhile as its own and every device would hold them twice.
-                Button(SyncEngineWords.backFirstTitle) { move(to: target, freshCopy: false) }
-                Button(SyncEngineWords.backOtherTitle) { move(to: target, freshCopy: true) }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text(target == .own ? (blocker ?? SyncEngineWords.moveNote(to: target)) : SyncEngineWords.backMessage)
+        if let message {
+            SettingsMessage(text: message)
+                .padding(.leading, HITRowMetrics.titleInset)
+                .accessibilityIdentifier("settings-engine-move-message")
         }
     }
 
-    /// Why moving to the new sync should wait: today's sync has not finished on this device, so what it has not
-    /// yet received (a deletion made on another device, say) would be missing from what this device sends.
-    /// "Finished" as the move made by the app reads it (`SyncEngineAutoMove.caughtUp`): the bolt filled, or a
-    /// comparison that found only what this device holds and iCloud's earlier copy lacks, which the new sync sends
-    /// itself. (Judged by the bolt alone, the hand move warned on a device the app would have moved.)
+    /// Why moving to the new sync should wait, in what is known (round 35, `SyncEngineWords.moveBlocker`): nothing
+    /// when the earlier sync has caught up (`SyncEngineAutoMove.caughtUp`), the count when a comparison found what
+    /// iCloud holds and this device lacks, and otherwise that nothing was compared since the app was opened.
     private var blocker: String? {
-        SyncEngineWords.moveBlocker(mirrorRunning: ModelContainerFactory.isCloudKitEnabled,
-                                    isSynced: SyncEngineAutoMove.caughtUp(CloudSyncMonitor.shared.state,
-                                                                          difference: CloudSyncMonitor.shared.recordDifference))
+        let monitor = CloudSyncMonitor.shared
+        return SyncEngineWords.moveBlocker(mirrorRunning: ModelContainerFactory.isCloudKitEnabled,
+                                           state: monitor.state, difference: monitor.recordDifference)
     }
 
     private func move(to target: SyncEngineBoard.Engine, freshCopy: Bool) {
@@ -535,25 +528,42 @@ enum SyncEngineWords {
     }
 
     /// The hidden group's row for George's word that every device may move (`SyncEngineAutoMove` R0).
-    static let everyoneTitle = "Everyone's move"
+    /// Round 35: "Everyone's move: Not released" read to George as his own move having failed; it is the word he
+    /// gives his friends' devices.
+    static let everyoneTitle = "Friends' devices"
     static func everyoneValue(_ word: SyncEngineAutoMove.Word) -> String {
         switch word {
         case .notAsked: return "Asking iCloud…"
-        case .go: return "Released"
-        case .notYet: return "Not released"
+        case .go: return "Moving by themselves"
+        case .notYet: return "Not moving yet: you have not given the word"
         case .paused: return "Paused"
         case .unknown: return "Couldn't ask iCloud"
         }
     }
 
-    /// Moving to the new sync while today's sync has not finished here: said in the confirmation, which then offers
-    /// "Move anyway". Nil when nothing stands in the way (the earlier sync is off, or its bolt is filled).
-    static func moveBlocker(mirrorRunning: Bool, isSynced: Bool) -> String? {
-        guard mirrorRunning, !isSynced else { return nil }
-        return "iCloud sync hasn't finished on this device: it has not yet received everything iCloud holds. Moving "
+    /// Moving to the new sync while the earlier sync may not have brought everything here: said in the confirmation,
+    /// which then offers "Move anyway". Nil when nothing stands in the way (the earlier sync is off, or it has caught
+    /// up as the move made by the app reads it, `SyncEngineAutoMove.caughtUp`). Round 35: it said "wait for the bolt"
+    /// on a launch where nothing had been compared yet, on a Mac whose bolt could not fill; it now says what is known.
+    static func moveBlocker(mirrorRunning: Bool, state: SyncState, difference: SyncRecordCheck.Difference?) -> String? {
+        guard mirrorRunning, !SyncEngineAutoMove.caughtUp(state, difference: difference) else { return nil }
+        let behind = SyncEngineAutoMove.leftBehind(difference)
+        if behind > 0 { return leftBehindWarning(behind) }
+        return notComparedWarning
+    }
+
+    /// A comparison found what iCloud holds and this device has not received.
+    static func leftBehindWarning(_ count: Int) -> String {
+        let what = count == 1 ? "1 item" : "\(count) items"
+        return "iCloud sync hasn't finished on this device: iCloud holds \(what) it has not received yet. Moving "
             + "now can bring back something deleted on another device, or miss its latest changes. Better: wait "
             + "for the bolt, then move."
     }
+
+    /// Nothing was compared since the app was opened.
+    static let notComparedWarning = "HITList has not compared this device with iCloud since it was opened, so it "
+        + "cannot say that everything has arrived. Check iCloud… (above) compares them now. Moving anyway is safe if "
+        + "nothing was changed on another device in the last few minutes: a deletion made there would come back."
 
     static let backFirstTitle = "First device: send this device's tasks"
     static let backOtherTitle = "Another device already moved back: download"
@@ -572,11 +582,10 @@ enum SyncEngineWords {
         return "HITList finishes moving to \(engineName(next).lowercased()) \(how). Nothing to do."
     }
 
-    /// Under the group. No longer "Early access": from 0.9.16 every device ends up here.
-    static let switchFooter = "HITList's own sync knows exactly what is waiting to go to iCloud, so the bolt is exact."
-
-    static let checkDifferenceNote = "Nothing was changed. What is waiting to go is sent by itself; the Sync log names "
-        + "each item that differs."
+    /// Round 35: it pointed at the Sync log, which only troubleshooting shows now; the file Send sync log… sends
+    /// names them.
+    static let checkDifferenceNote = "Nothing was changed. What is waiting to go is sent by itself; the file Send sync "
+        + "log… sends names each item that differs."
 
     static func refusedTitle(_ count: Int) -> String {
         count == 1 ? "1 item couldn't go to iCloud" : "\(count) items couldn't go to iCloud"

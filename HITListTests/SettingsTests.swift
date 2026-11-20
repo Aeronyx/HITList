@@ -60,7 +60,7 @@ final class SettingsTests: XCTestCase {
 
     func testCheckICloudAllGood() {
         let result = check(.available, reachable: true, zone: true)
-        XCTAssertEqual(result.summary, "iCloud available · container reachable · sync zone found · 0.8 s")
+        XCTAssertEqual(result.summary, "iCloud available · iCloud answered · HITList's data found · 0.8 s")
         XCTAssertTrue(result.isHealthy)
     }
 
@@ -68,7 +68,7 @@ final class SettingsTests: XCTestCase {
     /// Production (and an iPhone Debug build is Development); it now asks `SyncEnvironment.current`.
     func testCheckICloudSaysWhenThisBuildTalksToDevelopment() {
         XCTAssertEqual(check(.available, reachable: true, zone: true, seconds: 1.26, mac: true).summary,
-                       "iCloud available · container reachable · sync zone found · 1.3 s · Development environment")
+                       "iCloud available · iCloud answered · HITList's data found · 1.3 s · test iCloud")
         XCTAssertEqual(ICloudCheck.developmentEnvironment, SyncEnvironment.current.isDevelopment)
     }
 
@@ -76,10 +76,10 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(check(.noAccount).summary, "Not signed in to iCloud · 0.8 s")
         XCTAssertFalse(check(.noAccount).isHealthy)
         XCTAssertEqual(check(.available, reachable: true, zone: false).summary,
-                       "iCloud available · container reachable · sync zone not created yet · 0.8 s")
+                       "iCloud available · iCloud answered · no HITList data in iCloud yet · 0.8 s")
         XCTAssertFalse(check(.available, reachable: true, zone: false).isHealthy)
         XCTAssertEqual(check(.available, reachable: false, failure: "network unavailable").summary,
-                       "iCloud available · container unreachable · network unavailable · 0.8 s")
+                       "iCloud available · iCloud didn't answer · network unavailable · 0.8 s")
         XCTAssertEqual(check(nil, failure: "network unavailable", seconds: 20.2).summary,
                        "Couldn't reach iCloud: network unavailable · 20 s")
         XCTAssertEqual(check(.temporarilyUnavailable).summary, "iCloud needs you to sign in again · 0.8 s")
@@ -257,7 +257,7 @@ final class SettingsTests: XCTestCase {
     /// (Details did, on every moved device). The app's own sources are read: a word in a view no test draws is the
     /// kind that stays behind.
     func testNothingCallsTheNewSyncEarlyAccess() throws {
-        XCTAssertEqual(ICloudCheckGroup.engineName, "the new sync")
+        XCTAssertEqual(SyncDetails.engineName, "the new sync")
         let app = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("HITList")
         let files = try XCTUnwrap(FileManager.default.enumerator(at: app, includingPropertiesForKeys: nil))

@@ -48,7 +48,9 @@ final class SyncEngineStatusUITests: XCTestCase {
         XCTAssertEqual(bolt.label, words, "the bolt's words in \(state)")
         shot(state, "bolt")
         openICloudPage()
-        XCTAssertTrue(element("settings-engine-waiting").exists)
+        // Round 35: "Waiting to go" only while something waits.
+        let waits = ["waiting3", "full12"].contains(state)
+        XCTAssertEqual(element("settings-engine-waiting").exists, waits, "Waiting to go in \(state)")
         // Check iCloud… is the mirror's audit: hidden on the engine.
         XCTAssertFalse(element("settings-check-icloud").exists, "Check iCloud… on the engine")
         shot(state, "icloud")
@@ -62,8 +64,8 @@ final class SyncEngineStatusUITests: XCTestCase {
 
     func testSynced() {
         check("synced", words: "Synced just now")
-        // Round 32: on the engine Check iCloud… is the engine's own, and the group that moves this store sits at the
-        // page's foot (always shown on a store that is on the engine: it is the way back).
+        // Round 32: on the engine Check iCloud… is the engine's own. The rows that move this store sit at the page's
+        // foot in the troubleshooting group (round 35: shown where revealed, and on a Debug side store as here).
         let checkRow = element("settings-engine-check"), move = element("settings-engine-move")
         for _ in 0..<8 where !move.isHittable { app.swipeUp(velocity: .slow) }
         XCTAssertTrue(checkRow.exists, "Check iCloud… on the engine")
