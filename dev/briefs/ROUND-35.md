@@ -78,3 +78,65 @@ their own, two simulators: 59 passed, 39 on demand, one failed. The one, `testFl
 counts the screenshots it can take in the 1.6 s after a tap and found three with two simulators and a build
 running beside it (it needs more than three); alone it passed twice with seven. With the night's runs, every
 class of the suite has passed on the released code.
+
+## The bolt, reviewed twice
+
+The first reviewer's eight findings are above ("The bolt on the engine"). The mended version went to a second,
+who found all of them fixed and six more: time the process spent suspended, or the Mac asleep, counted against
+what was under way (a task added as the phone was locked emptied the bolt on unlocking it half a minute later);
+a Mac that slept in front of its person began no session; a fill with no sync behind it left the strike armed for
+some later, unrelated fill; nine seconds of fetching counted as a problem; a window that ended with its sync
+stamped and not yet heard of began a session after that sync; and an engine that never named its sync would
+have left the bolt hollow for good. Each is fixed with a test, with tests for the rules of the type's header
+that none had held. The second reviewer's verdict on what was left: by design. The live run was repeated on the
+final code (a launch: "Checking with iCloud…", "Synced just now"; six edits: no line; 149 records the same).
+
+## Brief 174: Settings → iCloud & data for a friend
+
+What a person who never heard how HITList syncs now sees, iPhone and iPad, top to bottom: Sync (the status line;
+a move the app made by itself, while it waits and for fourteen days after; on the new sync Sync now, what waits
+while something does, what iCloud refused); the hold group when held; Backups; Export & Import; If something
+doesn't sync (Check iCloud…, and the new Send sync log…, straight to the share sheet); Reset local cache… and
+Delete all data from iCloud. The Mac's iCloud section: the same in its own layout, Send sync log… to a save panel.
+
+Behind seven taps on Settings → About → Version, under "For troubleshooting" (footed "Shown because this device
+was set to show them: Settings → About."): the environment row, Details, the Sync log's page, the last fetch and
+send, Syncs through, "Friends' devices" (was "Everyone's move"), the move and its notes, and on the Mac the
+inline log. About then shows "Troubleshooting rows: Showing", which hides them. The key is the old one, so
+George's Mac stays revealed; a move asked for by hand and still waiting keeps the group up so it can be
+cancelled; a Debug side store shows the rows as before (`-settingsAsFriend YES` shows it as a friend's).
+
+The question before a move has three cases now: caught up, no warning; iCloud holds N items the device lacks,
+the old warning with the number; not compared since the app was opened, words that say exactly that and point at
+Check iCloud…. Check iCloud's own line lost "container", "zone" and "Development". A hosted test reads every
+string an unrevealed person can reach, in many states, for the words that are not theirs.
+
+Its pictures (31, before and after; read by the agent and by the supervisor) are in the notes folder,
+`round-35/174/`. Its tests: 8 hosted (`TroubleshootingTests`), the move's three cases, and
+`TroubleshootingRowsUITests` (the seven taps and the hiding; Send sync log… and its sheet; the page read from the
+screen in four states).
+
+**What it met and could not mend: the Mac test host reads the real app's settings.** `SyncEngineMoveFinishTests.
+testNothingIsDoneUnderTests` failed on its tree and on master alike, because George's real store had moved that
+morning and the test host (a Debug build in the real app's group, with no store suffix under tests) read his
+preference. The supervisor read the preference back through the app's own entitlement (as he left it: the new
+sync, no "stay", revealed) and gave a process that hosts tests a settings suite of its own
+(`AppGroup.settingsSuffix`). One test had written to the real suite and taken it back in the same breath
+(`MoveRedTeamTests`, the "stay" key); nothing else was found that wrote there.
+
+Also from the agent: the Debug Mac app opened a window for it once and never again ("No windows open yet"), so
+the Mac's "after" pictures are drawn by `ImageRenderer` in a hosted test (`MacICloudPicturesTests`, on demand).
+
+## Left open, on purpose or for want of proof
+
+- **The word for his friends**: his to give. Nothing in 0.9.17 changes how a store moves.
+- **Whether the bolt now behaves as he meant**: proved by tests and on iCloud's Development side; judged by him on
+  his own devices.
+- A card left in the middle of a date word saves it as read so far; About is half below the fold on Settings'
+  first screen on a 6.1-inch iPhone; "this monday" on a Friday; a sub-task typed and not entered is added when
+  the app is left; UI tests that tap a row's middle under the screen's bottom edge fail on a real phone.
+- The engine's first log line of a launch reads "Marks show: Local only: syncs on HITList's own engine…" before
+  "Checking with iCloud…": the monitor writes it before it has heard its board; the bolt never draws it.
+- `testFlipboardLightsStayOnTheirSwitches` counts screenshots in 1.6 s and fails with two simulators beside it.
+- iOS 18 and macOS 15 were never run (no runtime here).
+- Session "140 Sync engine: a pretend iCloud and its rig" still holds unmerged work.

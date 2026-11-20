@@ -131,6 +131,21 @@ How George works with you:
   `caffeinate`; clear the scratchpad's and `build.noindex`'s old build folders. His Desktop holds his own work
   beside `HITList/`: touch nothing there that this project did not make. Say in the hand-over what was removed
   and what could not be.
+- **A unit test never uses the real app's settings.** On a Mac the Debug build that hosts the tests is in the real
+  app's group and shares its preferences file. A process that hosts tests therefore has a suite of its own
+  (`AppGroup.settingsSuffix`, "xctest"; round 35: the day George's Mac moved to the new sync a test read his
+  store's preference and found "a move waiting"). Never open `UserDefaults(suiteName: AppGroup.id)` in a test to
+  write, and give every test that sets a sync preference a suite of its own all the same.
+- **On the engine the bolt shows a session, not every status** (`SyncEngineSteadiness`, round 35; George's rule in
+  section 7). Only what is shown is steadied: whatever decides anything reads the engine's status or
+  `CloudSyncMonitor.rawState`, and a report quotes `stateForReports`. A change to these rules goes to a reviewer
+  told to break it before it is believed (two did, fourteen times, with every test green).
+- **Settings → iCloud & data is a friend's page** (round 35, brief 174): sync, backups, export and import, Check
+  iCloud…, Send sync log…, and the two that throw something away. Whatever is there for building or mending the
+  sync goes in the group "For troubleshooting", shown after seven taps on Settings → About → Version
+  (`SyncEngineSwitch.revealedKey`; About has the row that hides it again). Nothing a person can reach without the
+  gesture says CloudKit, environment, Production, engine, zone or mirror (`TroubleshootingTests` reads the
+  strings). `-settingsAsFriend YES` shows a Debug side store's page as a friend's.
 - **The history was rewritten on 2026-11-18** (round 34, on his word): every commit is authored "Aeronyx" with a
   GitHub no-reply address, and the address, surname, home folder, App Store Connect ids and an old tracked build
   folder are out of all of it. This checkout's git identity is set the same way (`git config --local`): never
@@ -527,6 +542,35 @@ that phone ("the default filters are seeded"), so `testBrowseTakesFiltersInTheSe
 Next round: do not carry `.standard` into a side store's suite; scroll a row clear of the edge before a tap; and
 make Settings' first screen fit a 6.1-inch phone, as brief 86 meant. It replaces the app on his phone with a test
 build: tell him, and that TestFlight puts his back.
+
+Lessons from round 35 (2026-11-20: the day George's own devices moved; one agent, two reviewers; 0.9.17;
+`ROUND-35.md`): **His Mac's own system log answers what his message leaves out**, and may be read:
+`/usr/bin/log show --last 30m --info --predicate 'process == "HITList" AND subsystem == "com.trammells.hitlist"'`
+has every line of the sync log and the move's own notices ("it failed" was a row he had misread; the log showed
+the move had never begun). **A row that reports on other people must say so**: "Everyone's move: Not released"
+read to him as his own move failing, and a warning to "wait for the bolt" was shown on a Mac whose bolt could not
+fill. Say what is known, about whom. **The first use of anything by a person is its real test**: the Mac's hand
+move had only ever been driven from a terminal and from tests; nobody had read its question in the state his Mac
+was in. **A change that passes its tests and a live run is a draft**: the bolt's steadiness went to a reviewer
+told to break it, who found eight things, was mended, and went to a second who confirmed those and found six
+more (time the process spent suspended, the Mac asleep, a strike left armed). Send the mended version back; stop
+when a reviewer finds only what is by design. Ask each for the sequence with times, and whether the tests would
+fail if a rule were broken. **A state the engine remembers across launches is not a state of this launch**:
+`firstFetchDone` made the first status of every launch read "synced" before anything was asked of iCloud.
+**Prove a sync change on iCloud's Development side with the Debug Mac build on a side store**: `open -g -n --env
+HITLIST_STORE_SUFFIX=<name> --stdout <file> <the Debug app under build.noindex> --args
+-ApplePersistenceIgnoreState YES -syncEngine own -rehearsalEdits <seed>`, then read "Marks show" for that pid in
+the system log: what the bolt showed, line by line, while real records went and came back. **The Mac test host
+shares the real app's group** (the rule above): when a hosted test fails only on his Mac, suspect his real
+settings before the code. **A Mac app left for another keeps its scene "active"**: what must happen when a person
+comes back to a Mac app hangs on `NSApplication`'s activation and on wake from sleep, not on the scene's phase.
+**Keep the Mac awake and on power before a long run, and look**: `pmset -g batt` said "discharging" twice this
+round while builds ran (he had unplugged to move about); a closed lid the night before cost a hundred minutes.
+Tell him in the message when you see it. **An agent's own pictures are the hand-over's pictures**: brief 174's
+before and after, read by the agent and again by the supervisor, were enough to judge the page; ask for them in
+the notes folder in every brief that changes a screen. **The Debug Mac app may open no window for an agent**
+("No windows open yet" on every launch but the first): `ImageRenderer` in a hosted test draws the Mac's page
+instead (`MacICloudPicturesTests`, on demand).
 
 Lessons from round 33 (seven agents at once in the two hours before a usage limit reset; 0.9.15):
 **Seven agents on one Mac finish, but their own proof thins out**: builds were slow, a Flipboard UI test ran past
@@ -1105,7 +1149,53 @@ relaunches itself to finish a move; a moved device's group shows what happened a
 needs the seven taps; "3 days ago" and "last monday" are dates in the past; the Week layout shows three days in a
 narrow window; dense controls stop growing at the first accessibility text size.
 
-## 8. Where things stand (2026-11-20, night: 0.9.16 on master, checked once more, George told to release)
+Round 35 (2026-11-20, the day he released 0.9.16 and moved his own Mac and iPhone to the new sync). His words
+after it worked: "My only issue is that the bolt still goes hollow for a moment whenever a task is added on either
+device; remember, the bolt is supposed to indicate to the user only when there's a pending problem or when there's
+a successful resync after a long period away/outside of the standard sync window. For instance, if HITList is
+currently syncing regularly and has been during that session, there's no need for the bolt to change. It should
+then turn hollow and show the resync animation if the user closes the app/goes away for longer than a moment and
+resync as needed. Let's run some tests to confirm everything landed how we expected and then start cleaning up
+all these dev sync settings and logs so they won't be as easily visible to other users going forward." Decided by
+that: **the bolt keeps still in a session** on the new sync as on the earlier one (section 3); **developer rows
+in Settings are hidden, not removed**. Earlier the same day: he wants his friends' move automatic ("I want their
+migration to be automatic if possible once we test that mine works"): it is, on his word, which he has not yet
+given; and he asked whether a task added offline waits and syncs (it does; from 0.9.17 it goes the moment the
+network returns). He does not mind his own tasks being at risk ("I don't have any important tasks in HITList
+yet") but "my friends might and I want to make sure whatever issues affect me do not affect them": every fault
+met on his devices is asked that question in the hand-over.
+
+## 8. Where things stand (2026-11-20, afternoon: 0.9.16 released, his own devices on the new sync, 0.9.17 prepared)
+
+**0.9.16 (build 31) was released on the morning of 2026-11-20.** George moved his Mac by hand at 11:26 and his
+iPhone followed by itself: the new sync's first devices in iCloud's Production side, with no error since
+(`dev/briefs/ROUND-35.md` has the log's own account). **His friends' devices carry 0.9.16 and stay on the earlier
+sync**: he has not made the `HLRollout` record, and said in round 32 that he wants some days on the new sync
+first. Nothing in 0.9.17 changes how a store moves.
+
+**0.9.17 is on master for him to release** (round 35): the bolt keeps still while a session syncs as usual on the
+new sync; back online, what waited goes at once; Settings → iCloud & data is a friend's page, the rest behind
+seven taps on About → Version (his Mac stays revealed; on his iPhone he taps About's Version seven times to see
+the group again); the two rows that misled him are reworded; unit tests have settings of their own.
+
+**What he does**: `scripts/release.sh --version 0.9.17 --quick` (no schema to deploy: the engine's file is
+unchanged), update both devices from TestFlight, and look at the bolt while adding tasks on each. **When he is
+ready for his friends** (unchanged from 0.9.16): look in App Store Connect → TestFlight that they are on 0.9.16
+or later, then CloudKit Console → `iCloud.com.trammells.hitlist.sync` → **Production** → Public Database →
+Records → new record of type `HLRollout` (`minBuild` empty, `paused` 0); `paused` 1 pauses accounts that have
+not started. His Mac's revealed group then reads "Friends' devices: Moving by themselves".
+
+**Open with him**: the word for his friends; whether the bolt now behaves as he meant (he judges on his devices);
+the session "140 Sync engine: a pretend iCloud and its rig" still holds unmerged work; the bundle of the old
+history in the notes folder (his to delete); his Mac's thirteen daily backups of 1 to 14 November in a set-aside
+folder (intact); test data on iCloud's Development side (zones of side stores, `HITList-r35bolt` among them).
+Known and left: a card left in the middle of a date word saves it as read so far; About is half below the fold on
+Settings' first screen on a 6.1-inch iPhone; "this monday" on a Friday; a sub-task typed and not entered is added
+when the app is left; the engine's first log line of a launch says "Local only" before it says checking (the
+bolt never drew it); `testFlipboardLightsStayOnTheirSwitches` fails when two simulators run beside it. Not
+proven: iOS 18 and macOS 15 (no runtime here). The next brief number is 175.
+
+## 8-34b. The night before 0.9.16's release (2026-11-20, kept for the record)
 
 **2026-11-20, the night before release** (`dev/briefs/ROUND-34.md`, "Before release"; the lessons are in section
 3's block "Lessons from the night before 0.9.16 went out"). George asked whether a build his friends' devices

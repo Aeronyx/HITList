@@ -839,6 +839,26 @@ record holds; what is new:
 - **Read**: the two sections at the top of this file, this block, the Round 34 record, your brief, then what it
   names.
 
+## Round 35 record (2026-11-20; 0.9.17): what a session must know now
+
+- **George's own devices run the new sync in iCloud's Production side** since 2026-11-20 11:26. His friends' do
+  not yet. Nothing a session does reaches Production, his devices or his store.
+- **Unit tests have settings of their own** (`AppGroup.settingsSuffix`: "xctest" in a process that hosts tests).
+  On a Mac the test host is in the real app's group: never open `UserDefaults(suiteName: AppGroup.id)` in a test
+  to write, and give a test that sets a sync preference a suite of its own all the same.
+- **On the engine the marks are steadied** (`SyncEngineSteadiness`): `CloudSyncMonitor.state` is what is shown,
+  `rawState` what the engine says, `stateForReports` what a report quotes. Decide by the engine's status, never by
+  what is shown. A status that reads synced with no fetch or send of this launch behind it is "checking".
+- **Settings → iCloud & data is a friend's page.** A row for building or mending the sync goes in "For
+  troubleshooting" (shown after seven taps on Settings → About → Version; a Debug side store shows it;
+  `-settingsAsFriend YES` hides it there). No string a person reaches without the gesture says CloudKit,
+  environment, Production, Development, engine, zone, mirror, ledger or transport (`TroubleshootingTests`).
+- **A Mac app left for another keeps its scene "active"**: use `NSApplication`'s activation and the workspace's
+  wake for "the person came back".
+- **A side store's settings start empty** (nothing is carried from `.standard`).
+- **The Mac may be on battery or its lid closed**: `pmset -g batt` before a long run; say so in your report if a
+  run was cut short.
+
 ## Round 34 (2026-11-18, evening; briefs 168–173, Opus 5.5 agents; `ROUND-34.md` says why)
 
 0.9.15 was prepared and not released. George that evening: "I want to be very confident in the next build we
