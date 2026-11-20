@@ -1105,7 +1105,23 @@ relaunches itself to finish a move; a moved device's group shows what happened a
 needs the seven taps; "3 days ago" and "last monday" are dates in the past; the Week layout shows three days in a
 narrow window; dense controls stop growing at the first accessibility text size.
 
-## 8. Where things stand (2026-11-18, night: round 34 on master, 0.9.16 prepared for George to release)
+## 8. Where things stand (2026-11-20, night: 0.9.16 on master, checked once more, George told to release)
+
+**2026-11-20, the night before release** (`dev/briefs/ROUND-34.md`, "Before release"; the lessons are in section
+3's block "Lessons from the night before 0.9.16 went out"). George asked whether a build his friends' devices
+take by themselves is safe, and for one more look. Done: the update from 0.9.13 run for real (no row differs;
+the stored data's shape is unchanged since 0.9.13); four read-only Opus reviews (day one with no move asked for,
+the build's claims against its code, stale lists and counts, and one of the supervisor's own fix), none with a
+reason to hold; six small faults fixed with tests (Week's "Previous week" and its open all-day row, the
+notifications question asked only in front, the sidebar's counts at the moment a switch falls due, "early
+access" gone from Details, a card that keeps the space typed last when the app is left); Show completed switched
+on by a UI test for the first time; 44 UI tests passed on his iPhone (six failures there are the phone's, section
+3). **On his phone when this was written**: a test build that opens test stores, and iOS's question whether
+HITList may send notifications (a test raised it; his answer is the real app's too). **Still his, in order**:
+the steps below, unchanged. One thing to add when he gives the word: first look in App Store Connect →
+TestFlight at which build his testers have, because a device still on 0.9.13 keeps the earlier sync and reaches
+nobody who has moved.
+
 
 **2026-11-18, evening: round 34 on master for 0.9.16 (Fable 5.2 supervisor; six Opus 5.5 agents with the Agent
 tool, briefs 168 to 173)** (`dev/briefs/ROUND-34.md`). 0.9.14 and 0.9.15 were never released. His message is

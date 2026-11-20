@@ -205,3 +205,21 @@ repeat of the round's own proof:
 | Nested `Predicate` evaluation never run on iOS 18 or macOS 15 (the suites run on 26 and 27) | 1 | not proven; no older runtime is installed |
 
 Lessons are in `dev/SUPERVISOR.md` (section 3's rules and "Lessons from round 34").
+
+**Proof that night, on the final code** (`a5092915` and the notes after it): core 1,100 tests, the Mac 2,389, the
+iPhone 2,350, none failing; CI green on the push. **The UI suite was not finished**: George's Mac had its lid
+closed and was on battery, slept for a hundred minutes in the middle and was at 8% when that was noticed (keeping
+a Mac awake does not hold a closed lid). What ran on the final code: every class from `AccessibilityAuditUITests`
+to `FirstRunUITests` and all of `FlipboardPhoneUITests` (44 passed, 37 on demand, none failed), thirteen of
+`HITListUITests`' sixteen (one failed, `testFlipboardLightsStayOnTheirSwitches`, whose burst of screenshots found
+the tap had taken longer than the 1.6 s it allows with two simulators running; it had passed on the phone an hour
+before), and by themselves the Week layout's new full-day test, Show completed, and the Settings tour and first
+run on a simulator the size of an iPhone 16. **Not run again on the final code**: `SwitchboardUITests`,
+`MoveFinishUITests`, the other five of `UpcomingWeekUITests`, `SyncEngineStatusUITests`, `SettingsTidyUITests`,
+`SweepPolishUITests`, `RepeatPhraseUITests`, `RepeatPickerUITests`, `QuickAddChipRowUITests`,
+`QuickAddGuideUITests`, `MobileTabsUITests`, `ProfileMenuUITests`, `TodoistImportUITests`, `ScreenInsetsUITests`,
+`WeatherUITests`, `WidgetsUITests`, `ShareExtensionUITests`, `LocationQuestionUITests`, `MotionUITests` (all
+passed on `fa0170bf` the night before; several of them passed on his iPhone this night). On his iPhone, on side
+stores with iCloud off: 44 tests passed; six failed for reasons that are the phone's (section 3 of the handbook);
+then a test raised iOS's notifications question and the rest could not run. The next supervisor: run
+`SIMULATOR=<yours> scripts/test.sh ui` once more with the Mac open and on power if George has not released yet.
