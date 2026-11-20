@@ -51,7 +51,7 @@ struct Diagnostics: Equatable {
         let reminders = NotificationScheduler.isEnabled ? "reminders on" : "reminders off"
         return Diagnostics(
             version: AppInfo.version, build: AppInfo.build, os: AppInfo.osVersion, device: AppInfo.deviceModel,
-            syncState: monitor.state.summary(),
+            syncState: monitor.stateForReports.summary(),
             lastImport: monitor.lastImportAt, lastExport: monitor.lastExportAt,
             cloudKitEnvironment: environment,
             storePath: storePath,
