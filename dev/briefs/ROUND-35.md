@@ -140,3 +140,14 @@ the Mac's "after" pictures are drawn by `ImageRenderer` in a hosted test (`MacIC
 - `testFlipboardLightsStayOnTheirSwitches` counts screenshots in 1.6 s and fails with two simulators beside it.
 - iOS 18 and macOS 15 were never run (no runtime here).
 - Session "140 Sync engine: a pretend iCloud and its rig" still holds unmerged work.
+
+**0.9.17, on the merged tree** (`75050548` and the notes after it): core 1,100 tests, the Mac 2,428, the iPhone
+2,388, none failing. The whole UI suite, in two lanes on two simulators: 118 passed, 77 on demand, one failed,
+`FlipboardPhoneUITests.testASwitchGroupedOntoABoardKeepsItsOwnTiming` (its drag did not land with the other lane
+running beside it); alone it passed twice. Brief 174's own runs on its tree: its UI classes to their last test
+(22 tests), and both hosted suites. The bolt's rules on iCloud's Development side, three times, the last on the
+final code. Archive and export of both apps: see the hand-over.
+
+Not proven: the bolt on an iPhone on the new sync (its coming forward is read in the source and held by the
+rules' tests; George's own phone is where it is first seen); the Mac's activation and wake hooks in a running
+app (the same); Send sync log…'s save panel on a real Mac (its sheet was seen on the iPhone simulator).
