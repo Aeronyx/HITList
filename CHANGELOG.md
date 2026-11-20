@@ -5,7 +5,7 @@ until the version has a section here, then stamps the heading with the build num
 per release. A second build of one version (0.9.0 had builds 20 and 21) is released with `scripts/release.sh --quick`
 and needs a section headed `## X.Y.Z (N)`, which the script stamps with the date.
 
-## 0.9.17
+## 0.9.17 — build 32, 2026-11-20
 
 0.9.16 went out on the morning of 2026-11-20, and that day George moved his own Mac and iPhone to HITList's own
 sync: the first devices on it in iCloud's Production side. It took 4.2 seconds from the Mac's relaunch to a filled
