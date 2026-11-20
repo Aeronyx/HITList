@@ -152,6 +152,7 @@
 		3BBCCD31CDBED8C27116D278 /* SettingsPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F69802BB4075BBEB05BF86D /* SettingsPreferences.swift */; };
 		3CA8854413B8F7FD1BFC8C23 /* SwitchboardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0B8A079990A9A8C1BD9C0C5 /* SwitchboardTests.swift */; };
 		3D38AF17DF56F1EDB2A3F958 /* MacChromeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95337ADE991268904AA7383E /* MacChromeTests.swift */; };
+		3E9E2D6701869877E597D0BD /* MacICloudPicturesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA13139585C1BD14269A3302 /* MacICloudPicturesTests.swift */; };
 		3EAF93A1D340393528EAA3A1 /* TodoistZipTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69A43FDA93D6778E8A1DF3FC /* TodoistZipTests.swift */; };
 		3F018E9A7C93D604FF882E0F /* Inter_18pt-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = BDBD761482A5F9B84F96433A /* Inter_18pt-Medium.ttf */; };
 		3F0463C581B59F006A16F815 /* AccessibilityAuditUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD8CAFC613EB6934C5181E3E /* AccessibilityAuditUITests.swift */; };
@@ -1108,6 +1109,7 @@
 		B90C89E02634D6B5059FF614 /* SharedTasksDebug.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedTasksDebug.swift; sourceTree = "<group>"; };
 		B99134E8B48C0FE25EAAABA1 /* TodoistImportCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoistImportCard.swift; sourceTree = "<group>"; };
 		B9FCFD677AA9A010827BB792 /* DelightSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DelightSettingsSection.swift; sourceTree = "<group>"; };
+		BA13139585C1BD14269A3302 /* MacICloudPicturesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacICloudPicturesTests.swift; sourceTree = "<group>"; };
 		BA7DFDB7F08CAF6DE9B96FA3 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
 		BAA2E310A182159BE60C7D9E /* SyncEngineStatusUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngineStatusUITests.swift; sourceTree = "<group>"; };
 		BB606C235A41C872012BAFC7 /* ProfileMenuTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileMenuTests.swift; sourceTree = "<group>"; };
@@ -1934,6 +1936,7 @@
 				CF39113DEC64C596AC192046 /* ListSamenessTests.swift */,
 				C28D7116FE6E2C89E3CCFA39 /* LocalBackupTests.swift */,
 				95337ADE991268904AA7383E /* MacChromeTests.swift */,
+				BA13139585C1BD14269A3302 /* MacICloudPicturesTests.swift */,
 				53515B8CC6A5FF8A70336C46 /* MacSearchTests.swift */,
 				6F47544BF23E1A61CD9357EA /* MacSettingsTests.swift */,
 				5144DA93AF367608CA17BD2E /* MobileChromeTests.swift */,
@@ -3153,6 +3156,7 @@
 				412D6FDF2A1D5DC875E0FF96 /* ListSamenessTests.swift in Sources */,
 				E04FB8CD48D3B227514AAFDA /* LocalBackupTests.swift in Sources */,
 				3D38AF17DF56F1EDB2A3F958 /* MacChromeTests.swift in Sources */,
+				3E9E2D6701869877E597D0BD /* MacICloudPicturesTests.swift in Sources */,
 				277AD3B42C5742E0F45ABC92 /* MacSearchTests.swift in Sources */,
 				D99264CADBBCB47980A5D5A4 /* MacSettingsTests.swift in Sources */,
 				48B5F9A8831978AD2FD46F36 /* MobileChromeTests.swift in Sources */,
