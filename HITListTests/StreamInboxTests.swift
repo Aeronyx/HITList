@@ -355,7 +355,7 @@ final class StreamInboxTests: XCTestCase {
         await mac.check(.checkNow)
         relay.acksFail = false
         let phoneResult = await phone.check(.checkNow)
-        XCTAssertEqual(phoneResult.added, 0, "held for the Mac ten minutes")
+        XCTAssertEqual(phoneResult.added, 0, "held for the Mac an hour")
         XCTAssertEqual(try otherContainer.mainContext.fetch(FetchDescriptor<TaskItem>()).count, 0)
     }
 

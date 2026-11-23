@@ -3,8 +3,8 @@ import Foundation
 /// What HITList asks the Stream ring's inbox relay (`relay/stream-inbox`, brief 176) and what it answers. Pure: the
 /// requests are built here and the answers read here; the app's `StreamInbox` sends them.
 ///
-/// A device claims what waits (`claim`: the captures nobody holds, oldest first, at most 50, held for it half an hour,
-/// with its push token so the relay can wake it), makes tasks of them, then acks the ones it handled (`ack`: the relay
+/// A device claims what waits (`claim`: the captures nobody holds, oldest first, at most 50, held for it an hour, with
+/// its push token so the relay can wake it), makes tasks of them, then acks the ones it handled (`ack`: the relay
 /// deletes their words and keeps their ids 30 days, to catch a redelivery). The "starts with Task" rule is the relay's,
 /// one for every device (`settings`). Every request carries the inbox key as a bearer token; every answer is JSON.
 public enum InboxAPI {

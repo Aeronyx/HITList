@@ -11,7 +11,8 @@ import UIKit
 /// Tasks said to the Stream ring, taken from the relay of George's own (brief 176; `relay/stream-inbox`).
 ///
 /// The ring's audio goes only to the Stream app; Stream's captures reach the relay (its webhook, or the relay asking
-/// Stream every minute) and wait there. `check` claims what waits (the relay holds it for this device ten minutes),
+/// Stream every minute) and wait there. `check` claims what waits (the relay holds it for this device an hour, and wakes
+/// it again at 10 and 40 minutes while it is unacked),
 /// makes each capture this device hasn't added before into a task by Siri's road (`SpokenTask`, then
 /// `IntentActions.addTask`: the quick-add parser, its dates, priority and #Group, and the same save, so reminders,
 /// widgets and iCloud follow as for any task), and acks every id it handled: added, or left in Stream by the "starts

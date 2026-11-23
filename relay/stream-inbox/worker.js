@@ -25,9 +25,11 @@ const SIGNATURE_WINDOW_S = 300;
 const MINUTE_MS = 60_000;
 const DAY_MS = 86_400_000;
 const KEEP_MS = 30 * DAY_MS;
-// A device's claim holds what it took this long: a device that saved a capture and lost its ack has half an hour to
-// come back and ack it before another device may take the capture too (review, finding 4).
-const CLAIM_HOLD_MS = 30 * MINUTE_MS;
+// A device's claim holds what it took this long: a device that saved a capture and lost its ack has an hour to come
+// back and ack it before another device may take the capture too (round 3, finding 4), and is woken again at 10 and
+// 40 minutes while its claim is unacked (its check sends the lost ack first).
+const CLAIM_HOLD_MS = 60 * MINUTE_MS;
+const REWAKE_AFTER_MS = [10 * MINUTE_MS, 40 * MINUTE_MS];
 const CLAIM_LIMIT = 50;
 const ACK_LIMIT = 500;
 const MAX_ID = 256;
@@ -434,9 +436,10 @@ export class StreamInbox extends DurableObject {
       id, source, now, now);
   }
 
-  /// What waits and isn't held by another device (held half an hour from its claim; a device re-takes its own at any
-  /// time), oldest first; held for `device` now. A claim also brings the device's push token.
-  claim(device, push) {
+  /// What waits and isn't held by another device (held an hour from its claim; a device re-takes its own at any time),
+  /// oldest first; held for `device` now, which is woken again at 10 and 40 minutes while the claim is unacked. A claim
+  /// also brings the device's push token.
+  async claim(device, push) {
     const now = this.now();
     this.sweep(now);
     const wakeState = this.registerDevice(device, push, now);
@@ -449,7 +452,13 @@ export class StreamInbox extends DurableObject {
       now - CLAIM_HOLD_MS, device, CLAIM_LIMIT).toArray();
     for (const row of rows) {
       this.sql.exec("UPDATE captures SET claimed_by = ?, claimed_at = ? WHERE id = ?", device, now, row.id);
+      this.sql.exec("DELETE FROM timers WHERE kind = 'holder' AND capture_id = ?", row.id);
+      for (const after of REWAKE_AFTER_MS) {
+        this.sql.exec("INSERT INTO timers (due_at, kind, capture_id, device, claimed_at) VALUES (?, 'holder', ?, ?, ?)",
+          now + after, row.id, device, now);
+      }
     }
+    if (rows.length) await this.armAlarm();
     const last = this.getMeta("last", null);
     return {
       items: rows.map((row) => ({
@@ -652,21 +661,27 @@ export class StreamInbox extends DurableObject {
     await this.runTimers();
   }
 
-  /// Every waiting wake-up that is due: an iPhone's for a capture no device has claimed since it was kept.
+  /// Every waiting wake-up that is due: an iPhone's for a capture no device has claimed since it was kept; a holder's
+  /// for a claim of its own still unacked (the same claim: a re-take starts its own two).
   async runTimers() {
     const now = this.now();
     const due = this.sql.exec(
       "SELECT kind, capture_id, device, claimed_at FROM timers WHERE due_at <= ? ORDER BY due_at, id", now).toArray();
     this.sql.exec("DELETE FROM timers WHERE due_at <= ?", now);
     let phones = false;
+    const holders = new Set();
     for (const timer of due) {
-      const capture = this.sql.exec("SELECT claimed_at, done_at, text FROM captures WHERE id = ? LIMIT 1", timer.capture_id).toArray()[0];
+      const capture = this.sql.exec(
+        "SELECT claimed_by, claimed_at, done_at, text FROM captures WHERE id = ? LIMIT 1", timer.capture_id).toArray()[0];
       if (!capture || capture.done_at !== null || capture.text === null) continue;
       if (timer.kind === "phones" && capture.claimed_at === null) phones = true;
+      if (timer.kind === "holder" && capture.claimed_by === timer.device && capture.claimed_at === timer.claimed_at) {
+        holders.add(timer.device);
+      }
     }
     let woken = [];
-    if (phones && this.pushConfigured()) {
-      woken = this.dueDevices(now, (device) => !isMac(device.platform));
+    if ((phones || holders.size) && this.pushConfigured()) {
+      woken = this.dueDevices(now, (device) => (phones && !isMac(device.platform)) || holders.has(device.device));
       const sending = this.wakeNow(woken, now);
       if (sending) await sending;
     }

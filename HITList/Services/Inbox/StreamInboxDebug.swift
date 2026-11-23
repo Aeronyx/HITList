@@ -228,7 +228,7 @@ final class StreamInboxFakeRelay: @unchecked Sendable {
                 var items: [[String: Any]] = []
                 for index in waiting.indices.sorted(by: { waiting[$0].receivedAt < waiting[$1].receivedAt }) {
                     let capture = waiting[index]
-                    let free = capture.claimedAt.map { now.timeIntervalSince($0) > 30 * 60 } ?? true
+                    let free = capture.claimedAt.map { now.timeIntervalSince($0) > 60 * 60 } ?? true
                     guard free || capture.claimedBy == device, items.count < InboxAPI.claimLimit else { continue }
                     waiting[index].claimedBy = device
                     waiting[index].claimedAt = now

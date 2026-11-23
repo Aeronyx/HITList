@@ -254,7 +254,7 @@ expect "the test capture is claimed" 200 '[.items[] | {id, text}]' "[{\"id\":\"$
 keyed POST /inbox/ack -d "{\"ids\":[\"$test_id\"]}"
 expect "the test capture acked" 200 '.acked' '1'
 
-echo "▸ review 4: a claim holds 30 minutes"
+echo "▸ review 4, and round 3's: a claim holds an hour"
 say hold-1 "Book the car service"
 claim mac-test
 expect "claimed by the Mac" 200 '[.items[].id]' '["hold-1"]'
@@ -266,7 +266,10 @@ claim mac-test
 expect "the Mac re-takes its own claim at any time" 200 '[.items[].id]' '["hold-1"]'
 clock $((42 * 60 * 1000))
 claim iphone-test
-expect "31 minutes after the Mac's last claim, the iPhone gets it" 200 '[.items[].id]' '["hold-1"]'
+expect "31 minutes after the Mac's last claim: still held" 200 '.items | length' '0'
+clock $((72 * 60 * 1000))
+claim iphone-test
+expect "61 minutes after the Mac's last claim, the iPhone gets it" 200 '[.items[].id]' '["hold-1"]'
 keyed POST /inbox/ack -d '{"ids":["hold-1"]}'
 clock 0
 
@@ -648,6 +651,41 @@ if wait_token "$PHONE" 4 40; then pass "the inbox's own alarm wakes the iPhone (
 else fail "the inbox's own alarm wakes the iPhone" "no push in 40 s"; fi
 claim iphone-7 "$phone_push"
 ack_claimed
+clock 0
+
+echo "▸ round 3, 4: a claim left unacked: its device is woken again at 10 and 40 minutes, and it holds an hour"
+mine4='[.items[] | select(.id | startswith("h4-")) | .id]'
+D=$((30 * 60 * 1000))
+clock $D
+claim iphone-7 "$phone_push"
+ack_claimed
+say h4-1 "Renew the car insurance"
+claim iphone-7 "$phone_push"
+expect "the iPhone takes it, and its ack is lost" 200 "$mine4" '["h4-1"]'
+held=$(token_pushes "$PHONE")
+clock $((D + 9 * 60 * 1000)); alarm
+/bin/sleep 0.5
+check "9 minutes on: not woken" "$(token_pushes "$PHONE")" '.' "$held"
+clock $((D + 10 * 60 * 1000 + 1000)); alarm
+wait_token "$PHONE" $((held + 1))
+check "10 minutes on, still unacked: the iPhone is woken again (its check sends the ack first)" "$(token_pushes "$PHONE")" '.' "$((held + 1))"
+clock $((D + 31 * 60 * 1000))
+claim mac-test "$mac_push"
+check "31 minutes on, the Mac gets nothing: the claim holds an hour" "$BODY" "$mine4" '[]'
+clock $((D + 40 * 60 * 1000 + 1000)); alarm
+wait_token "$PHONE" $((held + 2))
+check "40 minutes on, still unacked: woken again" "$(token_pushes "$PHONE")" '.' "$((held + 2))"
+clock $((D + 61 * 60 * 1000))
+claim mac-test "$mac_push"
+check "an hour on, another device may take it" "$BODY" "$mine4" '["h4-1"]'
+ack_claimed
+say h4-2 "Book the dentist"
+claim iphone-7 "$phone_push"
+ack_claimed
+acked=$(token_pushes "$PHONE")
+clock $((D + 72 * 60 * 1000)); alarm
+/bin/sleep 0.5
+check "acked at once: no wake-up 10 minutes on" "$(token_pushes "$PHONE")" '.' "$acked"
 clock 0
 
 echo "▸ review 2: a session the server forgets doesn't spin the relay"
