@@ -822,6 +822,24 @@ holds (you are an agent; nobody answers a question; your final message is your r
 - **Changes in behaviour a person will notice** are listed in your report, each in one line: George asked to be
   told of every one.
 
+## Round 36 (2026-11-23; briefs 175 and 176, two Opus 5.5 agents at once; `ROUND-36.md` says why)
+
+0.9.17 (build 32) was released on 2026-11-20. This round is 0.9.18. George's own Mac and iPhone run the new sync in
+iCloud's Production side; his friends' devices do not yet. Everything in the Round 35 block and record holds; what
+is new:
+
+- **175** is in the quick-add parser (`HITListCore` `QuickAddParser*`, `DateExpression`, a new
+  `ReminderSuggestions`), `HITList/Views/Popouts/**` and the quick-add guide. **176** is in a new `relay/` folder, a
+  new `HITList/Services/Inbox/`, new `HITListCore` files of its own, `Services/Intents/AddTaskIntent.swift`, the
+  app's launch and background hooks, and a new Settings page. Neither edits the other's files. The supervisor
+  writes `WhatsNew`, `CHANGELOG.md`, the version and the roadmap, and edits no app code while you work.
+- **Nothing a session does reaches iCloud's Production side, George's devices, his store or his accounts**: side
+  stores with `-disableCloudKit YES`, and nobody deploys to Cloudflare or signs in anywhere (that is George's).
+- **The Mac runs on battery** at times: `pmset -g batt` before a long run, and say so in your report if one was cut
+  short.
+- **Read**: the two sections at the top of this file, this block, the Round 35 record, your brief, then what it
+  names.
+
 ## Round 35 (2026-11-20; brief 174, an Opus 5.5 agent beside the supervisor; `ROUND-35.md` says why)
 
 0.9.16 was released on the morning of 2026-11-20 and George's own Mac and iPhone run the new sync in iCloud's
