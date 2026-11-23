@@ -111,10 +111,18 @@ enum IntentActions {
         return AddedTask(id: task.id, title: task.title, dialog: addedDialog(for: task, now: now))
     }
 
-    /// "Added ‘Buy milk’ for tomorrow 17:00", "Added ‘Call Sam’ for Friday", "Added ‘Read a book’".
+    /// "Added ‘Buy milk’ for tomorrow 17:00", "Added ‘Call Sam’ for Friday", "Added ‘Read a book’"; and the task's own
+    /// reminder, named (the review of brief 175): "Added ‘Call mom’ for today 17:00, reminding you at the time", "…,
+    /// reminding you 30 minutes before", "Added ‘Tea’, reminding you today 10:15".
     static func addedDialog(for task: TaskItem, now: Date = Date()) -> String {
         var line = "Added ‘\(task.title)’"
         if let due = task.dueDate { line += " for " + spokenDue(due, hasTime: task.hasDueTime, now: now) }
+        var reminders: [String] = []
+        if task.hasDueTime, task.dueDate != nil, let minutes = task.reminderOffsetMinutes {
+            reminders.append(minutes > 0 ? String(ReminderOffset.phrase(minutes: minutes).dropFirst()) : "at the time")
+        }
+        if let at = task.reminderDate, at > now { reminders.append(spokenDue(at, hasTime: true, now: now)) }
+        if !reminders.isEmpty { line += ", reminding you " + reminders.joined(separator: " and ") }
         return line
     }
 

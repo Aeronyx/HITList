@@ -17,6 +17,8 @@ struct ReminderListRequest {
     var rows: [ReminderSuggestion]
     /// The row Return picks (Mac); the first when the list opens.
     var highlighted: Int
+    /// The "!" word (or phrase) a pick replaces, as `onPick` holds it (UTF-16).
+    var word: NSRange
     var onPick: (ReminderSuggestion) -> Void
     /// The mouse over a row (Mac): it takes the highlight.
     var onHighlight: (Int) -> Void = { _ in }
@@ -25,8 +27,12 @@ struct ReminderListRequest {
     /// Esc or a click away closed it.
     var onDismiss: () -> Void = {}
 
-    /// What the list shows, for SwiftUI to tell one request from the next (closures are not compared).
-    var signature: [String] { rows.map(\.id) + ["\(highlighted)"] + rows.map(\.detail) }
+    /// What the list shows and the word a pick replaces, for SwiftUI to tell one request from the next (closures are not
+    /// compared). With the word in it, a keystroke that leaves the rows as they were ("!a" then "t": At time of task both
+    /// times) is still a new request, so a tap picks for "!at" and not for "!a" (the review of brief 175).
+    var signature: [String] {
+        rows.map(\.id) + ["\(highlighted)", "\(word.location):\(word.length)"] + rows.map(\.detail)
+    }
 }
 
 /// The keys the open list takes from the title on the Mac.

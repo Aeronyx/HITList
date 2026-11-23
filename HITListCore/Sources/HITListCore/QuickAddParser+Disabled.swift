@@ -111,22 +111,28 @@ extension QuickAddParser {
     /// How: each switched-off span is swapped for a one-character placeholder no rule matches and the
     /// text is parsed again, until no switched-off token is left; ranges and the title are then mapped
     /// back to the text as typed. `isOff` gets a token's key and its UTF-8 span in `input`.
-    private func parse(_ input: String, mode: Mode, isOff: (QuickAddTokenKey, Range<Int>) -> Bool) -> QuickAddResult {
+    ///
+    /// Words said in plain language that would leave no title ("Remind me in an hour", "Priority 3") are masked
+    /// the same way once nothing else is: they are the title, and set nothing (the review of brief 175).
+    func parse(_ input: String, mode: Mode, isOff: (QuickAddTokenKey, Range<Int>) -> Bool) -> QuickAddResult {
         var masked = MaskedText(input)
-        var result = parse(input, mode: mode)
+        var result = scan(input, mode: mode)
         // Each round masks at least one more word, so this ends within the word count.
         while true {
-            let spans = result.tokens.compactMap { token -> Range<Int>? in
+            var spans = result.tokens.compactMap { token -> Range<Int>? in
                 let span = masked.originalOffsets(of: token.range)
                 let words = String(input[masked.originalIndex(span.lowerBound)..<masked.originalIndex(span.upperBound)])
                 return isOff(QuickAddTokenKey(kind: token.kind, text: words), span) ? span : nil
+            }
+            if spans.isEmpty, Self.leavesNoTitle(result, in: masked.text, mode: mode) {
+                spans = result.tokens.filter { $0.isSaidInWords && !$0.isSuperseded }.map { masked.originalOffsets(of: $0.range) }
             }
             guard !spans.isEmpty else { break }
             let before = masked.spanCount
             masked.mask(spans)
             // Nothing new to mask (a span already masked): stop rather than go round again.
             guard masked.spanCount > before else { break }
-            result = parse(masked.text, mode: mode)
+            result = scan(masked.text, mode: mode)
         }
         guard masked.hasMasks else { return result }
         result.tokens = result.tokens.map { token in

@@ -80,7 +80,8 @@ enum QuickAddGuide {
                         claims: [.title("renew passport"), .day(dates.day(3))]),
                 Example(typed: "team lunch next mon", caption: "Monday next week, \(dates.caption(nextMonday))",
                         claims: [.title("team lunch"), .day(nextMonday)]),
-                // Brief 175: "at 1" to "at 6" is the afternoon; a bare hour after a day stays on the 24-hour clock.
+                // Brief 175: "at 1" to "at 6" beside a day is the afternoon (with "morning" or "night" as typed, with no
+                // day the next one to come: `QuickAddParser.shortHour`); a bare hour after a day stays on the 24-hour clock.
                 Example(typed: "standup tom 9", caption: "Tomorrow 09:00; but \"at 6\" is 6 PM",
                         claims: [.title("standup"), .moment(dates.at(dates.day(1), 9))]),
                 // Brief 127: "tonight" is today, with no hour of its own.

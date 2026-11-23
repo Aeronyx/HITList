@@ -177,15 +177,224 @@ final class QuickAddReminderListTests: XCTestCase {
         XCTAssertEqual(QuickAddDraft(context: .inbox, text: "Call mom !4pm ").result(p).reminderDate, at(16))
     }
 
+    /// "at 1" to "at 6" with no am or pm beside a day is the afternoon (the review of brief 175, finding 2): an Upcoming
+    /// day's row gives the task its day, and so does the editor's task. With no day, 1 to 4 are the afternoon too (1 PM
+    /// gone at 2 PM: tomorrow's), and 5 or 6 the next one to come: at 10 PM "at 6" alone is 6 AM, on a day 6 PM.
+    func testAShortHourOnARowsDayOrTheTasksOwnIsTheAfternoon() throws {
+        let p = parser()
+        let thursday = calendar.date(byAdding: .day, value: 5, to: today)!
+        XCTAssertEqual(QuickAddDraft(context: .day(thursday), text: "Dentist at 1").result(p).dueDate, at(13, day: 5))
+        XCTAssertEqual(QuickAddDraft(context: .today, text: "Dentist at 1").result(p).dueDate, at(13, day: 1),
+                       "today's list: 1 PM has gone, tomorrow's")
+        XCTAssertEqual(QuickAddDraft(context: .inbox, text: "Dentist at 3").result(p).dueDate, at(15))
+
+        let late = QuickAddParser(now: at(22), calendar: calendar, knownProjects: ["Work"], knownLabels: ["calls"])
+        XCTAssertEqual(QuickAddDraft(context: .inbox, text: "Run at 6").result(late).dueDate, at(6, day: 1), "the next 6 to come")
+        XCTAssertEqual(QuickAddDraft(context: .day(thursday), text: "Run at 6").result(late).dueDate, at(18, day: 5),
+                       "the row's day: 6 PM")
+
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        let friday = calendar.date(byAdding: .day, value: 6, to: today)!
+        let task = TaskItem(title: "Call mom", dueDate: calendar.date(bySettingHour: 9, minute: 0, second: 0, of: friday),
+                            hasDueTime: true)
+        context.insert(task)
+        try context.save()
+        var draft = TaskEditorDraft(task: task)
+        draft.title += " at 1"
+        XCTAssertEqual(draft.phrases(p, for: task).due?.date, calendar.date(bySettingHour: 13, minute: 0, second: 0, of: friday))
+        var six = TaskEditorDraft(task: task)
+        six.title += " at 6"
+        XCTAssertEqual(six.phrases(late, for: task).due?.date, calendar.date(bySettingHour: 18, minute: 0, second: 0, of: friday),
+                       "the task's own day: 6 PM")
+        withExtendedLifetime(container) {}
+    }
+
+    /// "At time of task" is the task's own reminder: saved as an explicit 0 from quick add, the editor's title and Review
+    /// Inbox, so a Settings default of 15 minutes before does not win over it, and the editor's row reads it (the review
+    /// of brief 175, finding 7).
+    func testAtTimeOfTaskIsSavedAsTheTasksOwn() throws {
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        let p = parser()
+        let task = try TaskActions.create(from: QuickAddDraft(context: .inbox, text: "Call mom 5pm !At time of task").result(p),
+                                          defaultProject: nil, defaultLabel: nil, in: context)
+        XCTAssertEqual(task.reminderOffsetMinutes, 0)
+        let plan = NotificationPlan.make(tasks: [NotificationPlan.Item(task, now: now)], now: now, defaultOffsetMinutes: 15,
+                                         calendar: calendar)
+        XCTAssertEqual(plan.requests.map(\.triggerDate), [at(17)], "at the time, not the default's 4:45")
+
+        let sam = TaskItem(title: "Call Sam", dueDate: at(18), hasDueTime: true)
+        context.insert(sam)
+        try context.save()
+        var draft = TaskEditorDraft(task: sam)
+        draft.title += " !at"
+        XCTAssertEqual(EditorFields(task: sam).applying(draft.phrases(p, for: sam)).reminderOffsetMinutes, 0, "the row reads At time")
+        XCTAssertTrue(try draft.commit(to: sam, in: context, parser: p))
+        XCTAssertEqual(sam.title, "Call Sam")
+        XCTAssertEqual(sam.reminderOffsetMinutes, 0)
+
+        // A stored "!at" the editor sets when the task has a time (brief 127's wake).
+        let stored = TaskItem(title: "Pack !at", dueDate: at(20), hasDueTime: true)
+        context.insert(stored)
+        try context.save()
+        var wake = TaskEditorDraft(task: stored)
+        XCTAssertTrue(try wake.landStoredReminder(on: stored, parser: p, in: context))
+        XCTAssertEqual(stored.reminderOffsetMinutes, 0)
+        XCTAssertEqual(stored.title, "Pack")
+
+        let reviewed = TaskItem(title: "Pack")
+        context.insert(reviewed)
+        try context.save()
+        ReviewTitleEdit.apply("Pack 9pm !at", parser: p, to: reviewed, in: context)
+        XCTAssertEqual(reviewed.reminderOffsetMinutes, 0)
+        withExtendedLifetime(container) {}
+    }
+
+    /// The Reminder card's "At time" chip is what a person taps for a reminder at the task's time, and the card has no
+    /// "default" choice beside it ("No reminder" takes the time away): it writes "!At time of task", as the list does, and
+    /// saves 0, so a Settings default of 15 minutes before does not replace what was tapped (the supervisor, after the
+    /// review of brief 175). With no time yet it waits on the chip, as an offset does.
+    func testTheCardsAtTimeChipWritesTheWords() throws {
+        let p = parser()
+        var draft = QuickAddDraft(context: .inbox, text: "Call mom 5pm")
+        draft.setReminderOffset(0, p)
+        XCTAssertEqual(draft.text, "Call mom 5pm !At time of task ")
+        XCTAssertEqual(draft.result(p).reminderOffsetMinutes, 0)
+        let container = ModelContainerFactory.preview()
+        let task = try TaskActions.create(from: draft.result(p), defaultProject: nil, defaultLabel: nil, in: container.mainContext)
+        XCTAssertEqual(task.reminderOffsetMinutes, 0)
+        let plan = NotificationPlan.make(tasks: [NotificationPlan.Item(task, now: now)], now: now, defaultOffsetMinutes: 15,
+                                         calendar: calendar)
+        XCTAssertEqual(plan.requests.map(\.triggerDate), [at(17)], "at the time, not the default's 4:45")
+
+        var untimed = QuickAddDraft(context: .inbox, text: "Call mom")
+        untimed.setReminderOffset(0, p)
+        XCTAssertEqual(untimed.text, "Call mom", "no time: nothing to write yet")
+        XCTAssertEqual(untimed.chips(p).reminderOffsetMinutes, 0, "it waits on the chip")
+        untimed.text = "Call mom 6pm"
+        XCTAssertEqual(untimed.result(p).reminderOffsetMinutes, 0, "a time typed takes it")
+        // A typed "!At time of task" held while the time goes keeps its 0 for the next time, too.
+        var held = QuickAddDraft(context: .inbox, text: "Call 3pm !At time of task ")
+        held.clearTime(p)
+        XCTAssertEqual(held.chips(p).reminderOffsetMinutes, 0)
+        held.text += " 4pm"
+        XCTAssertEqual(held.result(p).reminderOffsetMinutes, 0)
+
+        // The editor's card (`TaskPopout.setReminderOffset`): 0 is stored as 0; nil takes the task's own away.
+        let sam = TaskItem(title: "Call Sam", dueDate: at(18), hasDueTime: true)
+        container.mainContext.insert(sam)
+        XCTAssertTrue(TaskActions.setReminderOffset(0, of: sam))
+        XCTAssertEqual(sam.reminderOffsetMinutes, 0)
+        XCTAssertFalse(TaskActions.setReminderOffset(0, of: sam), "no change")
+        XCTAssertEqual(NotificationPlan.make(tasks: [NotificationPlan.Item(sam, now: now)], now: now, defaultOffsetMinutes: 15,
+                                             calendar: calendar).requests.map(\.triggerDate), [at(18)])
+        XCTAssertTrue(TaskActions.setReminderOffset(30, of: sam))
+        XCTAssertEqual(sam.reminderOffsetMinutes, 30)
+        XCTAssertTrue(TaskActions.setReminderOffset(nil, of: sam))
+        XCTAssertNil(sam.reminderOffsetMinutes)
+        withExtendedLifetime(container) {}
+    }
+
+    /// Opening the editor wakes only a stored "!" reminder ("Pack !30mb", brief 127): words said in a title ("Remind me 1
+    /// day before the party", "Party! Reminder 1 day before") are the title's, and opening leaves them, unlit (the review
+    /// of brief 175, finding 10: "Send reminder 1 day before the party" became "Send the party").
+    func testOpeningTheEditorWakesOnlyAStoredCode() throws {
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        let p = parser()
+        for title in ["Send reminder 1 day before the party", "Remind me 1 day before the party", "Party! Reminder 1 day before"] {
+            let task = TaskItem(title: title, dueDate: at(18, day: 2), hasDueTime: true)
+            context.insert(task)
+            try context.save()
+            var draft = TaskEditorDraft(task: task)
+            XCTAssertFalse(try draft.landStoredReminder(on: task, parser: p, in: context), title)
+            XCTAssertEqual(task.title, title)
+            XCTAssertNil(task.reminderOffsetMinutes, title)
+            XCTAssertEqual(draft.title, title)
+            XCTAssertFalse(draft.parsed(p, for: task).tokens.contains { $0.kind == .reminder }, "not lit: \(title)")
+        }
+        let pack = TaskItem(title: "Pack !30mb", dueDate: at(18, day: 2), hasDueTime: true)
+        context.insert(pack)
+        try context.save()
+        var draft = TaskEditorDraft(task: pack)
+        XCTAssertTrue(try draft.landStoredReminder(on: pack, parser: p, in: context), "a code wakes, as before")
+        XCTAssertEqual(pack.title, "Pack")
+        XCTAssertEqual(pack.reminderOffsetMinutes, 30)
+        withExtendedLifetime(container) {}
+    }
+
+    /// A clock reminder on a repeating task that falls after the occurrence completed stays: "Water plants every day
+    /// !8am" typed at 2 pm reminds tomorrow at 8:00, and completing today's took that away before it went off (the
+    /// review of brief 175, finding 12). One for the occurrence done still goes with it, and Undo brings either back.
+    /// Nothing moves it to each new occurrence: re-anchoring a clock reminder every day is not this round's.
+    func testARepeatingTasksClockReminderAfterTheOccurrenceStays() throws {
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        let p = parser()
+        let plants = try TaskActions.create(from: QuickAddDraft(context: .inbox, text: "Water plants every day !8am").result(p),
+                                            defaultProject: nil, defaultLabel: nil, in: context)
+        XCTAssertEqual(plants.dueDate, today)
+        XCTAssertEqual(plants.reminderDate, at(8, day: 1), "8 am has gone today: tomorrow's")
+        let rollOver = TaskActions.RollOver(plants)
+        TaskActions.toggleCompletion(plants, in: context, now: at(14, 10), calendar: calendar)
+        XCTAssertEqual(plants.dueDate, calendar.date(byAdding: .day, value: 1, to: today), "rolled on to tomorrow")
+        XCTAssertEqual(plants.reminderDate, at(8, day: 1), "kept: it goes off for tomorrow's")
+        TaskActions.undo(rollOver, on: plants, in: context)
+        XCTAssertEqual(plants.reminderDate, at(8, day: 1))
+
+        let pills = try TaskActions.create(from: QuickAddDraft(context: .inbox, text: "Pills every day 9pm !4pm").result(p),
+                                           defaultProject: nil, defaultLabel: nil, in: context)
+        XCTAssertEqual(pills.reminderDate, at(16), "today's, before the 9 pm occurrence")
+        TaskActions.toggleCompletion(pills, in: context, now: at(14, 10), calendar: calendar)
+        XCTAssertNil(pills.reminderDate, "it belonged to the occurrence done")
+        withExtendedLifetime(container) {}
+    }
+
     /// Saved as the task's own moment, and scheduled like any other reminder.
     func testAClockReminderReachesTheSavedTask() throws {
         let container = ModelContainerFactory.preview()
         let context = container.mainContext
-        let draft = QuickAddDraft(context: .inbox, text: "Call mom remind me at 4:30 p.m.")
+        // ("remind me at 4:30 p.m." with no day is the due time since the review of brief 175: the next test.)
+        let draft = QuickAddDraft(context: .inbox, text: "Call mom !4:30 p.m.")
         let task = try TaskActions.create(from: draft.result(parser()), defaultProject: nil, defaultLabel: nil, in: context)
         XCTAssertEqual(task.title, "Call mom")
         XCTAssertEqual(task.reminderDate, at(16, 30))
         XCTAssertNil(task.dueDate)
+        withExtendedLifetime(container) {}
+    }
+
+    /// "Remind me at 4:30 p.m. to call mom" on the card: the task is due then, reminded at the time, in the Inbox and in
+    /// Today; an Upcoming day's row gives the day, and the words are a reminder on it (the review of brief 175, finding 4).
+    func testRemindMeAtATimeIsTheCardsDueTime() throws {
+        let p = parser()
+        let text = "Remind me at 4:30 p.m. to call mom"
+        for context in [QuickAddContext.inbox, .today] {
+            let draft = QuickAddDraft(context: context, text: text)
+            let chips = draft.chips(p)
+            XCTAssertEqual(chips.dueDate, at(16, 30), "\(context)")
+            XCTAssertTrue(chips.hasDueTime, "\(context)")
+            XCTAssertFalse(chips.dateIsDefault, "\(context)")
+            XCTAssertEqual(chips.reminderOffsetMinutes, 0, "\(context)")
+            XCTAssertEqual(ReminderChipText.title(time: chips.dueDate, offsetMinutes: chips.reminderOffsetMinutes),
+                           clock(at(16, 30)) + " · At time")
+            let result = draft.result(p)
+            XCTAssertEqual(result.title, "Call mom")
+            XCTAssertEqual(result.dueDate, at(16, 30))
+            XCTAssertNil(result.reminderDate)
+        }
+        let thursday = calendar.date(byAdding: .day, value: 5, to: today)!
+        let row = QuickAddDraft(context: .day(thursday), text: text).result(p)
+        XCTAssertEqual(row.dueDate, thursday)
+        XCTAssertFalse(row.hasDueTime)
+        XCTAssertEqual(row.reminderDate, at(16, 30, day: 5))
+
+        let container = ModelContainerFactory.preview()
+        let task = try TaskActions.create(from: QuickAddDraft(context: .inbox, text: text).result(p), defaultProject: nil,
+                                          defaultLabel: nil, in: container.mainContext)
+        XCTAssertEqual(task.dueDate, at(16, 30))
+        XCTAssertEqual(task.reminderOffsetMinutes, 0)
+        XCTAssertNil(task.reminderDate)
         withExtendedLifetime(container) {}
     }
 

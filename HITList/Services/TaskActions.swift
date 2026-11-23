@@ -20,8 +20,9 @@ enum TaskActions {
 
         let task = TaskItem(title: title, priority: parsed.priority.rawValue, dueDate: parsed.dueDate, hasDueTime: parsed.hasDueTime,
                             project: project, labels: labels, recurrence: parsed.recurrence)
-        // Zero ("!at") is the same as no offset: remind at the due time.
-        if let offset = parsed.reminderOffsetMinutes, offset > 0 { task.reminderOffsetMinutes = offset }
+        // Zero ("!at", "!At time of task") is kept: a reminder at the due time of the task's own, which Settings' default
+        // reminder does not replace (nil takes the default; the review of brief 175).
+        if let offset = parsed.reminderOffsetMinutes { task.reminderOffsetMinutes = max(0, offset) }
         // "!15m": a reminder at a moment of its own, dated or not (brief 48).
         task.reminderDate = parsed.reminderDate
         if let deadline = parsed.deadline { task.deadline = Calendar.current.startOfDay(for: deadline) }
@@ -114,6 +115,17 @@ enum TaskActions {
     /// next due time from the rule's hour and minute (a 2:30 repeat the spring change pushed to 3:00 is back
     /// at 2:30 the next day); an all-day task's rule has no time.
     ///
+    /// The Reminder card's offset for a task (the editor's card): minutes before its time; 0 at the time, the task's own,
+    /// which Settings' default reminder does not replace (the card's "At time", the supervisor after the review of brief
+    /// 175); nil takes the task's own away. True if it changed; the caller saves.
+    @discardableResult
+    static func setReminderOffset(_ minutes: Int?, of task: TaskItem) -> Bool {
+        let value = minutes.map { max(0, $0) }
+        guard task.reminderOffsetMinutes != value else { return false }
+        task.reminderOffsetMinutes = value
+        return true
+    }
+
     /// Subtasks (brief 32) follow: completing a task completes its open subtasks at the same moment, and
     /// un-completing it (the toast's Undo, the Completed list) reopens exactly those, by that shared
     /// `completedAt`; ones ticked by hand earlier stay ticked. A repeating task's next occurrence starts
@@ -136,8 +148,13 @@ enum TaskActions {
             if !task.hasDueTime || next.time == nil { next = next.timed(to: due, hasTime: task.hasDueTime, calendar: calendar) }
             task.dueDate = next.nextDueDate(from: due, now: now, calendar: calendar)
             if next.anchorDay != rule.anchorDay || next.time != rule.time { task.recurrence = next.encoded }
-            // A "from now" reminder goes off once (brief 48): it belonged to the occurrence just done.
-            task.reminderDate = nil
+            // A reminder moment of the task's own goes off once (brief 48): one on the occurrence just done goes with it.
+            // One that falls after that occurrence's day and is still to come stays for the next ("Water plants every
+            // day !8am" typed at 2 pm is tomorrow 8:00; the review of brief 175). It is not moved to each occurrence.
+            if let at = task.reminderDate {
+                let dayAfter = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: due)) ?? due
+                if at < dayAfter || at <= now { task.reminderDate = nil }
+            }
         } else {
             task.isCompleted = true
             task.completedAt = now

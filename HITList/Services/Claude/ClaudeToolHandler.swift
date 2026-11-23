@@ -229,7 +229,8 @@ struct ClaudeToolHandler {
             // A reminder before the due time leans on the time (brief 127): with none it has nothing to count from,
             // and stored it would come back the day a time is set again. One typed in the phrase is read.
             if !task.hasDueTime { task.reminderOffsetMinutes = nil }
-            if let minutes = due.reminderOffsetMinutes { task.reminderOffsetMinutes = minutes > 0 ? minutes : nil }
+            // Zero ("!at time of task") is kept: at the time, the task's own (the review of brief 175).
+            if let minutes = due.reminderOffsetMinutes { task.reminderOffsetMinutes = max(0, minutes) }
             if let at = due.reminderDate { task.reminderDate = at }
         }
         if let priority { task.priority = priority }

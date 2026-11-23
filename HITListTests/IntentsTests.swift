@@ -56,6 +56,25 @@ final class IntentsTests: XCTestCase {
         XCTAssertEqual(undated.dialog, "Added ‘Read a book’")
     }
 
+    /// "Remind me at 5 to call mom" is a task due at 5 PM, reminded at the time, and Siri says so (the review of brief
+    /// 175, finding 4: it was an undated task, and the reply named no reminder).
+    func testAddTaskDialogNamesTheReminder() throws {
+        let spoken = try IntentActions.addTask("Remind me at 5 to call mom", group: nil, in: context, now: now)
+        let task = try XCTUnwrap(IntentActions.task(id: spoken.id, in: context))
+        XCTAssertEqual(task.title, "Call mom")
+        XCTAssertEqual(task.dueDate, day(0, hour: 17))
+        XCTAssertTrue(task.hasDueTime)
+        XCTAssertEqual(task.reminderOffsetMinutes, 0)
+        let five = day(0, hour: 17).formatted(.dateTime.hour().minute())
+        XCTAssertEqual(spoken.dialog, "Added ‘Call mom’ for today \(five), reminding you at the time")
+
+        let before = try IntentActions.addTask("Buy milk tomorrow 5pm remind me 30 minutes before", group: nil, in: context, now: now)
+        XCTAssertEqual(before.dialog, "Added ‘Buy milk’ for tomorrow \(five), reminding you 30 minutes before")
+        let fromNow = try IntentActions.addTask("Remind me in 15 minutes to put the kettle on", group: nil, in: context, now: now)
+        let quarter = day(0, hour: 10, minute: 15).formatted(.dateTime.hour().minute())
+        XCTAssertEqual(fromNow.dialog, "Added ‘Put the kettle on’, reminding you today \(quarter)")
+    }
+
     func testAddTaskUnderstandsDictatedTimes() throws {
         // Siri writes "5 PM" and "5:30 p.m."; the card's parser must read both.
         try IntentActions.addTask("Buy milk tomorrow at 5 PM", group: nil, in: context, now: now)

@@ -65,7 +65,8 @@ final class ReviewTitleEditTests: XCTestCase {
         XCTAssertNotNil(typed.dueDate)
     }
 
-    /// No time typed: "!30mb" is the title's text, as in quick add; "!at" beside a time is the default, at it.
+    /// No time typed: "!30mb" is the title's text, as in quick add; "!at" beside a time is a reminder at it, of the
+    /// task's own (the review of brief 175: a Settings default no longer wins over it).
     func testWithoutATimeABeforeReminderStaysText() {
         let (task, context) = reviewed("Pack")
         ReviewTitleEdit.apply("Pack !30mb", parser: parser, to: task, in: context)
@@ -75,6 +76,6 @@ final class ReviewTitleEditTests: XCTestCase {
         let (other, otherContext) = reviewed("Pack")
         ReviewTitleEdit.apply("Pack 9pm !at", parser: parser, to: other, in: otherContext)
         XCTAssertEqual(other.title, "Pack")
-        XCTAssertNil(other.reminderOffsetMinutes, "at the time is the default")
+        XCTAssertEqual(other.reminderOffsetMinutes, 0, "at the time, its own")
     }
 }

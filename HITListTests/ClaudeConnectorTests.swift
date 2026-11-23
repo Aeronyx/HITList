@@ -453,6 +453,12 @@ final class ClaudeToolTests: XCTestCase {
 
         let (refused, _) = try call(ClaudeTools.updateTask, ["id": id, "due": "fri !30mb"])
         XCTAssertTrue(refused.isError, "no time beside it: not a date phrase")
+
+        // At the time is the task's own reminder, saved as 0 and read back as 0 (the review of brief 175).
+        _ = try call(ClaudeTools.updateTask, ["id": id, "due": "fri 6pm !At time of task"])
+        XCTAssertEqual(task.reminderOffsetMinutes, 0)
+        let (_, got) = try call(ClaudeTools.getTask, ["id": id])
+        XCTAssertEqual(got["reminder_minutes_before"], 0)
     }
 
     func testABadFieldChangesNothing() throws {
