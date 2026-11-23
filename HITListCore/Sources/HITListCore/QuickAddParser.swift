@@ -224,15 +224,18 @@ public struct QuickAddParser: Sendable {
             // the very end, the longest reading that ends before that word counts ("!at time" as "of task" is typed;
             // the review of brief 175: a phrase growing word by word never goes dark on the way); with none, all of
             // it is plain text.
+            // A dictated lead-in ("Can you", "Please", "Hey Siri") before "remind me" at the start is the phrase's too
+            // (the second review of brief 175): the title is the rest.
+            let lead = i == 0 ? ReminderPhrase.leadIn(lowers, at: 0) : 0
             let afterPhrase = i > 0 && consumed[i - 1]
-            if var reading = ReminderPhrase.reading(lowers, at: i, atStart: i == 0, afterPhrase: afterPhrase) {
-                if mode == .live, words[i + reading.length - 1].range.upperBound == input.endIndex {
-                    guard let shorter = ReminderPhrase.reading(Array(lowers.dropLast()), at: i, atStart: i == 0,
+            if var reading = ReminderPhrase.reading(lowers, at: i + lead, atStart: i == 0, afterPhrase: afterPhrase) {
+                if mode == .live, words[i + lead + reading.length - 1].range.upperBound == input.endIndex {
+                    guard let shorter = ReminderPhrase.reading(Array(lowers.dropLast()), at: i + lead, atStart: i == 0,
                                                                afterPhrase: afterPhrase)
-                    else { i += reading.length; continue }
+                    else { i += lead + reading.length; continue }
                     reading = shorter
                 }
-                let n = reading.length
+                let n = lead + reading.length
                 switch reading.phrase {
                 case .fromNow(let span):
                     ownReminder = .span(span); win(i, n, .reminder, slot: .reminderFromNow); spokenClock = nil
@@ -245,10 +248,11 @@ public struct QuickAddParser: Sendable {
                 if i == 0, !w.hasPrefix("!") { spokenStart = words[0].range.lowerBound }
                 i += n; continue
             }
-            // "Remind me to …" opening the text: the three words are a token of their own (brief 175).
-            if i == 0, Self.opensWithRemindMeTo(lowers) {
-                if mode == .live, words[2].range.upperBound == input.endIndex { i += 3; continue }
-                mark(0, 3, .reminder); remindMeTo = true; spokenStart = words[0].range.lowerBound; i += 3; continue
+            // "Remind me to …" opening the text, a lead-in before it or not: the words are a token of their own (brief 175).
+            if i == 0, Self.opensWithRemindMeTo(lowers, at: lead) {
+                let n = lead + 3
+                if mode == .live, words[n - 1].range.upperBound == input.endIndex { i += n; continue }
+                mark(0, n, .reminder); remindMeTo = true; spokenStart = words[0].range.lowerBound; i += n; continue
             }
             // Recurrence
             if let (rule, n) = Self.matchRecurrence(lowers, at: i) {
@@ -451,9 +455,9 @@ public struct QuickAddParser: Sendable {
     }
 
     /// The text opens with "Remind me to" (any case; brief 175).
-    static func opensWithRemindMeTo(_ words: [String]) -> Bool {
-        guard words.count >= 3 else { return false }
-        return words[0..<3].map(DateExpressionParser.normalize) == ["remind", "me", "to"]
+    static func opensWithRemindMeTo(_ words: [String], at k: Int = 0) -> Bool {
+        guard words.count >= k + 3 else { return false }
+        return words[k..<(k + 3)].map(DateExpressionParser.normalize) == ["remind", "me", "to"]
     }
 
     /// Resolves a `#`/`@`-prefixed name. Supports quoted names and multi-word known names.
@@ -558,7 +562,9 @@ public enum ReminderPhrase: Equatable, Sendable {
     /// an hour", "Remind me in 30 minutes to"; case and trailing ",.;" ignored), or nil if they aren't one.
     public init?(token text: String) {
         let words = text.split(whereSeparator: \.isWhitespace).map { $0.lowercased() }
-        guard let (phrase, n) = Self.match(words, at: 0, atStart: true), n == words.count else { return nil }
+        // A dictated lead-in opens it too: "Can you remind me in 10 minutes to".
+        let lead = Self.leadIn(words, at: 0)
+        guard let (phrase, n) = Self.match(words, at: lead, atStart: true), lead + n == words.count else { return nil }
         self = phrase
     }
 

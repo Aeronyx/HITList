@@ -524,6 +524,52 @@ final class ReminderWordsTests: XCTestCase {
         XCTAssertEqual(code.reminderDate, at(11, 23, 16, 0))
     }
 
+    /// Typical Siri and ring dictations (the second review of brief 175, finding 2): a short lead-in before "remind me"
+    /// ("Can you", "Could you", "Would you", "Please", "Hey", "Hey Siri", "Ok") opens the text with it, so the title is
+    /// the rest; and a day, and a part of the day, after the time belong to the clock ("at 5 tomorrow", "at 6 tomorrow
+    /// morning"). Monday 2026-11-23, 14:10 Eastern.
+    func testLeadInsAndADayAfterTheTimeOpenTheText() throws {
+        var ny = Calendar(identifier: .gregorian)
+        ny.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+        func at(_ m: Int, _ d: Int, _ h: Int, _ min: Int) -> Date {
+            ny.date(from: DateComponents(year: 2026, month: m, day: d, hour: h, minute: min))!
+        }
+        let p = QuickAddParser(now: at(11, 23, 14, 10), calendar: ny)
+        let due: [(String, String, Date)] = [
+            ("Can you remind me at 5 to call mom", "Call mom", at(11, 23, 17, 0)),
+            ("Please remind me at 5 to call mom", "Call mom", at(11, 23, 17, 0)),
+            ("Hey, remind me at 5 to call mom", "Call mom", at(11, 23, 17, 0)),
+            ("Hey Siri, remind me at 5 to call mom", "Call mom", at(11, 23, 17, 0)),
+            ("Would you remind me at 5 to call mom", "Call mom", at(11, 23, 17, 0)),
+            ("Ok, remind me at 5 to call mom", "Call mom", at(11, 23, 17, 0)),
+            ("Can you remind me tomorrow at 9 to call the vet", "Call the vet", at(11, 24, 9, 0)),
+            ("Remind me at 5 tomorrow to call mom", "Call mom", at(11, 24, 17, 0)),
+            ("Remind me at 6 tomorrow morning to stretch", "Stretch", at(11, 24, 6, 0)),
+            ("Ok, can you please remind me to call mom at 5", "Call mom", at(11, 23, 17, 0)),
+        ]
+        for (text, title, date) in due {
+            let r = p.parse(text)
+            XCTAssertEqual(r.title, title, text)
+            XCTAssertEqual(r.dueDate, date, text)
+            XCTAssertEqual(r.reminderOffsetMinutes, 0, "reminded at the time: \(text)")
+            XCTAssertNil(r.reminderDate, text)
+        }
+        let oven = p.parse("Could you remind me in 10 minutes to check the oven")
+        XCTAssertEqual(oven.title, "Check the oven")
+        XCTAssertEqual(oven.reminderDate, at(11, 23, 14, 20))
+        XCTAssertNil(oven.dueDate)
+        XCTAssertEqual(oven.tokens.map(\.text), ["Could you remind me in 10 minutes to"])
+        XCTAssertEqual(ReminderPhrase(token: "Could you remind me in 10 minutes to"), .fromNow(ReminderSpan(minutes: 10)))
+        // Not before "remind me", the words are the title's.
+        XCTAssertEqual(p.parse("Can you call mom at 5").title, "Can you call mom")
+        XCTAssertEqual(p.parse("Please call mom").title, "Please call mom")
+        XCTAssertEqual(p.parse("Hey mom remind me at 5").title, "Hey mom")
+        // A code keeps its day before the time, as the list writes it: "!4pm tomorrow" is a due day and a clock on it.
+        let code = p.parse("Call mom !4pm tomorrow")
+        XCTAssertEqual(code.dueDate, at(11, 24, 0, 0))
+        XCTAssertEqual(code.reminderDate, at(11, 24, 16, 0))
+    }
+
     func testPriorityInWords() {
         let cases: [(String, Priority)] = [("priority 1", .p1), ("Priority 2", .p2), ("priority three", .p3),
                                            ("priority four", .p4), ("priority one.", .p1)]
