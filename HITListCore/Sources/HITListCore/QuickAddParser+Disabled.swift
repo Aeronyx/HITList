@@ -112,8 +112,10 @@ extension QuickAddParser {
     /// text is parsed again, until no switched-off token is left; ranges and the title are then mapped
     /// back to the text as typed. `isOff` gets a token's key and its UTF-8 span in `input`.
     ///
-    /// Words said in plain language that would leave no title ("Remind me in an hour", "Priority 3") are masked
-    /// the same way once nothing else is: they are the title, and set nothing (the review of brief 175).
+    /// With nothing else for a title, a reminder said in words gives back its lead as the title and keeps its time
+    /// ("Remind me in an hour": "Remind me", in an hour; the second review of brief 175). Other words said in plain
+    /// language that would leave no title ("Priority 3", "Remind me to") are masked the same way once nothing else is:
+    /// they are the title, and set nothing (the review of brief 175).
     func parse(_ input: String, mode: Mode, isOff: (QuickAddTokenKey, Range<Int>) -> Bool) -> QuickAddResult {
         var masked = MaskedText(input)
         var result = scan(input, mode: mode)
@@ -125,6 +127,13 @@ extension QuickAddParser {
                 return isOff(QuickAddTokenKey(kind: token.kind, text: words), span) ? span : nil
             }
             if spans.isEmpty, Self.leavesNoTitle(result, in: masked.text, mode: mode) {
+                var leadFirst = self
+                leadFirst.leadIsTitle = true
+                let read = leadFirst.scan(masked.text, mode: mode)
+                if !read.title.isEmpty {
+                    result = read
+                    break
+                }
                 spans = result.tokens.filter { $0.isSaidInWords && !$0.isSuperseded }.map { masked.originalOffsets(of: $0.range) }
             }
             guard !spans.isEmpty else { break }

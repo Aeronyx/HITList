@@ -107,7 +107,9 @@ final class ReminderWordsTests: XCTestCase {
         let evening = Fixed.date(2026, 10, 21, 19, 30)
         let late = rows(hasTime: true, dueDate: Fixed.date(2026, 10, 21, 21, 0), now: evening).last!
         XCTAssertEqual(late.detail, "Tomorrow 9:00 AM")
-        XCTAssertEqual(late.phrase, "!Tomorrow 9:00 AM")
+        // No day in its words: 9:00 AM alone goes off tomorrow, and a draft added after midnight still means the
+        // morning to come (the second review of brief 175, finding 7; it was "!Tomorrow 9:00 AM").
+        XCTAssertEqual(late.phrase, "!9:00 AM")
         XCTAssertEqual(late.code, "!9am")
         let r = QuickAddParser(now: evening, calendar: Fixed.calendar).parse("Bins 9pm " + late.phrase)
         assertDate(r.reminderDate, 2026, 10, 22, 9, 0)
@@ -120,6 +122,60 @@ final class ReminderWordsTests: XCTestCase {
         XCTAssertEqual(other.phrase, "!Today 6:00 PM")
         assertDate(parser.parse("Call mom friday 9am " + other.phrase).reminderDate, 2026, 10, 21, 18, 0)
         assertDate(parser.parse("Call mom friday 9am !6pm").reminderDate, 2026, 10, 23, 18, 0)
+    }
+
+    /// A clock with a day typed whose moment has gone is not read: the words stay text, unlit ("Call mom !today 9am" at
+    /// 2 PM, "!tonight at 8" at 10 PM, a stored draft's "!Today 6:00 PM" added after 6). A clock without a day rolls to
+    /// the next, as before. And Later names a day only when a clock time alone would go off on another (a task due on a
+    /// later day), so its words never hold a day already gone: read back at any time of day, they are Later's moment,
+    /// still ahead (the second review of brief 175, finding 7). Monday 2026-11-23, Eastern.
+    func testAClockWithADayAlreadyGoneIsNotRead() throws {
+        var ny = Calendar(identifier: .gregorian)
+        ny.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+        func at(_ m: Int, _ d: Int, _ h: Int, _ min: Int) -> Date {
+            ny.date(from: DateComponents(year: 2026, month: m, day: d, hour: h, minute: min))!
+        }
+        func parse(_ text: String, _ h: Int, _ min: Int = 0) -> QuickAddResult {
+            QuickAddParser(now: at(11, 23, h, min), calendar: ny).parse(text)
+        }
+        for (text, h) in [("Call mom !today 9am", 14), ("Bins !tonight at 8", 22), ("Pack !Today 6:00 PM", 18),
+                          ("Call mom remind me today at 9am", 14)] {
+            let r = parse(text, h, 30)
+            XCTAssertEqual(r.title, text, text)
+            XCTAssertNil(r.reminderDate, text)
+            XCTAssertNil(r.dueDate, text)
+            XCTAssertTrue(r.tokens.isEmpty, "unlit: \(text)")
+        }
+        // Still ahead: read. With no day: the next one.
+        XCTAssertEqual(parse("Call mom !today 5pm", 14).reminderDate, at(11, 23, 17, 0))
+        XCTAssertEqual(parse("Call mom !9am", 14).reminderDate, at(11, 24, 9, 0))
+        XCTAssertEqual(parse("Call mom !tomorrow 9am", 14).reminderDate, at(11, 24, 9, 0))
+
+        // Later, read back where it was offered.
+        let friday = at(11, 27, 0, 0)
+        for hour in 0..<24 {
+            for minute in [0, 30] {
+                let now = at(11, 23, hour, minute)
+                let today = ny.startOfDay(for: now)
+                for (due, words) in [(nil, ""), (today, "today "), (friday, "friday ")] as [(Date?, String)] {
+                    let row = ReminderSuggestions.rows(hasTime: false, dueDate: due, now: now, calendar: ny).last!
+                    let moment = ReminderSuggestions.later(now: now, calendar: ny)
+                    let read = QuickAddParser(now: now, calendar: ny).parse("Bins " + words + row.phrase)
+                    XCTAssertEqual(read.reminderDate, moment, "\(row.phrase) at \(hour):\(minute) due \(words)")
+                    XCTAssertGreaterThan(moment, now)
+                    let stamped = row.phrase.hasPrefix("!Today") || row.phrase.hasPrefix("!Tomorrow")
+                    let plain = ReminderClock(hour: ny.component(.hour, from: moment), minute: ny.component(.minute, from: moment))
+                    XCTAssertEqual(stamped, plain.date(dueDay: due, now: now, calendar: ny) != moment,
+                                   "a day only where it must: \(row.phrase) at \(hour):\(minute) due \(words)")
+                }
+            }
+        }
+        // A Later row offered a while ago is offered again as it is now when picked.
+        let early = ReminderSuggestions.rows(hasTime: false, now: at(11, 23, 13, 0), calendar: ny).last!
+        XCTAssertEqual(early.phrase, "!4:00 PM")
+        XCTAssertEqual(ReminderSuggestions.current(early, dueDate: nil, now: at(11, 23, 17, 30), calendar: ny).phrase, "!9:00 PM")
+        let other = ReminderSuggestions.rows(hasTime: false, now: at(11, 23, 13, 0), calendar: ny)[0]
+        XCTAssertEqual(ReminderSuggestions.current(other, dueDate: nil, now: at(11, 23, 17, 30), calendar: ny), other)
     }
 
     // MARK: Narrowing
@@ -174,6 +230,23 @@ final class ReminderWordsTests: XCTestCase {
         }
     }
 
+    /// Return on the Mac picks from the list as the text is now, not the list a keystroke still queued before it was
+    /// drawn from (the second review of brief 175, finding 11): "!30" shown, "m" typed, Return: In 30 minutes, not 30
+    /// minutes before. The same list: the highlighted row; none now: Return is the title's.
+    func testReturnPicksFromTheListAsTheTextIsNow() {
+        let timed = rows(hasTime: true)
+        let shown = ReminderSuggestions.narrowed(timed, by: "30")
+        XCTAssertEqual(shown.map(\.label), ["30 minutes before", "In 30 minutes"])
+        let now = ReminderSuggestions.narrowed(timed, by: "30m")
+        XCTAssertEqual(ReminderSuggestions.rowForReturn(shown: shown, highlighted: 0, current: now)?.label, "In 30 minutes")
+        XCTAssertEqual(ReminderSuggestions.rowForReturn(shown: shown, highlighted: 1, current: shown)?.label, "In 30 minutes",
+                       "the same list: the highlighted row")
+        XCTAssertEqual(ReminderSuggestions.rowForReturn(shown: shown, highlighted: 0, current: shown)?.label, "30 minutes before")
+        XCTAssertNil(ReminderSuggestions.rowForReturn(shown: shown, highlighted: 0, current: []), "no list now")
+        XCTAssertEqual(ReminderSuggestions.rowForReturn(shown: shown, highlighted: 5, current: shown)?.label, "30 minutes before",
+                       "a highlight past the end: the first")
+    }
+
     // MARK: The "!" word at the caret, and a pick
 
     func testTheBangWordAtTheCaret() {
@@ -217,6 +290,29 @@ final class ReminderWordsTests: XCTestCase {
         // A word that starts no phrase is the word alone, as before.
         XCTAssertEqual(ReminderSuggestions.bangWord(in: "Buy !1 milk", cursor: 6)?.range, NSRange(location: 4, length: 2))
         XCTAssertEqual(ReminderSuggestions.bangWord(in: "Call !10mb about", cursor: 7)?.range, NSRange(location: 5, length: 5))
+    }
+
+    /// "!" typed in front of a word ("Call !|mom", "Call mom !|tomorrow 5pm"): with nothing typed after the "!" a pick
+    /// replaces the "!" alone, never the word after the caret (the second review of brief 175, finding 6). With a query
+    /// the caret is inside a phrase being typed or lit, and the whole of it goes, as before.
+    func testAPickWithNothingTypedAfterTheBangKeepsTheWordsAfterIt() throws {
+        let mom = try XCTUnwrap(ReminderSuggestions.bangWord(in: "Call !mom", cursor: 6))
+        XCTAssertEqual(mom, .init(range: NSRange(location: 5, length: 1), query: ""))
+        let picked = ReminderSuggestions.applying("!In 15 minutes", to: "Call !mom", replacing: mom.range)
+        XCTAssertEqual(picked.text, "Call !In 15 minutes mom")
+        XCTAssertEqual(parser.parse(picked.text).title, "Call mom")
+        XCTAssertEqual(parser.parse(picked.text).reminderDate, minutes(15))
+
+        let text = "Call mom !tomorrow 5pm"
+        let day = try XCTUnwrap(ReminderSuggestions.bangWord(in: text, cursor: 10))
+        XCTAssertEqual(day.range, NSRange(location: 9, length: 1))
+        let kept = ReminderSuggestions.applying("!In 15 minutes", to: text, replacing: day.range).text
+        XCTAssertEqual(kept, "Call mom !In 15 minutes tomorrow 5pm")
+        assertDate(parser.parse(kept).dueDate, 2026, 10, 22, 17, 0)
+        // A query: the word, or the lit phrase, whole.
+        XCTAssertEqual(ReminderSuggestions.bangWord(in: "Call !1mom", cursor: 7)?.range, NSRange(location: 5, length: 5))
+        XCTAssertEqual(ReminderSuggestions.bangWord(in: "Call 5pm !10 minutes before ", cursor: 11)?.range,
+                       NSRange(location: 9, length: 18))
     }
 
     func testAPickReplacesTheTypedWordAndTheCaretSitsAfterASpace() {
@@ -489,7 +585,7 @@ final class ReminderWordsTests: XCTestCase {
         XCTAssertEqual(bank.tokens.map(\.kind), [.date])
 
         let inside = p.parse("Call mom, remind me at 4")
-        XCTAssertEqual(inside.title, "Call mom,")
+        XCTAssertEqual(inside.title, "Call mom", "the comma before the phrase goes (finding 10 of the second review)")
         XCTAssertEqual(inside.dueDate, at(11, 23, 16, 0))
         XCTAssertEqual(inside.reminderOffsetMinutes, 0)
 
@@ -522,6 +618,52 @@ final class ReminderWordsTests: XCTestCase {
         let code = p.parse("Bins !4pm")
         XCTAssertNil(code.dueDate)
         XCTAssertEqual(code.reminderDate, at(11, 23, 16, 0))
+    }
+
+    /// Typical Siri and ring dictations (the second review of brief 175, finding 2): a short lead-in before "remind me"
+    /// ("Can you", "Could you", "Would you", "Please", "Hey", "Hey Siri", "Ok") opens the text with it, so the title is
+    /// the rest; and a day, and a part of the day, after the time belong to the clock ("at 5 tomorrow", "at 6 tomorrow
+    /// morning"). Monday 2026-11-23, 14:10 Eastern.
+    func testLeadInsAndADayAfterTheTimeOpenTheText() throws {
+        var ny = Calendar(identifier: .gregorian)
+        ny.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+        func at(_ m: Int, _ d: Int, _ h: Int, _ min: Int) -> Date {
+            ny.date(from: DateComponents(year: 2026, month: m, day: d, hour: h, minute: min))!
+        }
+        let p = QuickAddParser(now: at(11, 23, 14, 10), calendar: ny)
+        let due: [(String, String, Date)] = [
+            ("Can you remind me at 5 to call mom", "Call mom", at(11, 23, 17, 0)),
+            ("Please remind me at 5 to call mom", "Call mom", at(11, 23, 17, 0)),
+            ("Hey, remind me at 5 to call mom", "Call mom", at(11, 23, 17, 0)),
+            ("Hey Siri, remind me at 5 to call mom", "Call mom", at(11, 23, 17, 0)),
+            ("Would you remind me at 5 to call mom", "Call mom", at(11, 23, 17, 0)),
+            ("Ok, remind me at 5 to call mom", "Call mom", at(11, 23, 17, 0)),
+            ("Can you remind me tomorrow at 9 to call the vet", "Call the vet", at(11, 24, 9, 0)),
+            ("Remind me at 5 tomorrow to call mom", "Call mom", at(11, 24, 17, 0)),
+            ("Remind me at 6 tomorrow morning to stretch", "Stretch", at(11, 24, 6, 0)),
+            ("Ok, can you please remind me to call mom at 5", "Call mom", at(11, 23, 17, 0)),
+        ]
+        for (text, title, date) in due {
+            let r = p.parse(text)
+            XCTAssertEqual(r.title, title, text)
+            XCTAssertEqual(r.dueDate, date, text)
+            XCTAssertEqual(r.reminderOffsetMinutes, 0, "reminded at the time: \(text)")
+            XCTAssertNil(r.reminderDate, text)
+        }
+        let oven = p.parse("Could you remind me in 10 minutes to check the oven")
+        XCTAssertEqual(oven.title, "Check the oven")
+        XCTAssertEqual(oven.reminderDate, at(11, 23, 14, 20))
+        XCTAssertNil(oven.dueDate)
+        XCTAssertEqual(oven.tokens.map(\.text), ["Could you remind me in 10 minutes to"])
+        XCTAssertEqual(ReminderPhrase(token: "Could you remind me in 10 minutes to"), .fromNow(ReminderSpan(minutes: 10)))
+        // Not before "remind me", the words are the title's.
+        XCTAssertEqual(p.parse("Can you call mom at 5").title, "Can you call mom")
+        XCTAssertEqual(p.parse("Please call mom").title, "Please call mom")
+        XCTAssertEqual(p.parse("Hey mom remind me at 5").title, "Hey mom")
+        // A code keeps its day before the time, as the list writes it: "!4pm tomorrow" is a due day and a clock on it.
+        let code = p.parse("Call mom !4pm tomorrow")
+        XCTAssertEqual(code.dueDate, at(11, 24, 0, 0))
+        XCTAssertEqual(code.reminderDate, at(11, 24, 16, 0))
     }
 
     func testPriorityInWords() {
@@ -574,8 +716,9 @@ final class ReminderWordsTests: XCTestCase {
     /// Words said in plain language that would leave no title are the title, and set nothing (the review of brief 175,
     /// finding 13): a task has a title. The rest of the text is read as usual.
     func testWordsThatWouldLeaveNoTitleAreTheTitle() {
-        for text in ["Remind me in an hour", "Priority 3", "Remind me to", "remind me 30 minutes before", "Reminder in 10 minutes",
-                     "Remind me at 4pm"] {
+        // (A reminder said in words gives back only its lead, "Remind me" or "Reminder", and keeps its time: the second
+        // review of brief 175, finding 4; `testAReminderAloneKeepsItsTimeWithItsLeadAsTheTitle`.)
+        for text in ["Priority 3", "Remind me to", "remind me 30 minutes before"] {
             let r = parser.parse(text)
             XCTAssertEqual(r.title, text, text)
             XCTAssertNil(r.reminderDate, text)
@@ -586,9 +729,9 @@ final class ReminderWordsTests: XCTestCase {
             XCTAssertTrue(r.tokens.isEmpty, text)
         }
         let work = parser.parse("Remind me in an hour #Work")
-        XCTAssertEqual(work.title, "Remind me in an hour")
+        XCTAssertEqual(work.title, "Remind me")
         XCTAssertEqual(work.projectName, "Work")
-        XCTAssertNil(work.reminderDate)
+        XCTAssertEqual(work.reminderDate, minutes(60))
         let tomorrow = parser.parse("Priority 3 tomorrow")
         XCTAssertEqual(tomorrow.title, "Priority 3")
         XCTAssertEqual(tomorrow.dueDate, Fixed.date(2026, 10, 22))
@@ -600,10 +743,51 @@ final class ReminderWordsTests: XCTestCase {
         let off = parser.parse("Call remind me in an hour", disabling: [QuickAddTokenKey(kind: .reminder, text: "remind me in an hour")])
         XCTAssertEqual(off.title, "Call remind me in an hour")
         XCTAssertEqual(parser.parse("Remind me in an hour", disabling: [QuickAddTokenKey(kind: .date, text: "x")]).title,
-                       "Remind me in an hour")
+                       "Remind me")
         // Live: the same, once the phrase would light.
-        XCTAssertEqual(parser.parse("Remind me in an hour ", mode: .live).title, "Remind me in an hour")
-        XCTAssertTrue(parser.parse("Remind me in an hour ", mode: .live).tokens.isEmpty)
+        XCTAssertEqual(parser.parse("Remind me in an hour ", mode: .live).title, "Remind me")
+        XCTAssertEqual(parser.parse("Remind me in an hour ", mode: .live).tokens.map(\.text), ["in an hour"])
+    }
+
+    /// A reminder said in words with nothing else for a title gives back only its lead as the title, "Remind me" or
+    /// "Reminder", and keeps its time or reminder (the second review of brief 175, finding 4: the whole phrase became the
+    /// title and the time was lost). Monday 2026-11-23, 14:10 Eastern.
+    func testAReminderAloneKeepsItsTimeWithItsLeadAsTheTitle() throws {
+        var ny = Calendar(identifier: .gregorian)
+        ny.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+        func at(_ m: Int, _ d: Int, _ h: Int, _ min: Int) -> Date {
+            ny.date(from: DateComponents(year: 2026, month: m, day: d, hour: h, minute: min))!
+        }
+        let p = QuickAddParser(now: at(11, 23, 14, 10), calendar: ny)
+
+        let ten = p.parse("Remind me in 10 minutes")
+        XCTAssertEqual(ten.title, "Remind me")
+        XCTAssertEqual(ten.reminderDate, at(11, 23, 14, 20))
+        XCTAssertNil(ten.dueDate)
+        XCTAssertEqual(ten.tokens.map(\.text), ["in 10 minutes"])
+        XCTAssertEqual(ReminderPhrase(token: "in 10 minutes"), .fromNow(ReminderSpan(minutes: 10)), "its token still reads")
+
+        let nine = p.parse("Remind me at 9")
+        XCTAssertEqual(nine.title, "Remind me")
+        XCTAssertEqual(nine.dueDate, at(11, 24, 9, 0))
+        XCTAssertEqual(nine.reminderOffsetMinutes, 0, "with its reminder")
+
+        let tomorrow = p.parse("Remind me tomorrow at 9")
+        XCTAssertEqual(tomorrow.title, "Remind me")
+        XCTAssertEqual(tomorrow.dueDate, at(11, 24, 9, 0))
+        XCTAssertEqual(tomorrow.reminderOffsetMinutes, 0)
+
+        let two = p.parse("reminder in 2 hours")
+        XCTAssertEqual(two.title, "Reminder")
+        XCTAssertEqual(two.reminderDate, at(11, 23, 16, 10))
+
+        let asked = p.parse("Can you remind me at 5")
+        XCTAssertEqual(asked.title, "Can you remind me")
+        XCTAssertEqual(asked.dueDate, at(11, 23, 17, 0))
+
+        XCTAssertEqual(p.parse("Priority 3").title, "Priority 3")
+        XCTAssertEqual(p.parse("Priority 3").priority, .p4)
+        XCTAssertEqual(p.parse("Remind me to").title, "Remind me to")
     }
 
 
@@ -746,6 +930,89 @@ final class ReminderWordsTests: XCTestCase {
         XCTAssertEqual(ReminderPhrase(token: "!at 4"), .at(ReminderClock(hour: 16, minute: 0)))
     }
 
+    /// Cues in the words decide the half of the day for "at 1" to "at 11" with no am or pm (the supervisor's decision on
+    /// the second review of brief 175, finding 3). Morning cues (wake, waking, wake up, get up, breakfast, sunrise,
+    /// dawn, early, morning): as typed. Evening cues (night, tonight, evening, dinner, supper): 5 to 11 the evening; 1 to
+    /// 4 with "night" as typed, with the others the afternoon. No cue: the rule before (1 to 4 the afternoon, 5 and 6 the
+    /// next to come with no day, 7 to 11 as typed). Monday 2026-11-23, Eastern.
+    func testCuesInTheWordsDecideTheHalfOfTheDay() throws {
+        var ny = Calendar(identifier: .gregorian)
+        ny.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+        func at(_ m: Int, _ d: Int, _ h: Int, _ min: Int) -> Date {
+            ny.date(from: DateComponents(year: 2026, month: m, day: d, hour: h, minute: min))!
+        }
+        func due(_ text: String, _ h: Int = 14, _ min: Int = 10) -> Date? {
+            QuickAddParser(now: at(11, 23, h, min), calendar: ny).parse(text).dueDate
+        }
+        // Morning cues.
+        XCTAssertEqual(due("Wake up at 6 tomorrow"), at(11, 24, 6, 0))
+        XCTAssertEqual(due("Breakfast at 6:30 tomorrow"), at(11, 24, 6, 30))
+        XCTAssertEqual(due("Early flight at 6"), at(11, 24, 6, 0))
+        XCTAssertEqual(due("Get up at 5 tomorrow"), at(11, 24, 5, 0))
+        XCTAssertEqual(due("Sunrise hike at 6 friday"), at(11, 27, 6, 0))
+        XCTAssertEqual(due("Breakfast meeting at 9"), at(11, 24, 9, 0))
+        let wake = QuickAddParser(now: at(11, 23, 14, 10), calendar: ny).parse("Remind me at 5 to wake up")
+        XCTAssertEqual(wake.title, "Wake up")
+        XCTAssertEqual(wake.dueDate, at(11, 24, 5, 0))
+        // Evening cues: 5 to 11 the evening.
+        XCTAssertEqual(due("Game night at 6"), at(11, 23, 18, 0))
+        XCTAssertEqual(due("Movie night Friday at 6"), at(11, 27, 18, 0))
+        XCTAssertEqual(due("Dinner at 8"), at(11, 23, 20, 0))
+        XCTAssertEqual(due("Call grandma tonight at 7"), at(11, 23, 19, 0), "tonight at 7 was 7 am")
+        XCTAssertEqual(due("Supper at 6:30"), at(11, 23, 18, 30))
+        XCTAssertEqual(due("Call at 9 this evening"), at(11, 23, 21, 0))
+        let trash = QuickAddParser(now: at(11, 23, 14, 10), calendar: ny).parse("Remind me tonight at 9 to take out the trash")
+        XCTAssertEqual(trash.title, "Take out the trash")
+        XCTAssertEqual(trash.dueDate, at(11, 23, 21, 0))
+        XCTAssertEqual(trash.reminderOffsetMinutes, 0)
+        // 1 to 4: "night" as typed; "dinner" and "evening" the afternoon.
+        XCTAssertEqual(due("Take pills every night at 1"), at(11, 24, 1, 0))
+        XCTAssertEqual(due("Dinner at 4"), at(11, 23, 16, 0))
+        XCTAssertEqual(due("Call at 3 this evening"), at(11, 23, 15, 0))
+        // No cue: as last round.
+        XCTAssertEqual(due("Lunch at 1", 14, 30), at(11, 24, 13, 0))
+        XCTAssertEqual(due("Call at 2", 9, 0), at(11, 23, 14, 0))
+        XCTAssertEqual(due("Pick up dry cleaning at 6"), at(11, 23, 18, 0))
+        XCTAssertEqual(due("Wake up at 6", 22, 0), at(11, 24, 6, 0))
+        XCTAssertEqual(due("Run at 5", 3, 0), at(11, 23, 5, 0))
+        XCTAssertEqual(due("Run at 5"), at(11, 23, 17, 0))
+        XCTAssertEqual(due("Run at 9"), at(11, 24, 9, 0))
+        // As words only: a cue inside another word or a group's name is none.
+        XCTAssertEqual(due("Nightly backup at 6"), at(11, 23, 18, 0), "no cue: the next 6 to come")
+        XCTAssertEqual(due("Call #Dinner at 8"), at(11, 24, 8, 0))
+        // Reminder clocks read the same way.
+        func reminder(_ text: String) -> Date? { QuickAddParser(now: at(11, 23, 14, 10), calendar: ny).parse(text).reminderDate }
+        XCTAssertEqual(reminder("Dinner !at 7"), at(11, 23, 19, 0))
+        XCTAssertEqual(reminder("Breakfast !at 7"), at(11, 24, 7, 0))
+        XCTAssertEqual(reminder("Game night friday !at 6"), at(11, 27, 18, 0))
+        XCTAssertEqual(reminder("Pills every night !at 1"), at(11, 24, 1, 0))
+        // Alone, a phrase reads 1 to 6 as the afternoon and 7 to 11 as typed.
+        XCTAssertEqual(ReminderPhrase(token: "!at 4"), .at(ReminderClock(hour: 16, minute: 0)))
+        XCTAssertEqual(ReminderPhrase(token: "!at 9"), .at(ReminderClock(hour: 9, minute: 0)))
+    }
+
+    /// A title word just before a phrase loses a trailing ",", ";", ":" or dash, and a dash on its own goes: what joined
+    /// the phrase to the sentence is not the title's (the second review of brief 175, finding 10). Elsewhere it stays.
+    func testPunctuationLeftBeforeAPhraseLeavesTheTitle() {
+        let cases: [(String, String)] = [
+            ("Stir the soup, reminder in 15 minutes", "Stir the soup"),
+            ("Call mom - remind me at 4", "Call mom"),
+            ("Call mom – remind me at 4", "Call mom"),
+            ("Call mom — remind me at 4", "Call mom"),
+            ("Pay rent; tomorrow", "Pay rent"),
+            ("Agenda: friday 3pm", "Agenda"),
+            ("Lunch, tomorrow, with Sam", "Lunch with Sam"),
+            ("Call mom at 5pm - reminder 30 minutes before", "Call mom"),
+            ("Call mom, then dad tomorrow", "Call mom, then dad"),
+            ("Call mom. Reminder in an hour", "Call mom."),
+            ("Fix sink priority three - then paint", "Fix sink - then paint"),
+        ]
+        for (text, title) in cases {
+            XCTAssertEqual(parser.parse(text).title, title, text)
+        }
+        XCTAssertEqual(parser.parse("Stir the soup, reminder in 15 minutes").reminderDate, minutes(15))
+    }
+
     /// "reminder" with no "me" and no "!" is weak evidence: plenty of titles hold the word. It takes only the relative
     /// forms (before, in, at the time), never a clock time or a day (the supervisor, round 36); "remind me" keeps them
     /// all. Monday 2026-11-23, 14:10 Eastern.
@@ -791,7 +1058,7 @@ final class ReminderWordsTests: XCTestCase {
         XCTAssertEqual(water.dueDate, at(11, 23, 14, 20))
         noReminder(water, "Water plants reminder in 10 minutes")
         let watered = p.parse("Water plants, reminder in 10 minutes")
-        XCTAssertEqual(watered.title, "Water plants,")
+        XCTAssertEqual(watered.title, "Water plants", "the comma before the phrase goes (finding 10 of the second review)")
         XCTAssertEqual(watered.reminderFromNow, ReminderSpan(minutes: 10))
         XCTAssertEqual(watered.reminderDate, at(11, 23, 14, 20))
         XCTAssertNil(watered.dueDate, "a reminder from now, not a due time")

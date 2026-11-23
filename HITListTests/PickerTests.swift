@@ -269,6 +269,33 @@ final class PickerTests: XCTestCase {
                        "Fires " + monday.formatted(.dateTime.weekday(.abbreviated)) + " " + clock(23, 40, on: monday))
     }
 
+    /// A task with no offset of its own shows what will happen: Settings' default chosen (its preset; every choice of
+    /// the setting is one), or At time when there is no default; At time is chosen for an explicit 0 only, and a tap on
+    /// the default's own chip changes nothing. The chip's bell is bell.badge for any offset of its own, 0 included (the
+    /// second review of brief 175).
+    func testTheReminderCardShowsTheDefaultForNoOffsetOfItsOwn() {
+        XCTAssertEqual(ReminderPickerCard.chosenOffset(own: nil, defaultMinutes: 30), 30)
+        XCTAssertEqual(ReminderPickerCard.chosenOffset(own: nil, defaultMinutes: 0), 0, "no default: it fires at the time")
+        XCTAssertEqual(ReminderPickerCard.chosenOffset(own: 0, defaultMinutes: 30), 0)
+        XCTAssertEqual(ReminderPickerCard.chosenOffset(own: 15, defaultMinutes: 30), 15)
+        XCTAssertTrue(Preferences.defaultReminderOffsetChoices.allSatisfy(ReminderPickerCard.offsetPresets.contains),
+                      "every default the setting offers is a chip")
+        XCTAssertNil(ReminderPickerCard.offsetToSet(tapped: 30, own: nil, defaultMinutes: 30), "the default already: nothing changes")
+        XCTAssertEqual(ReminderPickerCard.offsetToSet(tapped: 0, own: nil, defaultMinutes: 30), 0)
+        XCTAssertEqual(ReminderPickerCard.offsetToSet(tapped: 30, own: 0, defaultMinutes: 30), 30)
+        XCTAssertEqual(ReminderPickerCard.offsetToSet(tapped: 15, own: nil, defaultMinutes: 30), 15)
+        XCTAssertEqual(ReminderPickerCard.offsetToSet(tapped: 0, own: nil, defaultMinutes: 0), 0)
+        let day = date(2026, 11, 3)
+        let five = calendar.date(bySettingHour: 16, minute: 30, second: 0, of: day)!.formatted(date: .omitted, time: .shortened)
+        XCTAssertEqual(ReminderPickerCard.fireText(day: day, time: PickerTime(hour: 17, minute: 0),
+                                                   offsetMinutes: ReminderPickerCard.chosenOffset(own: nil, defaultMinutes: 30),
+                                                   calendar: calendar), "Fires " + five, "when it will fire: the default's")
+        XCTAssertEqual(ReminderChipText.symbol(offsetMinutes: 0, reminderDate: nil), "bell.badge")
+        XCTAssertEqual(ReminderChipText.symbol(offsetMinutes: 30, reminderDate: nil), "bell.badge")
+        XCTAssertEqual(ReminderChipText.symbol(offsetMinutes: nil, reminderDate: day), "bell.badge")
+        XCTAssertEqual(ReminderChipText.symbol(offsetMinutes: nil, reminderDate: nil), "alarm")
+    }
+
     func testReminderOffsetsIncludeTenMinutesAndACustomField() {
         XCTAssertEqual(ReminderPickerCard.offsetPresets, [0, 5, 10, 15, 30, 60, 1440])
         XCTAssertEqual(ReminderPickerCard.offsetPresets.map { ReminderPickerCard.chipTitle(minutes: $0) },

@@ -88,6 +88,9 @@ public enum ReminderSuggestions {
                                   phrase: span.phrase, code: span.token, detail: span.token, reminder: .fromNow(span))
     }
 
+    /// Later's words name a day only when the clock time alone would go off on another (the task's due day, a later one):
+    /// a stored draft added after midnight, or later on the day, then holds no day already gone (the second review of
+    /// brief 175). "!9:00 AM" offered at 10 PM is tomorrow's, as "!Tomorrow 9:00 AM" was.
     static func laterRow(dueDate: Date?, now: Date, calendar: Calendar) -> ReminderSuggestion {
         let at = later(now: now, calendar: calendar)
         let parts = calendar.dateComponents([.hour, .minute], from: at)
@@ -95,18 +98,35 @@ public enum ReminderSuggestions {
         let isToday = calendar.isDate(at, inSameDayAs: now)
         let phrase: String
         let clock: ReminderClock
-        if !isToday {
-            clock = ReminderClock(hour: plain.hour, minute: plain.minute, day: 1)
-            phrase = "!Tomorrow " + plain.text
-        } else if plain.date(dueDay: dueDate, now: now, calendar: calendar) == at {
+        if plain.date(dueDay: dueDate, now: now, calendar: calendar) == at {
             clock = plain
             phrase = "!" + plain.text
+        } else if !isToday {
+            clock = ReminderClock(hour: plain.hour, minute: plain.minute, day: 1)
+            phrase = "!Tomorrow " + plain.text
         } else {
             clock = ReminderClock(hour: plain.hour, minute: plain.minute, day: 0)
             phrase = "!Today " + plain.text
         }
         return ReminderSuggestion(kind: .later, id: "later", label: "Later", phrase: phrase, code: plain.code,
                                   detail: isToday ? plain.text : "Tomorrow " + plain.text, reminder: .at(clock))
+    }
+
+    /// The row Return picks on the Mac (the second review of brief 175): `current` is the list for the text and caret as
+    /// they are when the key arrives; when it is the list shown, its highlighted row, else its first (a Return queued
+    /// behind a keystroke acts on the list that keystroke makes: "!30", "m", Return is In 30 minutes); nil when there is
+    /// no list now, and Return is the title's.
+    public static func rowForReturn(shown: [ReminderSuggestion], highlighted: Int,
+                                    current: [ReminderSuggestion]) -> ReminderSuggestion? {
+        guard let first = current.first else { return nil }
+        guard current.map(\.id) == shown.map(\.id), current.indices.contains(highlighted) else { return first }
+        return current[highlighted]
+    }
+
+    /// `row` as it is offered now, when it is picked: Later moves with the clock (a list left open a while offered an
+    /// older Later); every other row is what it was.
+    public static func current(_ row: ReminderSuggestion, dueDate: Date?, now: Date, calendar: Calendar = .current) -> ReminderSuggestion {
+        row.kind == .later ? laterRow(dueDate: dueDate, now: now, calendar: calendar) : row
     }
 
     /// The rows a typed query leaves (what follows the "!" up to the caret): those whose code starts with it ("!1":
@@ -144,7 +164,8 @@ public enum ReminderSuggestions {
     /// The word around `cursor` (a UTF-16 offset in `text`), when it starts with one "!" (not "!!", a priority) and the
     /// caret is past that "!"; nil otherwise, and after a space (a space ends the word: the list closes). Where the word
     /// starts a reminder phrase of several words, already lit with the caret back inside it ("!1|0 minutes before"), the
-    /// range is the whole phrase: a pick replaces all of it (the review of brief 175).
+    /// range is the whole phrase: a pick replaces all of it (the review of brief 175). With nothing typed after the "!"
+    /// the range is the "!" alone, so a pick keeps the words after the caret.
     public static func bangWord(in text: String, cursor: Int) -> BangWord? {
         let ns = text as NSString
         guard cursor > 0, cursor <= ns.length else { return nil }
@@ -159,6 +180,9 @@ public enum ReminderSuggestions {
         guard start < cursor, ns.character(at: start) == 0x21 /* ! */ else { return nil }
         if start + 1 < ns.length, ns.character(at: start + 1) == 0x21 { return nil }
         let query = ns.substring(with: NSRange(location: start + 1, length: cursor - start - 1))
+        // Nothing typed after the "!": it was typed in front of a word ("Call !|mom", "Call mom !|tomorrow 5pm"), and a
+        // pick takes its place alone (the second review of brief 175).
+        guard !query.isEmpty else { return BangWord(range: NSRange(location: start, length: 1), query: query) }
         return BangWord(range: NSRange(location: start, length: phraseEnd(in: ns, from: start, wordEnd: end) - start), query: query)
     }
 

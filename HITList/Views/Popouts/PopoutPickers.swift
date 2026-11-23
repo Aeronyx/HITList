@@ -67,6 +67,12 @@ struct PriorityChipPopover: View {
 /// "!15m"), "Remind 4:30 PM" (picked, typed "!4:30pm", or saved), after the time when there is one:
 /// "5:00 PM · in 15 min".
 enum ReminderChipText {
+    /// The Reminder chip's bell: `bell.badge` for a reminder of the task's own, an offset (0, "At time", included) or a
+    /// moment; the plain alarm otherwise (the second review of brief 175: an explicit 0 showed the plain one).
+    static func symbol(offsetMinutes: Int?, reminderDate: Date?) -> String {
+        offsetMinutes != nil || reminderDate != nil ? "bell.badge" : "alarm"
+    }
+
     static func title(time: Date?, offsetMinutes: Int?, reminderDate: Date? = nil, fromNow: ReminderSpan? = nil,
                       now: Date = Date(), calendar: Calendar = .current) -> String {
         // Zero says "At time" beside the time; with no time it waits for one and says nothing yet.

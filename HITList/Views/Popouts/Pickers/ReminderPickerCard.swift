@@ -14,6 +14,9 @@ struct ReminderPickerCard: View {
     /// Minutes before the time; 0 is at the time, the task's own; nil is none of its own (at the time, or Settings'
     /// default reminder when one is set).
     var offsetMinutes: Int?
+    /// Settings → Reminders → Default reminder (`Preferences.defaultReminderOffset`): what a task with no offset of its
+    /// own gets, and what the card shows for one.
+    var defaultOffsetMinutes = 0
     var now = Date()
     /// Nil removes the time.
     var onTime: (PickerTime?) -> Void
@@ -84,6 +87,20 @@ struct ReminderPickerCard: View {
         minutes > 0 ? ReminderOffset.duration(minutes: minutes) : "At time"
     }
 
+    /// The offset chip shown chosen: the task's own; with none of its own, what will happen: Settings' default (every
+    /// choice of the setting is a chip), or At time when there is none, since it then fires at the time (the second
+    /// review of brief 175: nil showed At time chosen while a default of 30 minutes before was what fired).
+    static func chosenOffset(own: Int?, defaultMinutes: Int) -> Int {
+        own ?? max(0, defaultMinutes)
+    }
+
+    /// What a tap on an offset chip sets: its minutes, 0 ("At time") included; nil (nothing to set) for the chip of
+    /// Settings' default on a task with no offset of its own, which is what happens already.
+    static func offsetToSet(tapped minutes: Int, own: Int?, defaultMinutes: Int) -> Int? {
+        if own == nil, defaultMinutes > 0, minutes == defaultMinutes { return nil }
+        return minutes
+    }
+
     /// The custom field's minutes: a whole number from 1 up to the grammar's four weeks.
     static func customOffset(_ text: String) -> Int? {
         guard let n = Int(text.trimmingCharacters(in: .whitespaces)), (1...ReminderOffset.maxMinutes).contains(n) else { return nil }
@@ -141,7 +158,10 @@ struct ReminderPickerCard: View {
                     }
                 }
             }
-            let fire = Self.fireText(day: day, time: time, offsetMinutes: offsetMinutes, now: now)
+            // When it will fire: the task's own offset, else Settings' default.
+            let fire = Self.fireText(day: day, time: time,
+                                     offsetMinutes: Self.chosenOffset(own: offsetMinutes, defaultMinutes: defaultOffsetMinutes),
+                                     now: now)
             let clears = time != nil || reminderDate != nil
             // The short layout keeps its room for the choices (brief 114): the general note goes, the hint that an offset
             // needs a time stays; with neither, nor "Fires…" or "No reminder", the foot takes no room at all.
@@ -195,13 +215,21 @@ struct ReminderPickerCard: View {
 
     /// "At time" sends 0, the task's own reminder at its time, as "!At time of task" typed is: the card has no "default"
     /// choice beside it, so it is what a person taps for "at the time", and nil let a Settings default reminder replace
-    /// it (the supervisor, after the review of brief 175). A task with no offset of its own shows "At time" chosen too.
+    /// it (the supervisor, after the review of brief 175). A task with no offset of its own shows what will happen
+    /// (`chosenOffset`): its Settings default's chip, which a tap leaves as it is (`offsetToSet`).
     private func offsetChip(_ minutes: Int, _ onOffset: @escaping (Int?) -> Void) -> some View {
-        HITChip(Self.chipTitle(minutes: minutes), systemImage: minutes == 0 ? "bell" : "bell.badge",
-                tint: Theme.accent, isSelected: (offsetMinutes ?? 0) == minutes,
-                action: { onOffset(minutes) })
-            .accessibilityLabel(ReminderOffset.label(minutes: minutes))
-            .help(ReminderOffset.label(minutes: minutes))
+        let isDefault = offsetMinutes == nil && defaultOffsetMinutes > 0 && minutes == defaultOffsetMinutes
+        let label = ReminderOffset.label(minutes: minutes) + (isDefault ? ", the default" : "")
+        return HITChip(Self.chipTitle(minutes: minutes), systemImage: minutes == 0 ? "bell" : "bell.badge",
+                       tint: Theme.accent,
+                       isSelected: Self.chosenOffset(own: offsetMinutes, defaultMinutes: defaultOffsetMinutes) == minutes,
+                       action: {
+                           if let value = Self.offsetToSet(tapped: minutes, own: offsetMinutes, defaultMinutes: defaultOffsetMinutes) {
+                               onOffset(value)
+                           }
+                       })
+            .accessibilityLabel(label)
+            .help(label)
             .accessibilityIdentifier("reminderOffset\(minutes)")
     }
 

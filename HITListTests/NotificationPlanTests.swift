@@ -240,6 +240,25 @@ final class NotificationPlanTests: XCTestCase {
         XCTAssertEqual(request.dueDate, plain.dueDate)
     }
 
+    /// A task's own reminder moment that is the due-time reminder's moment goes out once, as that request: "Call mom 5pm
+    /// !5pm", "Standup every weekday at 9am !9am", Later on the hour (the second review of brief 175: two banners for one
+    /// moment). A moment of its own at another time still goes out beside it.
+    func testAReminderMomentOnTheDueTimeRemindersMomentIsOneBanner() {
+        var call = item("Call mom", in: 8 * hour)
+        call.reminderDate = now.addingTimeInterval(8 * hour)
+        var flight = item("Flight", in: 5 * hour, remindMinutesBefore: 60)
+        flight.reminderDate = now.addingTimeInterval(4 * hour)
+        var pack = item("Pack", in: 8 * hour)
+        pack.reminderDate = now.addingTimeInterval(7 * hour)
+        let result = plan([call, flight, pack])
+        XCTAssertEqual(result.requests.filter { $0.taskID == call.id }.map(\.kind), [.due])
+        XCTAssertEqual(result.requests.filter { $0.taskID == flight.id }.map(\.kind), [.due], "the offset's moment too")
+        XCTAssertEqual(result.requests.filter { $0.taskID == pack.id }.map(\.kind), [.reminder, .due])
+        // With Settings' default making the due-time one earlier, the moment is its own again.
+        let withDefault = NotificationPlan.make(tasks: [call], now: now, defaultOffsetMinutes: 15, calendar: calendar)
+        XCTAssertEqual(withDefault.requests.map(\.kind), [.due, .reminder])
+    }
+
     func testTasksOwnOffsetWinsOverTheDefault() {
         let own = item("Flight", in: 5 * hour, remindMinutesBefore: 60)
         let explicitAtTime = item("Call", in: 6 * hour, remindMinutesBefore: 0)

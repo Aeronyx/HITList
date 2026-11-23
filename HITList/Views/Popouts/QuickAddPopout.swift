@@ -254,8 +254,14 @@ struct QuickAddPopout: View {
                 switch key {
                 case .up: listHighlight = max(0, highlighted - 1)
                 case .down: listHighlight = min(rows.count - 1, highlighted + 1)
-                // Return picks: it never adds the task while the list is open.
-                case .pick: pickReminder(rows[highlighted], word: word)
+                // Return picks: it never adds the task while the list is open. It acts on the list as the text and
+                // caret are now, not the one a keystroke still queued before it was drawn from (the second review of
+                // brief 175); none now, and Return is the title's.
+                case .pick:
+                    guard let now = currentReminderList(),
+                          let row = ReminderSuggestions.rowForReturn(shown: rows, highlighted: highlighted, current: now.rows)
+                    else { return false }
+                    pickReminder(row, word: now.word)
                 case .dismiss: listClosedAt = word.range.location
                 }
                 return true
@@ -263,9 +269,23 @@ struct QuickAddPopout: View {
             onDismiss: { listClosedAt = word.range.location })
     }
 
+    /// The "!" word and its rows for the text and caret as they are now (Return on the Mac, `reminderList`).
+    private func currentReminderList() -> (word: ReminderSuggestions.BangWord, rows: [ReminderSuggestion])? {
+        guard let word = bangWord else { return nil }
+        let p = parser
+        let chips = draft.chips(p)
+        let all = ReminderSuggestions.rows(hasTime: chips.hasDueTime, dueDate: chips.dueDate, now: p.dateParser.now,
+                                           calendar: p.dateParser.calendar)
+        return (word, ReminderSuggestions.narrowed(all, by: word.query))
+    }
+
     /// A row picked: its words take the typed "!…"'s place with a space after them, lit at once; the keyboard stays and
     /// the caret sits after the space.
     private func pickReminder(_ row: ReminderSuggestion, word: ReminderSuggestions.BangWord) {
+        // Later as it is now: a list left open a while offered an older one (the second review of brief 175).
+        let p = parser
+        let row = ReminderSuggestions.current(row, dueDate: draft.chips(p).dueDate, now: p.dateParser.now,
+                                              calendar: p.dateParser.calendar)
         let cursor = draft.pick(row, replacing: word.range)
         caretRequest = HighlightCaretRequest(offset: cursor, serial: (caretRequest?.serial ?? 0) + 1)
         caret = cursor
@@ -433,14 +453,16 @@ struct QuickAddPopout: View {
         let title = ReminderChipText.title(time: chips.hasDueTime ? chips.dueDate : nil, offsetMinutes: chips.reminderOffsetMinutes,
                                            reminderDate: chips.reminderDate, fromNow: chips.reminderFromNow,
                                            now: parser.dateParser.now)
-        return HITChip(title, systemImage: (chips.reminderOffsetMinutes ?? 0) > 0 || chips.reminderDate != nil ? "bell.badge" : "alarm",
+        return HITChip(title, systemImage: ReminderChipText.symbol(offsetMinutes: chips.reminderOffsetMinutes,
+                                                                   reminderDate: chips.reminderDate),
                        tint: set ? Theme.accent : Theme.secondaryText,
                        isSelected: set, size: .compact, action: { openChip = .reminder })
             .accessibilityLabel("Reminder: \(title == "Reminder" ? "none" : title)")
             .accessibilityIdentifier("quickAddReminderChip")
             .pickerAnchor(.reminder, isPresented: chipBinding(.reminder)) {
                 ReminderPickerCard(day: chips.dueDate, time: chips.hasDueTime ? chips.dueDate.map { PickerTime($0) } : nil,
-                                   offsetMinutes: chips.reminderOffsetMinutes, now: parser.dateParser.now,
+                                   offsetMinutes: chips.reminderOffsetMinutes,
+                                   defaultOffsetMinutes: Preferences.defaultReminderOffset, now: parser.dateParser.now,
                                    onTime: { time in
                                        if let time {
                                            draft.setTime(hour: time.hour, minute: time.minute, parser)

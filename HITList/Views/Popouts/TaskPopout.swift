@@ -406,8 +406,14 @@ struct TaskPopout: View {
                 switch key {
                 case .up: listHighlight = max(0, highlighted - 1)
                 case .down: listHighlight = min(rows.count - 1, highlighted + 1)
-                // Return picks: it does not confirm while the list is open.
-                case .pick: pickReminder(rows[highlighted], word: word)
+                // Return picks: it does not confirm while the list is open. It acts on the list as the title and caret
+                // are now, not the one a keystroke still queued before it was drawn from (the second review of brief
+                // 175); none now, and Return is the title's.
+                case .pick:
+                    guard let now = currentReminderList(),
+                          let row = ReminderSuggestions.rowForReturn(shown: rows, highlighted: highlighted, current: now.rows)
+                    else { return false }
+                    pickReminder(row, word: now.word)
                 case .dismiss: listClosedAt = word.range.location
                 }
                 return true
@@ -415,7 +421,21 @@ struct TaskPopout: View {
             onDismiss: { listClosedAt = word.range.location })
     }
 
+    /// The "!" word and its rows for the title and caret as they are now (Return on the Mac, `reminderList(shown:)`).
+    private func currentReminderList() -> (word: ReminderSuggestions.BangWord, rows: [ReminderSuggestion])? {
+        guard let word = bangWord else { return nil }
+        let p = parser()
+        let shown = EditorFields(task: task).applying(draft.phrases(p, for: task))
+        let all = ReminderSuggestions.rows(hasTime: shown.hasDueTime && shown.dueDate != nil, dueDate: shown.dueDate,
+                                           now: p.dateParser.now, calendar: p.dateParser.calendar)
+        return (word, ReminderSuggestions.narrowed(all, by: word.query))
+    }
+
     private func pickReminder(_ row: ReminderSuggestion, word: ReminderSuggestions.BangWord) {
+        // Later as it is now: a list left open a while offered an older one (the second review of brief 175).
+        let p = parser()
+        let due = EditorFields(task: task).applying(draft.phrases(p, for: task)).dueDate
+        let row = ReminderSuggestions.current(row, dueDate: due, now: p.dateParser.now, calendar: p.dateParser.calendar)
         let cursor = draft.pick(row, replacing: word.range)
         caretRequest = HighlightCaretRequest(offset: cursor, serial: (caretRequest?.serial ?? 0) + 1)
         caret = cursor
@@ -570,12 +590,13 @@ struct TaskPopout: View {
         let set = timeParts != nil || moment != nil
         let title = ReminderChipText.title(time: timeParts == nil ? nil : due, offsetMinutes: shown.reminderOffsetMinutes,
                                            reminderDate: moment, now: now)
-        return HITChip(title, systemImage: (shown.reminderOffsetMinutes ?? 0) > 0 || moment != nil ? "bell.badge" : "alarm",
+        return HITChip(title, systemImage: ReminderChipText.symbol(offsetMinutes: shown.reminderOffsetMinutes, reminderDate: moment),
                        tint: set ? Theme.accent : Theme.secondaryText,
                        isSelected: set, size: .compact, action: { openChip = .reminder })
             .pickerAnchor(.reminder, isPresented: chipBinding(.reminder)) {
                 ReminderPickerCard(day: due, time: timeParts.map { PickerTime(hour: $0.hour, minute: $0.minute) },
-                                   offsetMinutes: shown.reminderOffsetMinutes, now: now, onTime: { time in
+                                   offsetMinutes: shown.reminderOffsetMinutes,
+                                   defaultOffsetMinutes: Preferences.defaultReminderOffset, now: now, onTime: { time in
                     if let time {
                         openChip = nil
                         setTime(hour: time.hour, minute: time.minute)
