@@ -20,6 +20,10 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
+        Entry(version: "0.9.18", items: [
+            "Reminders from a list: type “!” in quick add and pick one, like “At time of task”, “30 minutes before” or “In 15 minutes”. Typing more narrows the list, and the short codes still work.",
+            "Reminders and times in words: “remind me 30 minutes before”, “Remind me to call mom at 5”, “5 p.m.”, “priority 1”. A time from 1 to 6 with no am or pm now means the afternoon.",
+        ]),
         Entry(version: "0.9.17", items: [
             "The sync bolt keeps still. On HITList's new sync it stays filled while your changes come and go as usual; it empties when something is still waiting after a few seconds, and when you come back after a minute away, until HITList has caught up.",
             "Back online after a while offline, what you changed is sent at once.",

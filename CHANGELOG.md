@@ -5,6 +5,43 @@ until the version has a section here, then stamps the heading with the build num
 per release. A second build of one version (0.9.0 had builds 20 and 21) is released with `scripts/release.sh --quick`
 and needs a section headed `## X.Y.Z (N)`, which the script stamps with the date.
 
+## 0.9.18
+
+George, 2026-11-23, after showing HITList to a friend: "I typed `!0mb` and it didn't register that I wanted a
+reminder, nor did spelling out anything about a reminder … Todoist handles this better; when the user types an
+exclamation point on an untimed task, it pops up with recommendations … it shouldn't take me typing out the whole
+"!0mb" phrase and hitting space for it to register." The same day he got a Sandbar Stream ring: "I want to be able
+to add tasks to my todo list without even pulling out my phone." (`dev/briefs/ROUND-36.md`.)
+
+Reminders in quick add (brief 175):
+
+- **Typing "!" opens a list**, as Todoist's does. On a task with a time: At time of task, 10, 30 or 45 minutes
+  before, 1, 2 or 3 hours before, 1 day before, then In 5, 15 or 30 minutes and Later. Without a time: In 5, 15 or
+  30 minutes, In 1 hour, and Later (three hours on, to the hour, or tomorrow 9:00 AM in the evening). Each row shows
+  its code beneath it. Typing narrows the list ("!1", "!in", "!h"); a pick is written lit at once, with no space to
+  type. On the Mac, ↑ ↓ and Return pick (Return does not add the task) and Esc closes the list. The task editor's
+  title has the same list.
+- **A pick is written in words** ("!At time of task", "!30 minutes before", "!In 15 minutes"), and so is a choice
+  from the Reminder chip. The codes (`!0mb`, `!30mb`, `!15m`, `!at`) still work when typed.
+- **Reminders in words**: "remind me 30 minutes before", "remind me in an hour", "remind me at 4pm", "reminder 1
+  hour before". "Remind me to …" at the start is taken out of the title, and the reminder is at the task's time.
+  "priority 1" to "priority 4" set the priority.
+- **Times as people say them**: "5 p.m." and "9:30 a.m." read right (before, "5 p.m." was 5 AM with "p.m." left in
+  the title). "at 1" to "at 6" with no am or pm is the afternoon ("pick up the dry cleaning at 6" was 6 AM);
+  "at 7" and later, and an hour typed straight after a day ("tomorrow 5"), read as before.
+
+The Stream ring (brief 176):
+
+- **What you say to the ring becomes a task, phone in pocket.** A relay of your own on Cloudflare's free plan
+  (`relay/stream-inbox/`) collects the ring's captures: every minute from Stream's MCP once you have signed in to
+  Stream there (free), or at once from Stream's webhook (needs Stream's paid Upstream). HITList on each connected
+  device takes what waits (every minute on a Mac while it runs, when the iPhone app comes forward, in its
+  background refresh), reads each capture as quick add does, and tells the relay; iCloud carries the task to the
+  other devices. A capture is never added twice.
+- **Settings → Stream Ring** connects a device with the relay's link, shows when the last capture came, sends a
+  test capture, and can take only captures that start with "Task".
+- **Siri** reads dictated text the same way ("Task: call the dentist." → "Call the dentist").
+
 ## 0.9.17 — build 32, 2026-11-20
 
 0.9.16 went out on the morning of 2026-11-20, and that day George moved his own Mac and iPhone to HITList's own
