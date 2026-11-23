@@ -64,8 +64,9 @@ public enum ClaudeTools {
                 priority (p1…p4, "priority 2"), #Group, @label and a reminder, in words or as a code: \
                 "remind me 30 minutes before" or "!30 minutes before" (before the due time, needs a time; \
                 "!15mb" for short), "remind me in 15 minutes" or "!in 15 minutes" (from now; "!15m"), \
-                "remind me at 4pm" or "!4pm" (at that time), "!at time of task" ("!0mb"). Text that starts \
-                "Remind me to" keeps the rest as the title and reminds at the task's time. Words that aren't \
+                "!4pm" (a reminder at that time), "!at time of task" ("!0mb"); "remind me at 4pm" with no other \
+                date or time makes 4pm the task's time, reminded then. Text that starts "Remind me to" keeps the \
+                rest as the title and reminds at the task's time. Words that aren't \
                 syntax stay in the title. Example: "Call the dentist tomorrow 9am p2 #Health @phone remind me \
                 1 hour before".
                 """,

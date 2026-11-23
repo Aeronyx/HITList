@@ -257,7 +257,8 @@ final class ReminderWordsTests: XCTestCase {
         XCTAssertNil(tea.dueDate, "a reminder from now gives the task no date")
 
         // A clock time: today if still ahead, else tomorrow; on the due day when there is one and it is still to come.
-        for text in ["Bins !4pm", "Bins !4:00 PM", "Bins remind me at 4pm", "Bins remind me at 4 p.m."] {
+        // ("Bins remind me at 4pm" is a due time since the review of brief 175: `testRemindMeWithAClockTimeAndNoDayIsTheDueTime`.)
+        for text in ["Bins !4pm", "Bins !4:00 PM", "Bins !at 4pm", "Bins !4 p.m."] {
             let r = parser.parse(text)
             XCTAssertEqual(r.title, "Bins", text)
             assertDate(r.reminderDate, 2026, 10, 21, 16, 0)
@@ -316,7 +317,8 @@ final class ReminderWordsTests: XCTestCase {
         XCTAssertEqual(off.title, "Call !10 minutes before")
         XCTAssertNil(off.reminderOffsetMinutes)
         // Its inner words are not read as anything else: "at 4pm" stays the reminder's, not a due time.
-        let spoken = parser.parse("Call remind me at 4pm", disabling: [QuickAddTokenKey(kind: .reminder, text: "remind me at 4pm")])
+        // ("remind me at 4pm" with no day of the task's own is its due time since the review of brief 175: a time token.)
+        let spoken = parser.parse("Call remind me at 4pm", disabling: [QuickAddTokenKey(kind: .time, text: "remind me at 4pm")])
         XCTAssertEqual(spoken.title, "Call remind me at 4pm")
         XCTAssertNil(spoken.dueDate)
         XCTAssertNil(spoken.reminderDate)
@@ -388,6 +390,69 @@ final class ReminderWordsTests: XCTestCase {
         XCTAssertTrue(parser.parse("Remind me to", mode: .live).tokens.isEmpty)
         XCTAssertTrue(parser.parse("Remind me to ", mode: .live).tokens.isEmpty)
         XCTAssertEqual(parser.parse("Remind me to c", mode: .live).tokens.map(\.text), ["Remind me to"])
+    }
+
+    /// "Remind me at 5pm to call mom": a clock time said with "remind me", with no day or time of the task's own, is when
+    /// the task is due, reminded at the time (the review of brief 175, finding 4: it made an undated task). Its words are a
+    /// time token (a date token with its day). "!4pm" stays a reminder moment of its own. Monday 2026-11-23, 14:10 Eastern.
+    func testRemindMeWithAClockTimeAndNoDayIsTheDueTime() throws {
+        var ny = Calendar(identifier: .gregorian)
+        ny.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+        func at(_ m: Int, _ d: Int, _ h: Int, _ min: Int) -> Date {
+            ny.date(from: DateComponents(year: 2026, month: m, day: d, hour: h, minute: min))!
+        }
+        let p = QuickAddParser(now: at(11, 23, 14, 10), calendar: ny)
+
+        let mom = p.parse("Remind me at 5pm to call mom")
+        XCTAssertEqual(mom.title, "Call mom")
+        XCTAssertEqual(mom.dueDate, at(11, 23, 17, 0))
+        XCTAssertTrue(mom.hasDueTime)
+        XCTAssertEqual(mom.reminderOffsetMinutes, 0, "at the time")
+        XCTAssertNil(mom.reminderDate)
+        XCTAssertNil(mom.reminderClock)
+        XCTAssertEqual(mom.tokens.map(\.text), ["Remind me at 5pm to"])
+        XCTAssertEqual(mom.tokens.map(\.kind), [.time])
+
+        let bank = p.parse("Remind me tomorrow at 9 to call the bank")
+        XCTAssertEqual(bank.title, "Call the bank")
+        XCTAssertEqual(bank.dueDate, at(11, 24, 9, 0))
+        XCTAssertEqual(bank.reminderOffsetMinutes, 0)
+        XCTAssertEqual(bank.tokens.map(\.kind), [.date])
+
+        let inside = p.parse("Call mom, remind me at 4")
+        XCTAssertEqual(inside.title, "Call mom,")
+        XCTAssertEqual(inside.dueDate, at(11, 23, 16, 0))
+        XCTAssertEqual(inside.reminderOffsetMinutes, 0)
+
+        let plants = p.parse("Remind me at 5 to water the plants every day")
+        XCTAssertEqual(plants.title, "Water the plants")
+        XCTAssertEqual(plants.recurrence?.frequency, .daily)
+        XCTAssertEqual(plants.dueDate, at(11, 23, 17, 0), "a repeat's day: the afternoon")
+        XCTAssertEqual(plants.reminderOffsetMinutes, 0)
+
+        // Another reminder before the time typed with it is the one.
+        let before = p.parse("Remind me at 5pm to call mom !10 minutes before")
+        XCTAssertEqual(before.dueDate, at(11, 23, 17, 0))
+        XCTAssertEqual(before.reminderOffsetMinutes, 10)
+
+        // With a day or a time of the task's own, a reminder moment on it, as before.
+        let friday = p.parse("Remind me at 4 to call mom friday")
+        XCTAssertEqual(friday.title, "Call mom")
+        XCTAssertEqual(friday.dueDate, at(11, 27, 0, 0))
+        XCTAssertFalse(friday.hasDueTime)
+        XCTAssertEqual(friday.reminderDate, at(11, 27, 16, 0))
+        XCTAssertNil(friday.reminderOffsetMinutes)
+        let timed = p.parse("Call mom 5pm remind me at 4pm")
+        XCTAssertEqual(timed.dueDate, at(11, 23, 17, 0))
+        XCTAssertEqual(timed.reminderDate, at(11, 23, 16, 0))
+        var editor = p
+        editor.dueDayIsSet = true
+        XCTAssertNil(editor.parse("Call mom remind me at 4pm").dueDate, "the editor's task has its own day")
+        XCTAssertEqual(editor.parse("Call mom remind me at 4pm").reminderClock, ReminderClock(hour: 16, minute: 0))
+        // The code is a reminder moment of its own.
+        let code = p.parse("Bins !4pm")
+        XCTAssertNil(code.dueDate)
+        XCTAssertEqual(code.reminderDate, at(11, 23, 16, 0))
     }
 
     func testPriorityInWords() {
@@ -696,7 +761,8 @@ final class ReminderWordsTests: XCTestCase {
         XCTAssertEqual(p.parse("Call mom at 5pm, reminder 30 minutes before").reminderOffsetMinutes, 30)
         XCTAssertEqual(p.parse("Call mom at 5pm - reminder 30 minutes before").reminderOffsetMinutes, 30)
         XCTAssertEqual(p.parse("Dentist friday 3pm reminder 1 hour before").reminderOffsetMinutes, 60, "after a time")
-        XCTAssertEqual(p.parse("Call mom remind me at 4pm").reminderClock, ReminderClock(hour: 16, minute: 0))
+        XCTAssertEqual(p.parse("Call mom remind me at 4pm").title, "Call mom")
+        XCTAssertEqual(p.parse("Call mom remind me at 4pm").dueDate, at(11, 23, 16, 0), "no day of its own: the due time")
         XCTAssertEqual(p.parse("Call mom 5pm and remind me 30 minutes before").reminderOffsetMinutes, 30)
     }
 

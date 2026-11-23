@@ -12,13 +12,10 @@ public struct QuickAddToken: Equatable, Sendable {
     public var isSuperseded = false
 
     /// Said in plain language rather than typed as a code (brief 175): "remind me in an hour", "reminder 1 hour
-    /// before", "Remind me to", "priority 1".
+    /// before", "Remind me to", "priority 1", and "remind me at 5pm" when it became the due time (a time token).
     var isSaidInWords: Bool {
-        switch kind {
-        case .reminder: return !text.hasPrefix("!")
-        case .priority: return text.lowercased().hasPrefix("priority")
-        default: return false
-        }
+        let lower = text.lowercased()
+        return lower.hasPrefix("remind") || lower.hasPrefix("priority")
     }
 }
 
@@ -157,6 +154,8 @@ public struct QuickAddParser: Sendable {
         var winner: [Slot: Int] = [:]
         /// The task's own reminder moment, the latest typed: that long from now, or a clock time (brief 175).
         var ownReminder: OwnReminder? = nil
+        /// That clock time said with "remind me" (not a "!" code): its token, by index in `result.tokens`.
+        var spokenClock: Int? = nil
         /// "Remind me to …" opens the text (brief 175): with a time and no other reminder, it reminds at the time.
         var remindMeTo = false
         /// Where a reminder said in words opens the text ("Remind me to call mom", "Remind me in 30 minutes to call
@@ -219,9 +218,10 @@ public struct QuickAddParser: Sendable {
                 if mode == .live, words[i + n - 1].range.upperBound == input.endIndex { i += n; continue }
                 switch reading.phrase {
                 case .fromNow(let span):
-                    ownReminder = .span(span); win(i, n, .reminder, slot: .reminderFromNow)
+                    ownReminder = .span(span); win(i, n, .reminder, slot: .reminderFromNow); spokenClock = nil
                 case .at(let clock):
                     ownReminder = .clock(clock, short: reading.shortHour); win(i, n, .reminder, slot: .reminderFromNow)
+                    spokenClock = w.hasPrefix("!") ? nil : result.tokens.count - 1
                 case .beforeDue(let minutes):
                     result.reminderOffsetMinutes = minutes; win(i, n, .reminder, slot: .reminderBeforeDue)
                 }
@@ -261,6 +261,20 @@ public struct QuickAddParser: Sendable {
             i += 1
         }
 
+        // "Remind me at 5pm to call mom", "Call mom, remind me tomorrow at 9": a clock time said with "remind me", and no
+        // day or time of the task's own (typed, or the editor's task's), is when the task is due, reminded at the time
+        // (the review of brief 175: it made an undated task). Its words are a time token, or a date token with their
+        // day. A repeat typed beside it gives the day. "!4pm" stays a reminder moment of its own.
+        if case .clock(let clock, let short)? = ownReminder, let index = spokenClock, date == nil, time == nil, moment == nil,
+           !dueDayIsSet {
+            time = (clock.hour, clock.minute)
+            timeIsShort = short
+            if let day = clock.day { date = dateParser.day(day) }
+            ownReminder = nil
+            result.tokens[index].kind = clock.day == nil ? .time : .date
+            if result.reminderOffsetMinutes == nil { result.reminderOffsetMinutes = 0 }
+        }
+
         // A reminder before the due time is relative to it: with no time typed (or set by "in 2 hours") it is
         // plain title text and sets nothing (George, 0.4.1 and again on 0.5.0, brief 41: "A typed reminder like
         // '!15mb' should not highlight before there's a time"). Once a time is typed it lights up and counts.
@@ -289,8 +303,8 @@ public struct QuickAddParser: Sendable {
         }
         result.title = titleWords.joined(separator: " ")
         // "Remind me to call mom" is "Call mom": a reminder said in words that opens the text, and still stands, leaves
-        // the rest of the title starting with a capital (brief 175).
-        if let spokenStart, result.tokens.contains(where: { $0.kind == .reminder && !$0.isSuperseded && $0.range.lowerBound == spokenStart }),
+        // the rest of the title starting with a capital (brief 175); so does one that became the due time.
+        if let spokenStart, result.tokens.contains(where: { !$0.isSuperseded && $0.range.lowerBound == spokenStart }),
            let first = result.title.first {
             result.title = first.uppercased() + result.title.dropFirst()
         }

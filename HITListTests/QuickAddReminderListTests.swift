@@ -246,11 +246,46 @@ final class QuickAddReminderListTests: XCTestCase {
     func testAClockReminderReachesTheSavedTask() throws {
         let container = ModelContainerFactory.preview()
         let context = container.mainContext
-        let draft = QuickAddDraft(context: .inbox, text: "Call mom remind me at 4:30 p.m.")
+        // ("remind me at 4:30 p.m." with no day is the due time since the review of brief 175: the next test.)
+        let draft = QuickAddDraft(context: .inbox, text: "Call mom !4:30 p.m.")
         let task = try TaskActions.create(from: draft.result(parser()), defaultProject: nil, defaultLabel: nil, in: context)
         XCTAssertEqual(task.title, "Call mom")
         XCTAssertEqual(task.reminderDate, at(16, 30))
         XCTAssertNil(task.dueDate)
+        withExtendedLifetime(container) {}
+    }
+
+    /// "Remind me at 4:30 p.m. to call mom" on the card: the task is due then, reminded at the time, in the Inbox and in
+    /// Today; an Upcoming day's row gives the day, and the words are a reminder on it (the review of brief 175, finding 4).
+    func testRemindMeAtATimeIsTheCardsDueTime() throws {
+        let p = parser()
+        let text = "Remind me at 4:30 p.m. to call mom"
+        for context in [QuickAddContext.inbox, .today] {
+            let draft = QuickAddDraft(context: context, text: text)
+            let chips = draft.chips(p)
+            XCTAssertEqual(chips.dueDate, at(16, 30), "\(context)")
+            XCTAssertTrue(chips.hasDueTime, "\(context)")
+            XCTAssertFalse(chips.dateIsDefault, "\(context)")
+            XCTAssertEqual(chips.reminderOffsetMinutes, 0, "\(context)")
+            XCTAssertEqual(ReminderChipText.title(time: chips.dueDate, offsetMinutes: chips.reminderOffsetMinutes),
+                           clock(at(16, 30)) + " · At time")
+            let result = draft.result(p)
+            XCTAssertEqual(result.title, "Call mom")
+            XCTAssertEqual(result.dueDate, at(16, 30))
+            XCTAssertNil(result.reminderDate)
+        }
+        let thursday = calendar.date(byAdding: .day, value: 5, to: today)!
+        let row = QuickAddDraft(context: .day(thursday), text: text).result(p)
+        XCTAssertEqual(row.dueDate, thursday)
+        XCTAssertFalse(row.hasDueTime)
+        XCTAssertEqual(row.reminderDate, at(16, 30, day: 5))
+
+        let container = ModelContainerFactory.preview()
+        let task = try TaskActions.create(from: QuickAddDraft(context: .inbox, text: text).result(p), defaultProject: nil,
+                                          defaultLabel: nil, in: container.mainContext)
+        XCTAssertEqual(task.dueDate, at(16, 30))
+        XCTAssertEqual(task.reminderOffsetMinutes, 0)
+        XCTAssertNil(task.reminderDate)
         withExtendedLifetime(container) {}
     }
 
