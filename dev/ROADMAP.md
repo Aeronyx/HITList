@@ -5,7 +5,18 @@ of each round; delegated sessions never edit it (their rows conflicted at every 
 release, is in `CHANGELOG.md`; how each round ran is in `dev/briefs/COMMON.md`; George's standing decisions are in
 `dev/SUPERVISOR.md` §7. Rewritten 2026-11-10: the file had grown a row per brief (history is in git before that date).
 
-## Now: 0.9.16, the build that moves everyone to the engine (rounds 32 to 34, 2026-11-16 to 18)
+## Now: 0.9.18, reminders in quick add and the Stream ring (round 36, 2026-11-23)
+
+0.9.16 (released 2026-11-20) moved George's own devices to the engine; 0.9.17 (released 2026-11-20) steadied the
+bolt and tidied Settings. 0.9.18 adds the "!" list and reminders in words (brief 175) and the Stream ring's captures
+through a relay of George's own, with wake-up pushes (brief 176; `dev/briefs/ROUND-36.md`). The road to 1.0, as
+George was told on 2026-11-20: a week of his own use of the engine, his word for his friends (stage 6 below), two
+weeks with no sync report, then the release that removes the mirror (stage 7); App Store paperwork beside it
+(support and privacy URLs, privacy answers, screenshots); and what was never proven (iOS 18 and macOS 15, Shared
+Tasks with two accounts, VoiceOver with a person, the share extension and the window on a real Mac). He resumes it
+after his weekly usage resets on 2026-11-25.
+
+## Before: 0.9.16, the build that moves everyone to the engine (rounds 32 to 34, 2026-11-16 to 18)
 
 George, 2026-11-18: "I want to be very confident in the next build we release and I also want it to force everyone
 to move over to the new sync engine so we can settle this once and for all … Please take more time to prepare a

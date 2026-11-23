@@ -840,6 +840,21 @@ is new:
 - **Read**: the two sections at the top of this file, this block, the Round 35 record, your brief, then what it
   names.
 
+## Round 36 record (2026-11-23; agents 175 and 176 merged for 0.9.18): what a session must know now
+
+- **Quick add reads reminders in words and opens a list on "!"** (`ReminderSuggestions`, `QuickAddParser+Reminders`):
+  a pick, and a Reminder chip's choice, is written in words ("!At time of task", "!30 minutes before", "!In 15
+  minutes", "!4:00 PM"); the codes still read. "At time of task" is stored as an explicit 0 (a nil offset means "the
+  Settings default"). Read `ROUND-36.md` for the hour rule ("at N" with no am/pm, and the morning and evening cues)
+  before touching `DateExpression` or `shortHour`/`openHour`; every case is pinned.
+- **The Stream ring's captures come through a relay of George's own** (`relay/stream-inbox/`, plain JavaScript, its
+  own `test.sh`; never deploy it, never sign in: `setup.sh` is George's). `HITList/Services/Inbox/StreamInbox` claims,
+  adds each capture through `IntentActions.addTask` **as of when it was said**, and acks; `NotificationPlan.Arrival`
+  fires a late capture's reminder on arrival; `SyncAppDelegate` hands the push token to the inbox and routes a push
+  carrying `hitlist.inbox` to one bounded check. Any other push must go on exactly as before.
+- **Settings → Stream Ring is listed only where it is in use** (`StreamRingListing`: a connected device, the revealed
+  troubleshooting rows, a Debug side store). A friend's first screen is as in 0.9.17.
+
 ## Round 35 (2026-11-20; brief 174, an Opus 5.5 agent beside the supervisor; `ROUND-35.md` says why)
 
 0.9.16 was released on the morning of 2026-11-20 and George's own Mac and iPhone run the new sync in iCloud's

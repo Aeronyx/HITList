@@ -543,6 +543,23 @@ Next round: do not carry `.standard` into a side store's suite; scroll a row cle
 make Settings' first screen fit a 6.1-inch phone, as brief 86 meant. It replaces the app on his phone with a test
 build: tell him, and that TestFlight puts his back.
 
+Lessons from round 36 (2026-11-23: reminders in quick add and the Stream ring; two agents, four reviewers, an Opus
+supervisor; 0.9.18; `ROUND-36.md`): **Read a vendor's own help pages before designing around its product**:
+support.sandbar.com refuses automated fetches, the app's built-in browser read it, and one line ("What you need: An
+active Upstream subscription") turned a webhook-only design into a webhook and a free poller; a third-party bridge's
+code had the signature right and said nothing of the tier. **The Agent tool's worktrees are cut from
+`origin/master`**, not from local master: push the briefs first, or tell the agents (both read theirs with `git
+show`). **Send a review's findings back to the agent that built the thing** (`SendMessage` resumes it with its whole
+context) after fast-forwarding its branch to master (`git -C <its worktree> merge --ff-only master`): three rounds
+each, and the generated project file was the only conflict. **Review a parser change with a corpus**: a few hundred
+realistic titles through the old and the new code (`git archive` of each tree into a throwaway package that depends
+on each `HITListCore` by path) at several times of day; after two rounds of green tests it still found five titles
+that read worse. **Decide a reviewer's design question yourself, and say why in the next message** (no task ids
+derived from capture ids: sync identity; an explicit 0 for "remind me at 5": asked for that time). **A feature for
+one person is listed only where it is in use** (`StreamRingListing`): a friend's Settings stays as it was.
+**George's Fable week can run out**: he switches the session to Opus, whose use draws on the all-models week; read
+`get_usage` before each wave of agents (this round went from 68% to the mid-80s).
+
 Lessons from round 35 (2026-11-20: the day George's own devices moved; one agent, two reviewers; 0.9.17;
 `ROUND-35.md`): **His Mac's own system log answers what his message leaves out**, and may be read:
 `/usr/bin/log show --last 30m --info --predicate 'process == "HITList" AND subsystem == "com.trammells.hitlist"'`
@@ -1165,7 +1182,42 @@ network returns). He does not mind his own tasks being at risk ("I don't have an
 yet") but "my friends might and I want to make sure whatever issues affect me do not affect them": every fault
 met on his devices is asked that question in the hand-over.
 
-## 8. Where things stand (2026-11-20, afternoon: 0.9.16 released, his own devices on the new sync, 0.9.17 prepared)
+Round 36 (2026-11-23). After showing HITList to a friend: "I typed `!0mb` and it didn't register that I wanted a
+reminder, nor did spelling out anything about a reminder … Todoist handles this better … it shouldn't take me typing
+out the whole "!0mb" phrase and hitting space for it to register." Decided by that: **typing "!" opens a list of
+reminders, as Todoist's does, and a pick is written in words** ("!At time of task"); reminders and times are read as
+people say them (the hour rule in `ROUND-36.md`, the supervisor's, reviewed twice). The same day, his Sandbar Stream
+ring: "I want to be able to add tasks to my todo list without even pulling out my phone", and then **he pays for
+Stream's Upstream** ("$10 a month (as I'm a beta adopter) and I also got 3 months free. If it will vastly improve
+functionality, let's do that. I really want this to work flawlessly; it would be a massive upgrade to my
+productivity"). Decided by that: **a relay of his own** (Cloudflare, free plan) takes the ring's captures from
+Stream's webhook and from Stream's MCP, and wakes his devices with Apple pushes; **the Stream Ring page is listed only
+where it is in use**. He said 1.0 work resumes after his weekly usage resets (Wednesday 2026-11-25), when the
+session goes back to Fable.
+
+## 8. Where things stand (2026-11-23, evening: 0.9.17 released, 0.9.18 on master)
+
+**0.9.17 (build 32) was released on 2026-11-20**: the Mac export failed offline and George reran the whole command
+(the bump had been undone by hand; `release.sh` cannot resume). **0.9.18 is on master** (round 36): the "!" list and
+reminders in words (brief 175), and the Stream ring (brief 176): `relay/stream-inbox/`, `HITList/Services/Inbox/`,
+Settings → Stream Ring (on a device once connected, or after seven taps on About → Version). His friends' devices
+carry 0.9.16 or 0.9.17 and stay on the earlier sync until he makes the `HLRollout` record.
+
+**What he does**: `scripts/release.sh --version 0.9.18 --quick` (no schema to deploy); then, once, the relay: an
+Apple push key (developer.apple.com → Certificates, IDs & Profiles → Keys → +, Apple Push Notifications service,
+Sandbox & Production, Team Scoped), then in Terminal `cd ~/Desktop/HITList/relay/stream-inbox`, `wrangler login`,
+`./setup.sh` (choice 3: Stream's sign-in, the webhook in Stream → Settings → Other Tools → Developer (Webhook) with
+Sign requests, the wake-ups with the .p8), then Settings → Stream Ring → Paste → Connect on the Mac and the iPhone,
+Chat off in Stream, and a test capture. The exact steps are in the round's hand-over message.
+
+**Open with him**: the first real capture proves what nothing here could (Apple's push service from a Worker over
+HTTP/2, Stream's real webhook fields and MCP answers, Cloudflare's alarms, iOS's background upload): the Stream Ring
+page's troubleshooting rows say what happened. The word for his friends (`HLRollout`). The session "140 Sync engine:
+a pretend iCloud and its rig" still holds unmerged work. Side stores of this round's agents in the app group. The
+macOS question from the Claude app about the private window picker. Known and left: `ROUND-36.md`, "Left open".
+The next brief number is 177.
+
+## 8-35. Round 35's state (2026-11-20, afternoon: 0.9.16 released, his own devices on the new sync, 0.9.17 prepared; kept for the record)
 
 **0.9.16 (build 31) was released on the morning of 2026-11-20.** George moved his Mac by hand at 11:26 and his
 iPhone followed by itself: the new sync's first devices in iCloud's Production side, with no error since
