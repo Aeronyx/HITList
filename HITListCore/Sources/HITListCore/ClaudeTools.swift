@@ -60,10 +60,14 @@ public enum ClaudeTools {
             name: addTask, title: "Add a task",
             description: """
                 Adds a task from quick-add text, parsed exactly as HITList's own quick add does: dates and \
-                times ("tomorrow 3pm", "next fri", "in 2 hours"), repeats ("every monday"), priority (p1…p4), \
-                #Group, @label and a reminder ("!15m" = 15 minutes from now; "!15mb" = 15 minutes before the \
-                due time, needs a time). Words that aren't \
-                syntax stay in the title. Example: "Call the dentist tomorrow 9am p2 #Health @phone".
+                times ("tomorrow 3pm", "friday at 5 p.m.", "next fri", "in 2 hours"), repeats ("every monday"), \
+                priority (p1…p4, "priority 2"), #Group, @label and a reminder, in words or as a code: \
+                "remind me 30 minutes before" or "!30 minutes before" (before the due time, needs a time; \
+                "!15mb" for short), "remind me in 15 minutes" or "!in 15 minutes" (from now; "!15m"), \
+                "remind me at 4pm" or "!4pm" (at that time), "!at time of task" ("!0mb"). Text that starts \
+                "Remind me to" keeps the rest as the title and reminds at the task's time. Words that aren't \
+                syntax stay in the title. Example: "Call the dentist tomorrow 9am p2 #Health @phone remind me \
+                1 hour before".
                 """,
             inputSchema: schema([
                 "text": ["type": "string", "description": "Quick-add text: the title plus any syntax."],
