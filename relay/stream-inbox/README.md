@@ -25,7 +25,8 @@ listed only where the troubleshooting rows show (Settings → About, tap Version
 redeploys and keeps the keys unless you ask for new ones.
 
 `./test.sh` proves the relay on this Mac with no account: `wrangler dev --local`, a pretend Stream
-(`test/fake-stream.mjs`), and `curl`.
+(`test/fake-stream.mjs`), and `curl`. `test/setup-dry.sh` proves `setup.sh` with stubs for wrangler, the keychain, curl
+and the clipboard: a key is never on a command line, and a run that can't read the relay's secrets changes nothing.
 
 ## Where captures come from
 
