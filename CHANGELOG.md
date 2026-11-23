@@ -24,22 +24,37 @@ Reminders in quick add (brief 175):
 - **A pick is written in words** ("!At time of task", "!30 minutes before", "!In 15 minutes"), and so is a choice
   from the Reminder chip. The codes (`!0mb`, `!30mb`, `!15m`, `!at`) still work when typed.
 - **Reminders in words**: "remind me 30 minutes before", "remind me in an hour", "remind me at 4pm", "reminder 1
-  hour before". "Remind me to …" at the start is taken out of the title, and the reminder is at the task's time.
-  "priority 1" to "priority 4" set the priority.
+  hour before". "Remind me to …" at the start is taken out of the title, and the reminder is at the task's time;
+  "Remind me tomorrow at 9am to call the dentist" gives the same task, due at 9 with its reminder. A bare
+  "reminder" counts only at the start or after punctuation ("Send reminder at 3pm" stays a title), and words said
+  in plain language never leave a task without a title. "priority 1" to "priority 4" set the priority at the end of
+  the text ("Fix priority 1 bugs" stays a title). Siri's reply says when the reminder is.
+- **"At time of task" is a reminder of its own**: it is saved as at the time, so Settings → Default reminder no
+  longer moves it earlier.
 - **Times as people say them**: "5 p.m." and "9:30 a.m." read right (before, "5 p.m." was 5 AM with "p.m." left in
-  the title). "at 1" to "at 6" with no am or pm is the afternoon ("pick up the dry cleaning at 6" was 6 AM);
-  "at 7" and later, and an hour typed straight after a day ("tomorrow 5"), read as before.
+  the title). With no am or pm, "at 1" to "at 4" is the afternoon; "at 5" and "at 6" are the afternoon beside a
+  day ("tomorrow at 5") and otherwise the next one to come ("Wake up at 6" typed at night is 6 AM; "pick up the
+  dry cleaning at 6" typed after lunch, 6 PM: it was 6 AM). "morning" or "night" in the text keeps the morning
+  reading; "at 7" and later, and an hour typed straight after a day ("tomorrow 5"), read as before.
+- **The list closes or keeps only the matching row** when what was typed is already a whole code ("!30m" keeps
+  In 30 minutes), so Return on the Mac never turns it into another reminder.
 
 The Stream ring (brief 176):
 
 - **What you say to the ring becomes a task, phone in pocket.** A relay of your own on Cloudflare's free plan
-  (`relay/stream-inbox/`) collects the ring's captures: every minute from Stream's MCP once you have signed in to
-  Stream there (free), or at once from Stream's webhook (needs Stream's paid Upstream). HITList on each connected
-  device takes what waits (every minute on a Mac while it runs, when the iPhone app comes forward, in its
-  background refresh), reads each capture as quick add does, and tells the relay; iCloud carries the task to the
-  other devices. A capture is never added twice.
-- **Settings → Stream Ring** connects a device with the relay's link, shows when the last capture came, sends a
-  test capture, and can take only captures that start with "Task".
+  (`relay/stream-inbox/`) collects the ring's captures: at once from Stream's signed webhook (Stream's Upstream,
+  which George has), and every minute from Stream's MCP after signing in to Stream there, which also catches what
+  the webhook missed (Stream tries it once and never again). Each capture is kept until a device has it.
+- **Wake-ups**: on each capture the relay sends a silent Apple push to the connected iPhone and Mac, and HITList
+  takes the capture in the background, reads it as quick add does **as of when it was said** ("tomorrow" said at
+  11:50 PM stays the next day), saves it and tells the relay. iCloud carries the task everywhere. Without a push
+  the Mac still looks every minute while it runs, and the iPhone whenever HITList comes forward.
+- **Never twice, never lost**: a capture is held for one device at a time (30 minutes), a save that fails leaves
+  nothing behind and is tried again, and a capture the app was killed in the middle of is not added again.
+- **Settings → Stream Ring** (listed on a device once it is connected, or after seven taps on Settings → About →
+  Version; a friend's Settings is as in 0.9.17): connects a device with the relay's link, says where captures come
+  from, when the last one came, and what is wrong in words; sends a test capture; and keeps one rule for every
+  device, "Only captures that start with 'Task'".
 - **Siri** reads dictated text the same way ("Task: call the dentist." → "Call the dentist").
 
 ## 0.9.17 — build 32, 2026-11-20
