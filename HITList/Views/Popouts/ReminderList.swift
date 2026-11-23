@@ -206,7 +206,10 @@ struct ReminderListBox: Equatable {
     let request: ReminderListRequest
     let anchor: Anchor<CGRect>
 
-    static func == (a: Self, b: Self) -> Bool { a.request.signature == b.request.signature }
+    /// What it shows and where its title is: a title that moved (the editor's sheet rising with the keyboard) is a new
+    /// value, so the list follows it. Compared by what it shows alone, it stayed where the sheet had been mid-rise, a
+    /// sheet's travel below the title (iPhone 17 picture, brief 175).
+    static func == (a: Self, b: Self) -> Bool { a.request.signature == b.request.signature && a.anchor == b.anchor }
 }
 
 struct ReminderListPreferenceKey: PreferenceKey {

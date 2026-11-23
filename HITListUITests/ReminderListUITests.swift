@@ -130,6 +130,8 @@ final class ReminderListUITests: XCTestCase {
         XCTAssertTrue(hour.exists, "the task has a time: 1 hour before")
         XCTAssertLessThanOrEqual(list.frame.maxY, app.keyboards.firstMatch.frame.minY, "clear of the keyboard")
         XCTAssertGreaterThanOrEqual(list.frame.minY, editorTitle.frame.maxY, "under the title")
+        XCTAssertLessThanOrEqual(list.frame.minY - editorTitle.frame.maxY, 30,
+                                 "right under it, wherever the sheet went: \(list.frame) / \(editorTitle.frame)")
         shot("08 editor's list")
         hour.tap()
         XCTAssertTrue(list.waitForNonExistence(timeout: 3))
