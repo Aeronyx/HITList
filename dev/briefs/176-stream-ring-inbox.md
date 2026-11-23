@@ -171,3 +171,24 @@ he will run them (every command, every tap in Stream); how soon a capture reache
 state; what is not known about Stream that the first real capture will tell (`lastFields`); tests and their counts
 before and after; pictures' folder and count; your branch and commits; your simulator, folder and `wrangler dev`
 gone.
+
+## Addendum (2026-11-23, sent to the agent after Sandbar's own help pages were read)
+
+Sandbar's "Set up Stream Webhook" lists **"An active Upstream subscription"** under what you need; the request comes
+from the iPhone over its own network, waits 5 s and is **never retried**. "Set up Stream MCP" lists no
+subscription: Stream on iOS and an MCP client. So the relay gains George's free path: it **pulls** captures from
+Stream's MCP (`https://api.sandbar.com/mcp`: Streamable HTTP, stateless, JSON; OAuth with dynamic client
+registration, scopes `stream`/`stream.write`, access token 1 h, refresh token 30 days renewed with use, the
+connection ends 90 days after approval; read tool `get_recent_interactions`, "last 7 days by default, up to 100").
+
+- `POST /stream/connect-link` (inbox key) → a one-time `https://…/stream/connect?c=…` (10 minutes) → Stream's sign-in
+  → `/stream/callback` keeps the tokens in the Durable Object. The inbox key never goes in a URL.
+- A cron trigger every minute polls while connected; interactions go into the same table as the webhook's, one per
+  `interaction_id`. The first poll after connecting takes nothing older than the approval (by time, or by
+  recording the first poll's ids as seen). A refused refresh or a second 401 means disconnected.
+- `GET /inbox/status` gains `stream: {connected, approvedAt, expiresAt, lastPollAt, lastError}`.
+- `test.sh` proves the poller against a local fake MCP and OAuth server (no packages). `setup.sh` offers both
+  sources and prints the HITList inbox link.
+- Settings → Stream Ring says where captures come from, offers "Reconnect Stream…" in the last 14 days or after
+  the end, and says to turn Chat off in Stream (Sandbar's own tip: the chat bubble in the Stream tab).
+- `POST /stream` stays as built, for a time George has Upstream (a 30-day trial comes with the ring).
