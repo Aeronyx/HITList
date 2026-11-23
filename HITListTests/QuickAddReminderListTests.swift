@@ -351,6 +351,35 @@ final class QuickAddReminderListTests: XCTestCase {
         withExtendedLifetime(container) {}
     }
 
+    /// An overdue repeating task's reminder moment, still to come but before the next occurrence's day, goes with the
+    /// occurrence completed: "Pay rent every month on the 1st" due Oct 1, In 1 hour tapped at 2 PM on Oct 31, completed
+    /// at 2:30: the next is Nov 1, and a reminder kept for 3 PM today would go off for it, its Complete rolling Nov 1 on
+    /// to Dec 1 (the second review of brief 175). One on or after the next occurrence's day stays.
+    func testAnOverdueRepeatingTasksReminderGoesWithTheOccurrenceDone() throws {
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        let first = calendar.date(from: DateComponents(year: 2026, month: 10, day: 1))!
+        let rent = TaskItem(title: "Pay rent", dueDate: first, hasDueTime: false)
+        rent.recurrenceRule = .monthly
+        context.insert(rent)
+        try context.save()
+        rent.reminderDate = minutes(60)
+        TaskActions.toggleCompletion(rent, in: context, now: minutes(30), calendar: calendar)
+        XCTAssertEqual(rent.dueDate, calendar.date(from: DateComponents(year: 2026, month: 11, day: 1)), "rolled on to Nov 1")
+        XCTAssertNil(rent.reminderDate, "3 PM today is before Nov 1: it went with October's")
+
+        // On the next occurrence's day, still to come: kept.
+        let gym = TaskItem(title: "Gym", dueDate: today, hasDueTime: false)
+        gym.recurrenceRule = .daily
+        context.insert(gym)
+        try context.save()
+        gym.reminderDate = at(7, day: 1)
+        TaskActions.toggleCompletion(gym, in: context, now: minutes(30), calendar: calendar)
+        XCTAssertEqual(gym.dueDate, calendar.date(byAdding: .day, value: 1, to: today))
+        XCTAssertEqual(gym.reminderDate, at(7, day: 1))
+        withExtendedLifetime(container) {}
+    }
+
     /// Saved as the task's own moment, and scheduled like any other reminder.
     func testAClockReminderReachesTheSavedTask() throws {
         let container = ModelContainerFactory.preview()
