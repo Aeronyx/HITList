@@ -161,4 +161,26 @@ final class InboxProtocolTests: XCTestCase {
         XCTAssertNil(quiet.push)
         XCTAssertFalse(quiet.idsMatch)
     }
+
+    // MARK: Round 3
+
+    /// Finding 6: a capture's own time more than a day before it reached the relay can't be when it was said (an older
+    /// relay may still hand one over): the words are read as of its arrival.
+    func testASaidTimeMoreThanADayBeforeTheArrivalIsIgnored() throws {
+        let arrived = try XCTUnwrap(InboxAPI.parseDate("2026-11-24T12:45:00Z"))
+        let lastNight = arrived.addingTimeInterval(-11 * 3600)
+        XCTAssertEqual(InboxItem(id: "a", text: "x", receivedAt: arrived, capturedAt: lastNight).saidAt, lastNight,
+                       "eleven hours before: kept")
+        let dayBefore = arrived.addingTimeInterval(-86_400)
+        XCTAssertEqual(InboxItem(id: "b", text: "x", receivedAt: arrived, capturedAt: dayBefore).saidAt, dayBefore,
+                       "a day exactly: kept")
+        let epoch = Date(timeIntervalSince1970: 12)
+        XCTAssertEqual(InboxItem(id: "c", text: "x", receivedAt: arrived, capturedAt: epoch).saidAt, arrived,
+                       "1970 is no time")
+        XCTAssertEqual(InboxItem(id: "d", text: "x", receivedAt: arrived, capturedAt: arrived.addingTimeInterval(-86_401)).saidAt,
+                       arrived, "over a day before: the arrival")
+        XCTAssertNil(InboxItem(id: "e", text: "x", capturedAt: epoch).saidAt, "1970 and no arrival: no time, read as of now")
+        let earlier = arrived.addingTimeInterval(-600)
+        XCTAssertEqual(InboxItem(id: "f", text: "x", capturedAt: earlier).saidAt, earlier, "no arrival, a plausible time: kept")
+    }
 }

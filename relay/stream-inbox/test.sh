@@ -335,6 +335,28 @@ expect "both new ids taken, even one older than the approval" 200 '[.items[].id]
 check "the capture's time is Stream's" "$BODY" "[.items[] | select(.id == \"t-1\") | .capturedAt | sub(\"\\\\.[0-9]+Z$\"; \"Z\")]" "[\"$spoken\"]"
 keyed POST /inbox/ack -d '{"ids":["t-1","t-2"]}'
 
+echo "▸ round 3, 6: a time that can't be the capture's is no time"
+# say_with ID FIELDS: a webhook capture with more fields (built in a variable first, for bash 3.2).
+say_with() {
+  local body="{\"text\":\"Plausible or not\",\"interaction_id\":\"$1\",$2}"
+  webhook "$(file "said-$1.json" "$body")"
+}
+say_with p-12 '"time":12'
+say_with p-2019 '"created_at":"2019-06-01T10:00:00Z"'
+say_with p-ahead "\"created_at\":\"$(iso +1H)\""
+two_hours=$(iso -2H)
+say_with p-ok "\"created_at\":\"$two_hours\""
+fake interactions '[{"id":"q-12","text":"Polled with a tiny time","timestamp":12}]'
+poll
+claim mac-test
+plain='sub("\\.[0-9]+Z$"; "Z")'
+check "a small number isn't 1970: the arrival counts" "$BODY" '[.items[] | select(.id == "p-12") | .capturedAt == .receivedAt]' '[true]'
+check "a time before 2020 counts as no time" "$BODY" '[.items[] | select(.id == "p-2019") | .capturedAt == .receivedAt]' '[true]'
+check "a time an hour after the arrival counts as no time" "$BODY" '[.items[] | select(.id == "p-ahead") | .capturedAt == .receivedAt]' '[true]'
+check "a plausible time is kept" "$BODY" "[.items[] | select(.id == \"p-ok\") | .capturedAt | $plain]" "[\"$two_hours\"]"
+check "the poller's tiny time counts as no time too" "$BODY" '[.items[] | select(.id == "q-12") | .capturedAt == .receivedAt]' '[true]'
+keyed POST /inbox/ack -d '{"ids":["p-12","p-2019","p-ahead","p-ok","q-12"]}'
+
 echo "▸ review 3: an answer the relay can't read is said, with its shape"
 mode '{"prose":true}'
 poll

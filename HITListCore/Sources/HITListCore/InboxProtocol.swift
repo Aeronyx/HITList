@@ -111,8 +111,19 @@ public struct InboxItem: Decodable, Equatable, Sendable, Identifiable {
         self.capturedAt = capturedAt
     }
 
-    /// The moment the words are read as of ("tomorrow" from the evening it was said, not the morning it was taken).
-    public var saidAt: Date? { capturedAt ?? receivedAt }
+    /// The moment the words are read as of ("tomorrow" from the evening it was said, not the morning it was taken). A
+    /// time before 2020, or more than a day before the capture reached the relay, can't be when it was said (round 3,
+    /// finding 6): then the arrival.
+    public var saidAt: Date? {
+        guard let capturedAt, capturedAt >= Self.earliestSaid,
+              receivedAt.map({ capturedAt >= $0.addingTimeInterval(-Self.saidWithin) }) ?? true else { return receivedAt }
+        return capturedAt
+    }
+
+    /// 2020-01-01T00:00:00Z: nothing said to a Stream ring is older.
+    public static let earliestSaid = Date(timeIntervalSince1970: 1_577_836_800)
+    /// How long before its arrival a capture's own time is believed.
+    public static let saidWithin: TimeInterval = 86_400
 
     /// The relay's test capture, which counts whatever the "starts with Task" rule says.
     public var isTest: Bool { id.hasPrefix(InboxAPI.testIDPrefix) }

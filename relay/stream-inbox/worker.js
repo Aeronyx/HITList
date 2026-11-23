@@ -43,6 +43,9 @@ const OUTBOUND_TIMEOUT_MS = 15_000;
 const PUSH_GAP_MS = 30_000;
 const PROVIDER_TOKEN_MS = 50 * MINUTE_MS;
 const TOKEN_TEXT = /^[A-Za-z0-9_-]{43}$/;
+// A capture's own time is believed only from 2020 on and up to five minutes after the relay got it (round 3, 6).
+const EARLIEST_SAID_MS = Date.UTC(2020, 0, 1);
+const SAID_AHEAD_MS = 5 * MINUTE_MS;
 
 const TEST_TEXT = "Test capture from your Stream ring";
 const CLIENT_NAME = "HITList inbox";
@@ -183,7 +186,7 @@ async function webhook(request, env) {
     : !id ? `interaction_id is missing or over ${MAX_ID} characters` : null;
   const words = problem ? "" : body.text;
   // The interaction's own time, when Stream sends one with its zone (the webhook is sent as the capture is saved).
-  const said = parseTime(first(body, TIME_FIELDS, (v) => parseTime(v) !== null));
+  const said = parseTime(first(body, TIME_FIELDS, (v) => parseTime(v, now) !== null), now);
   const outcome = await inbox(env).receiveWebhook({
     id, text: words, body: text, fields, problem, hash: problem ? null : await textHash(words), said,
   });
@@ -865,7 +868,7 @@ export class StreamInbox extends DurableObject {
   /// the interactions' times when they have them, else every id it sees is kept as seen); after that every new id is
   /// taken, whatever its time says. An answer that can't be read is said, with its shape and never its words.
   async take(result, conn, now) {
-    const read = interactionsFrom(result);
+    const read = interactionsFrom(result, now);
     if (read.error) return { lastError: `Stream's tool said: ${read.error}` };
     if (!read.items) {
       return { lastError: "Stream's answer couldn't be read: the relay found no list of interactions in it.", answerShape: read.shape };
@@ -918,8 +921,9 @@ function argumentsFor(schema) {
 
 /// The interactions in a `tools/call` result, read tolerantly: from `structuredContent`, or each text content as
 /// JSON; an array of objects, bare or under a key. `items` is null when nothing in the answer is such a list (then
-/// `shape` says what came: content types, whether each text was JSON, the top-level keys, never words).
-function interactionsFrom(result) {
+/// `shape` says what came: content types, whether each text was JSON, the top-level keys, never words). Times are
+/// judged against `receivedAt`, the poll's own.
+function interactionsFrom(result, receivedAt) {
   const candidates = [];
   if (result && result.structuredContent !== undefined) candidates.push(result.structuredContent);
   const json = [];
@@ -935,7 +939,7 @@ function interactionsFrom(result) {
   }
   for (const value of candidates) {
     const list = objectList(value);
-    if (list) return { items: list.map(interaction).filter(Boolean) };
+    if (list) return { items: list.map((raw) => interaction(raw, receivedAt)).filter(Boolean) };
   }
   for (const value of candidates) {
     if (isPlainObject(value) && value.error) return { error: String(value.error.message || value.error) };
@@ -969,10 +973,10 @@ function objectList(value, depth = 0) {
 const TIME_FIELDS = ["created_at", "createdAt", "timestamp", "time", "date", "saved_at", "savedAt", "occurred_at",
   "occurredAt", "started_at", "startedAt", "updated_at", "updatedAt"];
 
-function interaction(raw) {
+function interaction(raw, receivedAt) {
   const text = first(raw, ["text", "transcript", "content", "body", "note", "message", "value"], (v) => typeof v === "string");
   if (typeof text !== "string") return null;
-  const at = parseTime(first(raw, TIME_FIELDS, (v) => parseTime(v) !== null));
+  const at = parseTime(first(raw, TIME_FIELDS, (v) => parseTime(v, receivedAt) !== null), receivedAt);
   let id = interactionID(first(raw, ["interaction_id", "interactionId", "id", "uuid"], (v) => interactionID(v) !== null));
   if (!id) id = `words-${simpleHash(`${text}|${at || ""}`)}`;
   return { id, text, at: at === undefined ? null : at, raw, fields: Object.keys(raw).slice(0, 64) };
@@ -985,15 +989,20 @@ function first(object, keys, accept) {
   return undefined;
 }
 
-/// A moment, only when it can't be misread: epoch seconds or milliseconds, or an ISO 8601 time with its zone. A date
-/// alone, or a time with no zone, would be read as UTC and could be hours off: it counts as no time.
-function parseTime(value) {
-  if (typeof value === "number" && Number.isFinite(value) && value > 0) return value > 100_000_000_000 ? value : value * 1000;
-  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/i.test(value.trim())) {
-    const ms = Date.parse(value.trim());
-    return Number.isNaN(ms) ? null : ms;
+/// A moment, only when it can't be misread and could be the capture's: epoch seconds or milliseconds, or an ISO 8601
+/// time with its zone, after 2020 began and no later than five minutes after the relay got it (`receivedAt`). A date
+/// alone, or a time with no zone, would be read as UTC and could be hours off; `{"time": 12}` would be 1970 (round 3,
+/// finding 6): each counts as no time.
+function parseTime(value, receivedAt) {
+  let ms = null;
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    ms = value > 100_000_000_000 ? value : value * 1000;
+  } else if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/i.test(value.trim())) {
+    const parsed = Date.parse(value.trim());
+    ms = Number.isNaN(parsed) ? null : parsed;
   }
-  return null;
+  if (ms === null || ms < EARLIEST_SAID_MS || ms > receivedAt + SAID_AHEAD_MS) return null;
+  return ms;
 }
 
 /// A JSON-RPC answer: the body as JSON, or, from a stream of server-sent events, the event carrying the message with

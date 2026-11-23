@@ -52,7 +52,7 @@ Every answer is JSON. The inbox endpoints need `Authorization: Bearer <inbox key
 | | |
 |---|---|
 | `POST /stream` | Stream's webhook: `X-Stream-Signature: t=…,v1=…` (HMAC-SHA256 of `t.body`), ±300 s. 202 kept, 200 duplicate or skipped by the rule, 204 empty, 400, 401, 413. |
-| `POST /inbox/claim` | `{"device":"…","push":{token, environment, platform}}`: what waits, oldest first, at most 50, held for that device 30 minutes (it may take its own again at any time), each with the time it was said. |
+| `POST /inbox/claim` | `{"device":"…","push":{token, environment, platform}}`: what waits, oldest first, at most 50, held for that device 30 minutes (it may take its own again at any time), each with the time it was said: Stream's own when it gives a believable one (with its zone, from 2020, at most five minutes after it arrived), else when it arrived. |
 | `POST /inbox/ack` | `{"ids":[…]}`: what a device handled. Its words are deleted. |
 | `GET /inbox/status` | What waits, when the last capture came and from where, its top-level fields, the rule, each source's state, the wake-ups. |
 | `POST /inbox/settings` | `{"onlyStartingWithTask":true}`: the rule, for every device. |
