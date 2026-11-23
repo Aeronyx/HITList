@@ -11,7 +11,8 @@ import UIKit
 /// Tasks said to the Stream ring, taken from the relay of George's own (brief 176; `relay/stream-inbox`).
 ///
 /// The ring's audio goes only to the Stream app; Stream's captures reach the relay (its webhook, or the relay asking
-/// Stream every minute) and wait there. `check` claims what waits (the relay holds it for this device ten minutes),
+/// Stream every minute) and wait there. `check` claims what waits (the relay holds it for this device an hour, and wakes
+/// it again at 10 and 40 minutes while it is unacked),
 /// makes each capture this device hasn't added before into a task by Siri's road (`SpokenTask`, then
 /// `IntentActions.addTask`: the quick-add parser, its dates, priority and #Group, and the same save, so reminders,
 /// widgets and iCloud follow as for any task), and acks every id it handled: added, or left in Stream by the "starts
@@ -101,6 +102,10 @@ final class StreamInbox {
     @ObservationIgnored private let clock: () -> Date
     @ObservationIgnored private let storeIsReal: () -> Bool
     @ObservationIgnored private let isActive: @MainActor () -> Bool
+    @ObservationIgnored private let pushEnvironment: @MainActor () -> InboxPushRegistration.Environment
+    /// The iPhone's: an ack that failed goes again as a background upload iOS finishes after suspension (round 3,
+    /// finding 4). None on the Mac and in the tests' inboxes (theirs records).
+    @ObservationIgnored private let ackSender: StreamInboxAckSender?
     @ObservationIgnored private let addTask: @MainActor (String, Date, ModelContext) throws -> UUID
     @ObservationIgnored private let log: @MainActor (String, SyncLogEntry.Level) -> Void
     /// The app's own inbox: timers, observers, background time. Off for the hosted tests' inboxes.
@@ -123,6 +128,8 @@ final class StreamInbox {
          clock: @escaping () -> Date = Date.init,
          storeIsReal: @escaping () -> Bool = { !ModelContainerFactory.isRunningInMemory },
          isActive: @escaping @MainActor () -> Bool = StreamInbox.appIsActive,
+         pushEnvironment: @escaping @MainActor () -> InboxPushRegistration.Environment = StreamInbox.signedPushEnvironment,
+         ackSender: StreamInboxAckSender? = nil,
          addTask: @escaping @MainActor (String, Date, ModelContext) throws -> UUID = StreamInbox.addThroughQuickAdd,
          log: @escaping @MainActor (String, SyncLogEntry.Level) -> Void = { line, level in
              CloudSyncMonitor.shared.write(.note, line, level: level)
@@ -136,6 +143,8 @@ final class StreamInbox {
         self.clock = clock
         self.storeIsReal = storeIsReal
         self.isActive = isActive
+        self.pushEnvironment = pushEnvironment
+        self.ackSender = ackSender
         self.addTask = addTask
         self.log = log
         deviceID = settings.deviceID(platform: Self.platform)
@@ -179,10 +188,16 @@ final class StreamInbox {
     /// From `HITListApp.init`: observers and the minute's timer now, the first check a few seconds later.
     static func start(container: ModelContainer) {
         guard shared == nil else { return }
-        #if DEBUG
-        let inbox = StreamInboxDebug.inbox(container: container) ?? StreamInbox(container: container, isLive: true)
+        #if os(iOS)
+        let ackSender: StreamInboxAckSender? = BackgroundAck.Sender()
         #else
-        let inbox = StreamInbox(container: container, isLive: true)
+        let ackSender: StreamInboxAckSender? = nil
+        #endif
+        #if DEBUG
+        let inbox = StreamInboxDebug.inbox(container: container)
+            ?? StreamInbox(container: container, isLive: true, ackSender: ackSender)
+        #else
+        let inbox = StreamInbox(container: container, isLive: true, ackSender: ackSender)
         #endif
         shared = inbox
         inbox.install()
@@ -215,10 +230,15 @@ final class StreamInbox {
         Task { await check(.cameForward) }
     }
 
-    /// A check that nothing waits on: a wake in the background (`WidgetRefresh.settle`).
+    /// A check that nothing waits on: a wake in the background (`WidgetRefresh.settle`), or the relay's wake-up on the
+    /// Mac. A wake-up's capture arrived after a check under way had claimed, so its own check comes after that one,
+    /// never joined to it (round 3, finding 2).
     func checkSoon(_ reason: Reason) {
         guard isConnected else { return }
-        Task { await check(reason) }
+        Task {
+            if reason == .wakePush { _ = await running?.value }
+            await check(reason)
+        }
     }
 
     private func updateTimer() {
@@ -351,11 +371,15 @@ final class StreamInbox {
             return .didNotRun
         }
         lastStartedAt = clock()
-        let task = Task { await self.perform(link: link, reason: reason) }
+        let task = Task { () -> CheckResult in
+            let result = await self.perform(link: link, reason: reason)
+            // Cleared as the check ends, before anything waiting on it goes on: a wake-up or a test capture waiting for
+            // it then starts a check of its own, never joins one that has finished (round 3, finding 2).
+            self.running = nil
+            return result
+        }
         running = task
-        let result = await task.value
-        running = nil
-        return result
+        return await task.value
     }
 
     private func perform(link: InboxLink, reason: Reason) async -> CheckResult {
@@ -370,8 +394,9 @@ final class StreamInbox {
         if !unacked.isEmpty {
             do {
                 _ = try await client.ack(ids: unacked, link: link)
-                settings.unackedIDs = []
+                acked(unacked)
             } catch {
+                handToIOS(unacked, link: link)
                 return finish(CheckResult(problem: StreamInboxProblem(error)), reason: reason)
             }
         }
@@ -409,7 +434,13 @@ final class StreamInbox {
             let before = Set(context.insertedModelsArray.map(\.persistentModelID))
             settings.addingNow = .init(id: item.id, title: Self.expectedTitle(text, now: said, in: context), startedAt: clock())
             do {
-                _ = try addTask(text, said, context)
+                let taskID = try addTask(text, said, context)
+                // Said earlier than now: a reminder that fell due between the words and their arrival goes off now
+                // (round 3, finding 1; `NotificationPlan.Arrival`).
+                let arrived = clock()
+                if said < arrived {
+                    NotificationPlan.recordArrival(.init(taskID: taskID, saidAt: said, arrivedAt: arrived), defaults: settings.defaults)
+                }
                 added.append(item.id)
                 handled.append(item.id)
                 result.added += 1
@@ -436,9 +467,10 @@ final class StreamInbox {
         if !handled.isEmpty {
             do {
                 _ = try await client.ack(ids: handled, link: link)
-                settings.unackedIDs = []
+                acked(handled)
             } catch {
                 result.problem = result.problem ?? StreamInboxProblem(error)
+                handToIOS(handled, link: link)
             }
         }
 
@@ -454,6 +486,27 @@ final class StreamInbox {
             await refreshStatus()
         }
         return finish(result, reason: reason)
+    }
+
+    /// The relay has these ids: nothing waits to be acked, and none is in flight with iOS any more.
+    private func acked(_ ids: [String]) {
+        settings.unackedIDs = []
+        let done = Set(ids)
+        if settings.ackSending.contains(where: done.contains) { settings.ackSending = settings.ackSending.filter { !done.contains($0) } }
+    }
+
+    /// An ack that didn't reach the relay, handed to iOS as a background upload, which it finishes after the app is
+    /// suspended or quit (round 3, finding 4): once while it is in flight. Its success takes exactly its ids out of
+    /// `unackedIDs` (`StreamInboxSettings.ackFinished`); until then the next check still sends them first (the relay
+    /// counts an id once), and a capture offered again meanwhile is never added twice (`addedIDs`). The note written
+    /// before a save (`addingNow`) is about that save, not its ack, and isn't touched.
+    private func handToIOS(_ ids: [String], link: InboxLink) {
+        guard let ackSender else { return }
+        let inFlight = Set(settings.ackSending)
+        let fresh = ids.filter { !inFlight.contains($0) }
+        guard !fresh.isEmpty else { return }
+        settings.ackSending += fresh
+        ackSender.send(ids: fresh, link: link)
     }
 
     /// The note written before a save, still there: the app stopped between the save and writing the id down. The task
@@ -553,16 +606,48 @@ final class StreamInbox {
         StreamInboxSettings(defaults: defaults).pushToken = token.map { String(format: "%02x", $0) }.joined()
     }
 
-    /// What each claim says of this device's push token: a Debug build's token is a development one, TestFlight's and
-    /// the App Store's production.
+    /// What each claim says of this device's push token, and which of Apple's push services it belongs to.
     private var pushRegistration: InboxPushRegistration? {
         guard let token = settings.pushToken, !token.isEmpty else { return nil }
-        #if DEBUG
-        let environment = InboxPushRegistration.Environment.development
+        return InboxPushRegistration(token: token, environment: pushEnvironment(), platform: Self.platformName)
+    }
+
+    /// The push service this build's tokens belong to, read once from what it was signed with (round 3, finding 3), not
+    /// from whether it is a Debug build: an Xcode Run in Release is signed for development, and its token is a
+    /// development one.
+    static func signedPushEnvironment() -> InboxPushRegistration.Environment { signed }
+
+    private static let signed: InboxPushRegistration.Environment = {
+        #if targetEnvironment(simulator)
+        let isSimulator = true
         #else
-        let environment = InboxPushRegistration.Environment.production
+        let isSimulator = false
         #endif
-        return InboxPushRegistration(token: token, environment: environment, platform: Self.platformName)
+        return pushEnvironment(profile: embeddedProfile(), isSimulator: isSimulator)
+    }()
+
+    /// The provisioning profile Xcode embeds in what it builds; none in an app from TestFlight or the App Store on the
+    /// iPhone.
+    nonisolated static func embeddedProfile(bundle: Bundle = .main) -> Data? {
+        #if os(macOS)
+        try? Data(contentsOf: bundle.bundleURL.appendingPathComponent("Contents/embedded.provisionprofile"))
+        #else
+        try? Data(contentsOf: bundle.bundleURL.appendingPathComponent("embedded.mobileprovision"))
+        #endif
+    }
+
+    /// The profile's `aps-environment` (the Mac's `com.apple.developer.aps-environment`), read from the plist inside its
+    /// signature: "development" is the sandbox service; anything else, or no profile (TestFlight and the App Store), is
+    /// production. The simulator's tokens are the sandbox's.
+    nonisolated static func pushEnvironment(profile: Data?, isSimulator: Bool) -> InboxPushRegistration.Environment {
+        if isSimulator { return .development }
+        guard let profile, let start = profile.range(of: Data("<?xml".utf8)),
+              let end = profile.range(of: Data("</plist>".utf8), in: start.lowerBound..<profile.endIndex),
+              let plist = try? PropertyListSerialization.propertyList(from: profile[start.lowerBound..<end.upperBound],
+                                                                       format: nil) as? [String: Any],
+              let entitlements = plist["Entitlements"] as? [String: Any] else { return .production }
+        let value = (entitlements["aps-environment"] ?? entitlements["com.apple.developer.aps-environment"]) as? String
+        return value == "development" ? .development : .production
     }
 
     /// The relay's wake-up push: `{"aps":{"content-available":1},"hitlist":{"inbox":1}}`. Any other push (CloudKit's,
@@ -573,14 +658,20 @@ final class StreamInbox {
 
     /// How long a wake-up's check may hold the push handler: iOS allows about 30 s.
     static let wakeLimit: Duration = .seconds(25)
+    /// This inbox's limit (the tests' is shorter).
+    @ObservationIgnored var wakeLimit: Duration = StreamInbox.wakeLimit
 
-    /// A wake-up push: a check runs now (after any already under way, which claimed before this capture), and the
-    /// answer comes once it has finished, or at `wakeLimit` (the check goes on under its own background time).
+    /// A wake-up push: its own check runs (after any already under way, which claimed before this capture), and the
+    /// answer comes once that has finished or at `wakeLimit`, whichever is first. The wait for the check under way is
+    /// inside the limit (round 3, finding 2): one a CloudKit wake started on a weak signal took 30-80 s. What is still
+    /// running at the limit goes on under its own background time.
     func handleWakePush() async -> WakeResult {
         guard isConnected else { return .noData }
-        _ = await running?.value
-        let checking = Task { await self.check(.wakePush) }
-        let limit = Self.wakeLimit
+        let checking = Task { () -> CheckResult in
+            _ = await self.running?.value
+            return await self.check(.wakePush)
+        }
+        let limit = wakeLimit
         let result: CheckResult? = await withCheckedContinuation { (answer: CheckedContinuation<CheckResult?, Never>) in
             let once = FirstAnswer(answer)
             Task { once.give(await checking.value) }
@@ -600,19 +691,28 @@ final class StreamInbox {
         return await inbox.handleWakePush()
     }
 
+    #if os(iOS)
+    /// From `SyncAppDelegate`: iOS finished the inbox's background ack and woke the app to say how it went. False for
+    /// a session that isn't the inbox's.
+    nonisolated static func handleBackgroundEvents(identifier: String, completion: @escaping () -> Void) -> Bool {
+        BackgroundAck.shared.handleEvents(identifier: identifier, completion: completion)
+    }
+    #endif
+
     /// The status line's word on wake-ups (iPhone and iPad; the Mac checks every minute while it runs): on, or what
     /// stops them. Nil while the relay has no Apple push key (they are off, not wrong).
     var wakeWords: String? {
         #if os(iOS)
-        let configured = wakeState?.configured ?? relayStatus?.push?.configured ?? false
-        guard configured else { return nil }
-        let device = UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone"
-        guard settings.pushToken?.isEmpty == false else { return StreamRingWords.wakeNoToken(device) }
-        if let trouble = relayStatus?.push?.lastError { return StreamRingWords.wakeTrouble(device, trouble) }
-        return wakeState?.registered == true ? StreamRingWords.wakeOn(device) : nil
+        wakeWords(for: UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone")
         #else
-        return nil
+        nil
         #endif
+    }
+
+    /// The words for a device of this kind ("iPhone"), whichever platform asks (the tests ask on the Mac too).
+    func wakeWords(for device: String) -> String? {
+        StreamRingWords.wake(device: device, configured: wakeState?.configured ?? relayStatus?.push?.configured ?? false,
+                             hasToken: settings.pushToken?.isEmpty == false, state: wakeState, now: clock())
     }
 
     // MARK: - The background

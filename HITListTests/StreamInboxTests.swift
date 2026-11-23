@@ -37,9 +37,10 @@ final class StreamInboxTests: XCTestCase {
         throw SaveFailed()
     }
 
-    private func inbox(failing: Set<String> = [], storeIsReal: Bool = true, active: Bool = true) -> StreamInbox {
+    private func inbox(failing: Set<String> = [], storeIsReal: Bool = true, active: Bool = true,
+                       pushEnvironment: InboxPushRegistration.Environment = .development) -> StreamInbox {
         StreamInbox(container: container, defaults: defaults, keyStore: MemoryInboxKey(), client: relay.client,
-                    storeIsReal: { storeIsReal }, isActive: { active },
+                    storeIsReal: { storeIsReal }, isActive: { active }, pushEnvironment: { pushEnvironment },
                     addTask: { text, now, context in
                         if failing.contains(text) { return try Self.failingSave(text, in: context) }
                         return try StreamInbox.addThroughQuickAdd(text, now, context)
@@ -47,13 +48,26 @@ final class StreamInboxTests: XCTestCase {
                     log: { [weak self] line, _ in self?.logged.append(line) })
     }
 
-    private func connected(failing: Set<String> = [], storeIsReal: Bool = true, active: Bool = true) async throws -> StreamInbox {
-        let inbox = inbox(failing: failing, storeIsReal: storeIsReal, active: active)
+    private func connected(failing: Set<String> = [], storeIsReal: Bool = true, active: Bool = true,
+                           pushEnvironment: InboxPushRegistration.Environment = .development) async throws -> StreamInbox {
+        let inbox = inbox(failing: failing, storeIsReal: storeIsReal, active: active, pushEnvironment: pushEnvironment)
         let problem = await inbox.connect(linkText: relay.link, checkAfter: false)
         XCTAssertNil(problem)
         XCTAssertTrue(inbox.isConnected)
         return inbox
     }
+
+    /// Waits for `condition`, up to `seconds`; whether it came.
+    private func eventually(_ seconds: TimeInterval = 3, _ condition: () -> Bool) async -> Bool {
+        let end = Date().addingTimeInterval(seconds)
+        while !condition() {
+            guard Date() < end else { return false }
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        return true
+    }
+
+    private var claims: Int { relay.requests.filter { $0.path == InboxAPI.Endpoint.claim.rawValue }.count }
 
     private func tasks() throws -> [TaskItem] {
         try container.mainContext.fetch(FetchDescriptor<TaskItem>()).sorted { $0.title < $1.title }
@@ -353,7 +367,7 @@ final class StreamInboxTests: XCTestCase {
         await mac.check(.checkNow)
         relay.acksFail = false
         let phoneResult = await phone.check(.checkNow)
-        XCTAssertEqual(phoneResult.added, 0, "held for the Mac ten minutes")
+        XCTAssertEqual(phoneResult.added, 0, "held for the Mac an hour")
         XCTAssertEqual(try otherContainer.mainContext.fetch(FetchDescriptor<TaskItem>()).count, 0)
     }
 
@@ -373,6 +387,99 @@ final class StreamInboxTests: XCTestCase {
         let request = try XCTUnwrap(plan.requests.first { $0.taskID == task.id })
         XCTAssertEqual(request.kind, .due)
         XCTAssertEqual(request.triggerDate, task.dueDate)
+    }
+
+    /// The start of the minute `date` is in.
+    private func minute(_ date: Date) -> Date {
+        Date(timeIntervalSinceReferenceDate: (date.timeIntervalSinceReferenceDate / 60).rounded(.down) * 60)
+    }
+
+    /// "9:05am", as George would say it.
+    private func spoken(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "h:mma"
+        formatter.amSymbol = "am"
+        formatter.pmSymbol = "pm"
+        return formatter.string(from: date)
+    }
+
+    private func task(startingWith words: String) throws -> TaskItem {
+        try XCTUnwrap(try tasks().first { $0.title.hasPrefix(words) }, "“\(words)…” was made")
+    }
+
+    /// Round 3, finding 1: what fell due between the words and their arrival goes off on arrival, as a notification now
+    /// and once: a reminder moment ("remind me in 10 minutes" said 12 minutes ago), a due time from now ("in 2 hours"
+    /// said 2 h 5 min ago), a clock time ("at 9:05" said at 8:55 and taken at 9:10).
+    func testALateCapturesReminderGoesOffOnArrival() async throws {
+        let now = Date()
+        let fiveAgo = minute(now.addingTimeInterval(-300))
+        relay.add("car", "Move the car, remind me in 10 minutes", said: now.addingTimeInterval(-12 * 60))
+        relay.add("mom", "Call mom in 2 hours", said: now.addingTimeInterval(-(2 * 3600 + 5 * 60)))
+        relay.add("sam", "Call Sam at \(spoken(fiveAgo))", said: fiveAgo.addingTimeInterval(-10 * 60))
+        let inbox = try await connected()
+        await inbox.check(.checkNow)
+        let car = try task(startingWith: "Move the car")
+        let mom = try task(startingWith: "Call mom")
+        let sam = try task(startingWith: "Call Sam")
+        XCTAssertEqual(try XCTUnwrap(car.reminderDate).timeIntervalSince(now), -120, accuracy: 2, "said + 10 min")
+        XCTAssertEqual(try XCTUnwrap(mom.dueDate).timeIntervalSince(now), -300, accuracy: 61, "said + 2 h")
+        XCTAssertEqual(sam.dueDate, fiveAgo)
+
+        let planNow = Date()
+        let arrivals = NotificationPlan.arrivals(now: planNow, defaults: defaults)
+        XCTAssertEqual(Set(arrivals.keys), [car.id, mom.id, sam.id], "each capture's task, with when it was said")
+        let items = [car, mom, sam].map { NotificationPlan.Item($0, now: planNow) }
+        let plan = NotificationPlan.make(tasks: items, now: planNow, arrivals: arrivals)
+        for made in [car, mom, sam] {
+            let request = try XCTUnwrap(plan.requests.first { $0.taskID == made.id }, "\(made.title) goes off")
+            XCTAssertEqual(request.triggerDate, planNow, "\(made.title): on arrival")
+        }
+        XCTAssertEqual(plan.requests.first { $0.taskID == car.id }?.kind, .reminder)
+        XCTAssertEqual(plan.requests.first { $0.taskID == mom.id }?.kind, .overdue)
+
+        let ledger = NotificationPlan.prunedLedger(Set(plan.requests.compactMap(\.ledgerKey)), now: planNow)
+        let again = NotificationPlan.make(tasks: items, now: planNow.addingTimeInterval(5), alreadyScheduled: ledger,
+                                          arrivals: arrivals)
+        XCTAssertTrue(again.requests.isEmpty, "once: the next reschedule finds them announced")
+        XCTAssertTrue(NotificationPlan.make(tasks: items, now: planNow).requests.isEmpty,
+                      "the same tasks without their arrival (typed late, or another device's import): nothing, as before")
+    }
+
+    /// Round 3, finding 1: a capture's reminder still ahead when it arrives keeps its time.
+    func testACapturesReminderStillAheadKeepsItsTime() async throws {
+        let said = Date().addingTimeInterval(-3 * 60)
+        relay.add("car", "Move the car, remind me in 10 minutes", said: said)
+        let inbox = try await connected()
+        await inbox.check(.checkNow)
+        let car = try task(startingWith: "Move the car")
+        let planNow = Date()
+        let plan = NotificationPlan.make(tasks: [NotificationPlan.Item(car, now: planNow)], now: planNow,
+                                         arrivals: NotificationPlan.arrivals(now: planNow, defaults: defaults))
+        let request = try XCTUnwrap(plan.requests.first { $0.taskID == car.id })
+        XCTAssertEqual(request.kind, .reminder)
+        XCTAssertEqual(request.triggerDate.timeIntervalSince(said), 600, accuracy: 1, "at its moment, seven minutes on")
+    }
+
+    /// Round 3, finding 1: a capture said and taken in the same minute is planned as if typed then: nothing fell due
+    /// between the words and their arrival, so nothing goes off on arrival.
+    func testACaptureSaidAndTakenInTheSameMinuteIsPlannedAsIfTyped() async throws {
+        let now = Date()
+        let thisMinute = minute(now)
+        let said = thisMinute.addingTimeInterval(now.timeIntervalSince(thisMinute) / 2)
+        relay.add("car", "Move the car, remind me in 10 minutes", said: said)
+        relay.add("sam", "Call Sam at \(spoken(thisMinute))", said: said)
+        let inbox = try await connected()
+        await inbox.check(.checkNow)
+        let planNow = Date()
+        let items = try tasks().map { NotificationPlan.Item($0, now: planNow) }
+        XCTAssertEqual(items.count, 2)
+        let withArrivals = NotificationPlan.make(tasks: items, now: planNow,
+                                                 arrivals: NotificationPlan.arrivals(now: planNow, defaults: defaults))
+        XCTAssertEqual(withArrivals, NotificationPlan.make(tasks: items, now: planNow), "as if typed")
+        let car = try task(startingWith: "Move the car")
+        let request = try XCTUnwrap(withArrivals.requests.first { $0.taskID == car.id })
+        XCTAssertEqual(request.triggerDate.timeIntervalSince(said), 600, accuracy: 1)
     }
 
     // MARK: The Keychain
@@ -504,13 +611,13 @@ final class StreamInboxTests: XCTestCase {
     // MARK: Wake-ups
 
     func testThePushTokenTravelsWithEachClaim() async throws {
-        let inbox = try await connected()
+        let inbox = try await connected(pushEnvironment: .production)
         StreamInbox.pushTokenArrived(Data([0xAB, 0x12, 0x00, 0xFF]), defaults: defaults)
         await inbox.check(.checkNow)
         let claim = try XCTUnwrap(relay.requests.last { $0.path == InboxAPI.Endpoint.claim.rawValue })
         let push = try XCTUnwrap(claim.json["push"] as? [String: String])
         XCTAssertEqual(push["token"], "ab1200ff")
-        XCTAssertEqual(push["environment"], "development", "a Debug build's token is a development one")
+        XCTAssertEqual(push["environment"], "production", "the push service the build's signed profile names")
         #if os(macOS)
         XCTAssertEqual(push["platform"], "macOS")
         #else
@@ -536,5 +643,125 @@ final class StreamInboxTests: XCTestCase {
         relay.isDown = true
         let third = await inbox.handleWakePush()
         XCTAssertEqual(third, .failed)
+    }
+
+    // MARK: Round 3
+
+    /// Finding 2: a wake-up's handler answers within its limit even behind a check already under way (one a CloudKit
+    /// wake started on a weak signal): the wait for that check counts inside the limit, not before it.
+    func testAWakeUpAnswersWithinItsLimitBehindASlowCheck() async throws {
+        let inbox = try await connected()
+        inbox.wakeLimit = .milliseconds(300)
+        relay.delay = 0.8
+        let before = claims
+        let slow = Task { await inbox.check(.checkNow) }
+        let underWay = await eventually { self.claims == before + 1 }
+        XCTAssertTrue(underWay, "the slow check has claimed")
+        let started = Date()
+        let answer = await inbox.handleWakePush()
+        let took = Date().timeIntervalSince(started)
+        XCTAssertLessThan(took, 0.7, "answered at its limit, not after the slow check (\(took) s)")
+        XCTAssertEqual(answer, .noData)
+        relay.delay = 0
+        _ = await slow.value
+        let settled = await eventually(5) { self.claims == before + 2 && !inbox.isChecking }
+        XCTAssertTrue(settled, "the wake-up's own check still ran, after the slow one")
+    }
+
+    /// Finding 2, the Mac: a wake-up (`checkSoon(.wakePush)`) runs a check of its own after the one under way instead of
+    /// joining it: that one claimed before the capture arrived.
+    func testAWakeUpNeverJoinsACheckAlreadyUnderWay() async throws {
+        let inbox = try await connected()
+        relay.delay = 0.4
+        let before = claims
+        let first = Task { await inbox.check(.checkNow) }
+        let claimed = await eventually { self.claims == before + 1 }
+        XCTAssertTrue(claimed)
+        relay.add("late", "Buy milk")
+        inbox.checkSoon(.wakePush)
+        _ = await first.value
+        relay.delay = 0
+        let own = await eventually(5) { self.claims == before + 2 && !inbox.isChecking }
+        XCTAssertTrue(own, "the wake-up's own claim, after the first check's")
+        XCTAssertEqual(try tasks().map(\.title), ["Buy milk"])
+    }
+
+    /// Finding 4, the iPhone: an ack that fails is handed to iOS as a background upload (once while it is in flight),
+    /// which iOS finishes after the app is suspended or quit; its success takes exactly its ids out of those waiting to
+    /// be acked. Until then the next check still sends them first, and a capture offered again is never added twice.
+    func testAnAckThatFailsGoesAgainAsABackgroundUpload() async throws {
+        final class Recording: StreamInboxAckSender {
+            var sent: [[String]] = []
+            func send(ids: [String], link: InboxLink) { sent.append(ids) }
+        }
+        let iOS = Recording()
+        relay.add("a", "Buy milk")
+        let inbox = StreamInbox(container: container, defaults: defaults, keyStore: MemoryInboxKey(), client: relay.client,
+                                storeIsReal: { true }, ackSender: iOS, log: { _, _ in })
+        _ = await inbox.connect(linkText: relay.link, checkAfter: false)
+        relay.acksFail = true
+        await inbox.check(.checkNow)
+        XCTAssertEqual(iOS.sent, [["a"]], "the failed ack, handed to iOS")
+        let settings = StreamInboxSettings(defaults: defaults)
+        XCTAssertEqual(settings.unackedIDs, ["a"], "and still sent first by the next check until it lands")
+        await inbox.check(.checkNow)
+        XCTAssertEqual(iOS.sent, [["a"]], "not again while iOS has it")
+        // iOS delivered it while the app was suspended.
+        relay.acksFail = false
+        _ = try await relay.client.ack(ids: ["a"], link: XCTUnwrap(inbox.link))
+        settings.ackFinished(["a"], delivered: true)
+        XCTAssertEqual(settings.unackedIDs, [])
+        XCTAssertEqual(settings.ackSending, [])
+        relay.add("b", "Buy bread")
+        let before = relay.requests.count
+        await inbox.check(.checkNow)
+        XCTAssertEqual(relay.requests.dropFirst(before).first?.path, InboxAPI.Endpoint.claim.rawValue, "nothing left to ack first")
+        XCTAssertEqual(try tasks().map(\.title), ["Buy bread", "Buy milk"], "each once")
+        XCTAssertEqual(relay.waitingIDs, [])
+    }
+
+    /// Finding 3a: the push service a token belongs to is read from the build's signed entitlement, not from whether
+    /// it is a Debug build: a Release build signed for development (an Xcode Run in Release, as George's speed probes
+    /// are) has a development token, and the relay sent it to the wrong service.
+    func testThePushServiceIsReadFromTheSignedProfile() {
+        func profile(_ entitlements: String) -> Data {
+            var data = Data([0x30, 0x82, 0x0F, 0x1A, 0x06, 0x09, 0x2A, 0x86])  // the signature's wrapper around the plist
+            data.append(Data("""
+                <?xml version="1.0" encoding="UTF-8"?>
+                <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+                <plist version="1.0"><dict><key>Name</key><string>HITList</string>\
+                <key>Entitlements</key><dict>\(entitlements)</dict></dict></plist>
+                """.utf8))
+            data.append(Data([0x00, 0xA0, 0x82, 0x0B, 0xFF]))
+            return data
+        }
+        let phoneDevelopment = profile("<key>aps-environment</key><string>development</string>")
+        let macDevelopment = profile("<key>com.apple.developer.aps-environment</key><string>development</string>")
+        let production = profile("<key>aps-environment</key><string>production</string>")
+        XCTAssertEqual(StreamInbox.pushEnvironment(profile: phoneDevelopment, isSimulator: false), .development)
+        XCTAssertEqual(StreamInbox.pushEnvironment(profile: macDevelopment, isSimulator: false), .development)
+        XCTAssertEqual(StreamInbox.pushEnvironment(profile: production, isSimulator: false), .production)
+        XCTAssertEqual(StreamInbox.pushEnvironment(profile: nil, isSimulator: false), .production,
+                       "TestFlight and the App Store carry no profile")
+        XCTAssertEqual(StreamInbox.pushEnvironment(profile: Data("not a profile".utf8), isSimulator: false), .production)
+        XCTAssertEqual(StreamInbox.pushEnvironment(profile: profile(""), isSimulator: false), .production, "no push entitlement")
+        XCTAssertEqual(StreamInbox.pushEnvironment(profile: nil, isSimulator: true), .development, "the simulator's tokens")
+    }
+
+    /// Finding 3b: "wakes this iPhone when you speak" only once Apple has taken a push for this device; a registered
+    /// token alone is "wake-ups not confirmed yet"; a refused one says why.
+    func testTheStatusLineSaysWakeUpsOnlyOnceAppleTookOne() async throws {
+        relay.pushConfigured = true
+        let inbox = try await connected()
+        StreamInbox.pushTokenArrived(Data(repeating: 0xAB, count: 32), defaults: defaults)
+        await inbox.check(.checkNow)
+        XCTAssertEqual(inbox.wakeWords(for: "iPhone"), StreamRingWords.wakeUnconfirmed, "registered, never woken")
+        relay.setWake(device: inbox.deviceID, okAt: Date().addingTimeInterval(-120))
+        await inbox.check(.checkNow)
+        XCTAssertEqual(inbox.wakeWords(for: "iPhone"), StreamRingWords.wakeOn("iPhone"), "Apple took one two minutes ago")
+        let refused = "Apple refused its push token at both of its push services (BadDeviceToken); it isn't woken until HITList on it gives a new one."
+        relay.setWake(device: inbox.deviceID, error: refused, refused: true)
+        await inbox.check(.checkNow)
+        XCTAssertEqual(inbox.wakeWords(for: "iPhone"), StreamRingWords.wakeTrouble("iPhone", refused))
     }
 }

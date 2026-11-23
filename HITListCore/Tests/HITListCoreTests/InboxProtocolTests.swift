@@ -161,4 +161,55 @@ final class InboxProtocolTests: XCTestCase {
         XCTAssertNil(quiet.push)
         XCTAssertFalse(quiet.idsMatch)
     }
+
+    // MARK: Round 3
+
+    /// Finding 6: a capture's own time more than a day before it reached the relay can't be when it was said (an older
+    /// relay may still hand one over): the words are read as of its arrival.
+    func testASaidTimeMoreThanADayBeforeTheArrivalIsIgnored() throws {
+        let arrived = try XCTUnwrap(InboxAPI.parseDate("2026-11-24T12:45:00Z"))
+        let lastNight = arrived.addingTimeInterval(-11 * 3600)
+        XCTAssertEqual(InboxItem(id: "a", text: "x", receivedAt: arrived, capturedAt: lastNight).saidAt, lastNight,
+                       "eleven hours before: kept")
+        let dayBefore = arrived.addingTimeInterval(-86_400)
+        XCTAssertEqual(InboxItem(id: "b", text: "x", receivedAt: arrived, capturedAt: dayBefore).saidAt, dayBefore,
+                       "a day exactly: kept")
+        let epoch = Date(timeIntervalSince1970: 12)
+        XCTAssertEqual(InboxItem(id: "c", text: "x", receivedAt: arrived, capturedAt: epoch).saidAt, arrived,
+                       "1970 is no time")
+        XCTAssertEqual(InboxItem(id: "d", text: "x", receivedAt: arrived, capturedAt: arrived.addingTimeInterval(-86_401)).saidAt,
+                       arrived, "over a day before: the arrival")
+        XCTAssertNil(InboxItem(id: "e", text: "x", capturedAt: epoch).saidAt, "1970 and no arrival: no time, read as of now")
+        let earlier = arrived.addingTimeInterval(-600)
+        XCTAssertEqual(InboxItem(id: "f", text: "x", capturedAt: earlier).saidAt, earlier, "no arrival, a plausible time: kept")
+    }
+
+    /// Finding 3: a claim says when Apple last took a wake-up push for this device, or why it can't be woken; the status
+    /// says each device's own wake-ups.
+    func testAClaimAndTheStatusSayEachDevicesWakeUps() throws {
+        let claim = #"""
+        {"items":[],"push":{"configured":true,"registered":false,"lastOkAt":null,
+         "lastError":"Apple refused its push token at both of its push services (BadDeviceToken); it isn't woken until HITList on it gives a new one."}}
+        """#
+        let reply = try InboxAPI.decode(InboxClaimReply.self, from: Data(claim.utf8))
+        XCTAssertEqual(reply.push?.registered, false)
+        XCTAssertNil(reply.push?.lastOkAt)
+        XCTAssertTrue(reply.push?.lastError?.contains("BadDeviceToken") == true)
+        let woken = try InboxAPI.decode(InboxClaimReply.self, from: Data(
+            #"{"items":[],"push":{"configured":true,"registered":true,"lastOkAt":"2026-11-24T12:01:00.000Z","lastError":null}}"#.utf8))
+        XCTAssertEqual(woken.push, InboxPushState(configured: true, registered: true,
+                                                  lastOkAt: InboxAPI.parseDate("2026-11-24T12:01:00Z")))
+        let status = #"""
+        {"pending":0,"push":{"configured":true,"devices":1,"lastSentAt":"2026-11-24T12:01:00Z",
+         "lastError":"Mac-1A2B3C4D: Apple refused a wake-up push (500).",
+         "byDevice":[{"device":"iPhone-9F8E7D6C","platform":"iOS","service":"production","lastClaimAt":"2026-11-24T12:01:05Z",
+                      "lastPushAt":"2026-11-24T12:01:00Z","lastOkAt":"2026-11-24T12:01:00Z","lastError":null,"refused":false},
+                     {"device":"Mac-1A2B3C4D","platform":"macOS","service":"sandbox","refused":true,"lastError":"x"}]}}
+        """#
+        let push = try XCTUnwrap(try InboxAPI.decode(InboxStatus.self, from: Data(status.utf8)).push)
+        XCTAssertEqual(push.byDevice?.map(\.device), ["iPhone-9F8E7D6C", "Mac-1A2B3C4D"])
+        XCTAssertEqual(push.byDevice?.first?.lastOkAt, InboxAPI.parseDate("2026-11-24T12:01:00Z"))
+        XCTAssertEqual(push.byDevice?.last?.refused, true)
+        XCTAssertEqual(push.byDevice?.last?.service, "sandbox")
+    }
 }

@@ -287,6 +287,22 @@ enum StreamRingWords {
     static func wakeOn(_ device: String) -> String { "wakes this \(device) when you speak" }
     static func wakeNoToken(_ device: String) -> String { "can't wake this \(device) yet: it has no push token" }
     static func wakeTrouble(_ device: String, _ trouble: String) -> String { "can't wake this \(device): \(trouble)" }
+    static let wakeUnconfirmed = "wake-ups not confirmed yet"
+    /// How long a push Apple took still counts as proof.
+    static let wakeConfirmedFor: TimeInterval = 30 * 86_400
+
+    /// The status line's word on wake-ups (round 3, finding 3): "wakes this iPhone when you speak" only once Apple has
+    /// taken a push for this device in the last 30 days with nothing failing since; "wake-ups not confirmed yet" before
+    /// that; this device's own trouble in words (a refused token, a key that can't be used, Apple unreachable). Nil
+    /// while the relay has no Apple push key (they are off, not wrong).
+    static func wake(device: String, configured: Bool, hasToken: Bool, state: InboxPushState?, now: Date) -> String? {
+        guard configured else { return nil }
+        guard hasToken else { return wakeNoToken(device) }
+        if let trouble = state?.lastError { return wakeTrouble(device, trouble) }
+        guard let state, state.registered, let woken = state.lastOkAt,
+              now.timeIntervalSince(woken) < wakeConfirmedFor else { return wakeUnconfirmed }
+        return wakeOn(device)
+    }
 
     /// The line as drawn: a short part ("3 added today", "last capture 5 min ago") never breaks inside itself, and each
     /// "·" stays at the end of the line before, so a wrap falls between parts ("· 3" at a line's end read as a stray
@@ -367,6 +383,10 @@ enum StreamRingWords {
             rows.append(Row(title: "Wake-ups", value: push.configured
                 ? "on, \(push.devices) device\(push.devices == 1 ? "" : "s"), last sent \(time(push.lastSentAt))\(push.lastError.map { ": \($0)" } ?? "")"
                 : "off (no Apple push key on the relay)"))
+            for wake in push.byDevice ?? [] {
+                let state = wake.refused ? "refused" : wake.lastOkAt.map { "Apple took one \(time($0))" } ?? "not confirmed yet"
+                rows.append(Row(title: "Wake-ups for \(wake.device)", value: state + (wake.lastError.map { ": \($0)" } ?? "")))
+            }
         }
         if let rule = status.settings {
             rows.append(Row(title: "The relay's rule", value: rule.onlyStartingWithTask ? "only captures that start with Task" : "every capture"))

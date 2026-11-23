@@ -66,7 +66,8 @@ APNS_KEY_ONE_LINE="$(awk 'BEGIN { ORS = "\\n" } { print }' "$WORK/apns.p8")"
   echo "APNS_KEY=\"$APNS_KEY_ONE_LINE\""
   echo "APNS_KEY_ID=$APNS_KEY_ID"
   echo "APNS_TEAM_ID=$APNS_TEAM_ID"
-  echo "APNS_HOST=$FAKE"
+  echo "APNS_HOST=$FAKE/production"
+  echo "APNS_SANDBOX_HOST=$FAKE/sandbox"
   echo "RELAY_TEST_MODE=1"
 } > "$DIR/.dev.vars"
 
@@ -168,6 +169,14 @@ wait_pushes() { # wait_pushes N: up to 5 s for the pretend Apple to have N pushe
   for _ in $(seq 1 25); do [ "$(pushes)" -ge "$1" ] && return 0; /bin/sleep 0.2; done
   return 1
 }
+token_pushes() { fakelog | jq "[.pushes[] | select(.token == \"$1\")] | length"; }
+wait_token() { # wait_token TOKEN N [SECONDS]: up to 5 s (or SECONDS) for N pushes to that token
+  for _ in $(seq 1 $((${3:-5} * 5))); do [ "$(token_pushes "$1")" -ge "$2" ] && return 0; /bin/sleep 0.2; done
+  return 1
+}
+# alarm: the inbox's alarm, run now on the test clock (RELAY_TEST_MODE only).
+alarm() { keyed POST /__test/alarm; }
+ack_claimed() { keyed POST /inbox/ack -d "{\"ids\":$(printf '%s' "$BODY" | jq -c '[.items[].id]')}"; }
 
 # MARK: the relay
 
@@ -245,7 +254,7 @@ expect "the test capture is claimed" 200 '[.items[] | {id, text}]' "[{\"id\":\"$
 keyed POST /inbox/ack -d "{\"ids\":[\"$test_id\"]}"
 expect "the test capture acked" 200 '.acked' '1'
 
-echo "▸ review 4: a claim holds 30 minutes"
+echo "▸ review 4, and round 3's: a claim holds an hour"
 say hold-1 "Book the car service"
 claim mac-test
 expect "claimed by the Mac" 200 '[.items[].id]' '["hold-1"]'
@@ -257,7 +266,10 @@ claim mac-test
 expect "the Mac re-takes its own claim at any time" 200 '[.items[].id]' '["hold-1"]'
 clock $((42 * 60 * 1000))
 claim iphone-test
-expect "31 minutes after the Mac's last claim, the iPhone gets it" 200 '[.items[].id]' '["hold-1"]'
+expect "31 minutes after the Mac's last claim: still held" 200 '.items | length' '0'
+clock $((72 * 60 * 1000))
+claim iphone-test
+expect "61 minutes after the Mac's last claim, the iPhone gets it" 200 '[.items[].id]' '["hold-1"]'
 keyed POST /inbox/ack -d '{"ids":["hold-1"]}'
 clock 0
 
@@ -334,6 +346,28 @@ claim mac-test
 expect "both new ids taken, even one older than the approval" 200 '[.items[].id] | sort' '["t-1","t-2"]'
 check "the capture's time is Stream's" "$BODY" "[.items[] | select(.id == \"t-1\") | .capturedAt | sub(\"\\\\.[0-9]+Z$\"; \"Z\")]" "[\"$spoken\"]"
 keyed POST /inbox/ack -d '{"ids":["t-1","t-2"]}'
+
+echo "▸ round 3, 6: a time that can't be the capture's is no time"
+# say_with ID FIELDS: a webhook capture with more fields (built in a variable first, for bash 3.2).
+say_with() {
+  local body="{\"text\":\"Plausible or not\",\"interaction_id\":\"$1\",$2}"
+  webhook "$(file "said-$1.json" "$body")"
+}
+say_with p-12 '"time":12'
+say_with p-2019 '"created_at":"2019-06-01T10:00:00Z"'
+say_with p-ahead "\"created_at\":\"$(iso +1H)\""
+two_hours=$(iso -2H)
+say_with p-ok "\"created_at\":\"$two_hours\""
+fake interactions '[{"id":"q-12","text":"Polled with a tiny time","timestamp":12}]'
+poll
+claim mac-test
+plain='sub("\\.[0-9]+Z$"; "Z")'
+check "a small number isn't 1970: the arrival counts" "$BODY" '[.items[] | select(.id == "p-12") | .capturedAt == .receivedAt]' '[true]'
+check "a time before 2020 counts as no time" "$BODY" '[.items[] | select(.id == "p-2019") | .capturedAt == .receivedAt]' '[true]'
+check "a time an hour after the arrival counts as no time" "$BODY" '[.items[] | select(.id == "p-ahead") | .capturedAt == .receivedAt]' '[true]'
+check "a plausible time is kept" "$BODY" "[.items[] | select(.id == \"p-ok\") | .capturedAt | $plain]" "[\"$two_hours\"]"
+check "the poller's tiny time counts as no time too" "$BODY" '[.items[] | select(.id == "q-12") | .capturedAt == .receivedAt]' '[true]'
+keyed POST /inbox/ack -d '{"ids":["p-12","p-2019","p-ahead","p-ok","q-12"]}'
 
 echo "▸ review 3: an answer the relay can't read is said, with its shape"
 mode '{"prose":true}'
@@ -448,55 +482,210 @@ keyed POST /inbox/ack -d '{"ids":["after-race"]}'
 
 # MARK: wake-ups
 
-echo "▸ wake-ups: an Apple background push when a capture arrives"
-IPHONE="aa$(openssl rand -hex 31)"
+echo "▸ wake-ups: an Apple background push when a capture arrives (a Mac's token: woken at once)"
+MAC="aa$(openssl rand -hex 31)"
 STALE="bb$(openssl rand -hex 31)"
 WRONG="cc$(openssl rand -hex 31)"
+mac_push="{\"token\":\"$MAC\",\"environment\":\"development\",\"platform\":\"macOS\"}"
 status
 check "status: pushes configured" "$BODY" '.push.configured' 'true'
-claim iphone-test "{\"token\":\"$IPHONE\",\"environment\":\"development\",\"platform\":\"iOS\"}"
-expect "a claim registers the device's push token" 200 '.push' '{"configured":true,"registered":true}'
+claim mac-test "$mac_push"
+expect "a claim registers the device's push token" 200 '.push | {configured, registered}' '{"configured":true,"registered":true}'
 say push-1 "Water the plants"
-if wait_pushes 1; then pass "a capture wakes the device"; else fail "a capture wakes the device" "$(fakelog | jq -c .pushes)"; fi
-check "headers, payload and the provider token verify" "$(fakelog)" '.pushes[0] | {token, problems}' "{\"token\":\"$IPHONE\",\"problems\":[]}"
+if wait_token "$MAC" 1; then pass "a capture wakes the device"; else fail "a capture wakes the device" "$(fakelog | jq -c .pushes)"; fi
+check "headers, payload and the provider token verify" "$(fakelog)" "[.pushes[] | select(.token == \"$MAC\")][0] | {token, problems}" "{\"token\":\"$MAC\",\"problems\":[]}"
 say push-2 "Call the bank"
 /bin/sleep 1
-check "a second capture within 30 s before the device claims: no second push" "$(fakelog)" '.pushes | length' '1'
-claim iphone-test "{\"token\":\"$IPHONE\",\"environment\":\"development\",\"platform\":\"iOS\"}"
+check "a second capture within 30 s before the device claims: no second push" "$(token_pushes "$MAC")" '.' '1'
+claim mac-test "$mac_push"
 say push-3 "Book a table"
-if wait_pushes 2; then pass "after the device claimed, the next capture wakes it again"; else fail "after the device claimed, the next capture wakes it again"; fi
-claim iphone-test "{\"token\":\"$IPHONE\",\"environment\":\"development\",\"platform\":\"iOS\"}"
+if wait_token "$MAC" 2; then pass "after the device claimed, the next capture wakes it again"; else fail "after the device claimed, the next capture wakes it again"; fi
+claim mac-test "$mac_push"
 mode '{"apnsDelayMs":3000}'
 say push-5 "A webhook while Apple is slow"
 if [ "$(echo "$SECONDS_TAKEN < 1" | bc)" = 1 ]; then pass "the webhook still answers at once while Apple is slow (${SECONDS_TAKEN}s)"
 else fail "the webhook still answers at once while Apple is slow" "${SECONDS_TAKEN}s"; fi
 mode '{"apnsDelayMs":0}'
 /bin/sleep 4
-claim stale-device "{\"token\":\"$STALE\",\"environment\":\"production\",\"platform\":\"iOS\"}"
-claim wrong-device "{\"token\":\"$WRONG\",\"environment\":\"production\",\"platform\":\"iOS\"}"
+claim stale-device "{\"token\":\"$STALE\",\"environment\":\"production\",\"platform\":\"macOS\"}"
+claim wrong-device "{\"token\":\"$WRONG\",\"environment\":\"production\",\"platform\":\"macOS\"}"
 status
 check "three devices registered" "$BODY" '.push.devices' '3'
 mode "{\"apns\":{\"$STALE\":[410,\"Unregistered\"],\"$WRONG\":[400,\"BadDeviceToken\"]}}"
-before=$(pushes)
-claim iphone-test "{\"token\":\"$IPHONE\",\"environment\":\"development\",\"platform\":\"iOS\"}"
+claim mac-test "$mac_push"
 say push-6 "Pay the gas bill"
-wait_pushes $((before + 3))
+wait_token "$WRONG" 2
 /bin/sleep 1
 status
-check "410 and BadDeviceToken drop those tokens" "$BODY" '.push.devices' '1'
+check "410, and BadDeviceToken at both services: those tokens aren't woken again" "$BODY" '.push.devices' '1'
 check "the last push was sent" "$BODY" '.push.lastSentAt != null' 'true'
 mode '{"apnsExpireOnce":true}'
-claim iphone-test "{\"token\":\"$IPHONE\",\"environment\":\"development\",\"platform\":\"iOS\"}"
-before=$(pushes)
+claim mac-test "$mac_push"
+before=$(token_pushes "$MAC")
 say push-7 "Buy stamps"
-if wait_pushes $((before + 2)); then pass "an expired provider token is made again and the push sent"; else fail "an expired provider token is made again and the push sent" "$(fakelog | jq -c '.pushes[-2:]')"; fi
-check "the retry verified" "$(fakelog)" '.pushes | last | .problems' '[]'
-before=$(pushes)
+if wait_token "$MAC" $((before + 2)); then pass "an expired provider token is made again and the push sent"; else fail "an expired provider token is made again and the push sent" "$(fakelog | jq -c '.pushes[-2:]')"; fi
+check "the retry verified" "$(fakelog)" "[.pushes[] | select(.token == \"$MAC\")] | last | .problems" '[]'
+before=$(token_pushes "$MAC")
 clock 31000
 say push-8 "Renew the passport"
-if wait_pushes $((before + 1)); then pass "31 s on, a device that hasn't claimed is woken again"; else fail "31 s on, a device that hasn't claimed is woken again"; fi
-claim iphone-test "{\"token\":\"$IPHONE\",\"environment\":\"development\",\"platform\":\"iOS\"}"
-keyed POST /inbox/ack -d "{\"ids\":$(printf '%s' "$BODY" | jq -c '[.items[].id]')}"
+if wait_token "$MAC" $((before + 1)); then pass "31 s on, a device that hasn't claimed is woken again"; else fail "31 s on, a device that hasn't claimed is woken again"; fi
+claim mac-test "$mac_push"
+ack_claimed
+clock 0
+
+echo "▸ round 3, 3: a wake-up counts once Apple has taken it, and its trouble is said"
+SANDBOXED="dd$(openssl rand -hex 31)"
+NOWHERE="ee$(openssl rand -hex 31)"
+mode "{\"apnsTokens\":{\"$SANDBOXED\":\"sandbox\",\"$NOWHERE\":\"nowhere\"}}"
+# mac_claim DEVICE TOKEN: a Mac that says "production" (a Release build signed for development says so too).
+mac_claim() { claim "$1" "{\"token\":\"$2\",\"environment\":\"production\",\"platform\":\"macOS\"}"; }
+mac_claim mac-dev "$SANDBOXED"
+check "a new token is registered, not yet proved" "$BODY" '.push | {registered, lastOkAt, lastError}' '{"registered":true,"lastOkAt":null,"lastError":null}'
+say r3w-1 "Water the ferns"
+wait_token "$SANDBOXED" 2
+check "refused as BadDeviceToken at one push service, it is tried at the other" "$(fakelog)" "[.pushes[] | select(.token == \"$SANDBOXED\") | .host]" '["production","sandbox"]'
+mac_claim mac-dev "$SANDBOXED"
+check "the device's claim says it was woken" "$BODY" '.push | (.lastOkAt != null) and .registered and (.lastError == null)' 'true'
+ack_claimed
+say r3w-2 "Water the palms"
+wait_token "$SANDBOXED" 3
+/bin/sleep 0.5
+check "the service that took it is remembered" "$(fakelog)" "[.pushes[] | select(.token == \"$SANDBOXED\") | .host] | .[2:]" '["sandbox"]'
+status
+check "status: each device's own state" "$BODY" '[.push.byDevice[] | select(.device == "mac-dev") | (.lastOkAt != null) and (.lastError == null) and (.refused | not)]' '[true]'
+mac_claim mac-dead "$NOWHERE"
+say r3w-3 "Feed the cat"
+wait_token "$NOWHERE" 2
+/bin/sleep 0.5
+status
+check "a token refused at both services is said, with its device" "$BODY" '.push.lastError | test("mac-dead") and test("BadDeviceToken")' 'true'
+check "and in that device's own state" "$BODY" '[.push.byDevice[] | select(.device == "mac-dead") | .refused]' '[true]'
+mac_claim mac-dead "$NOWHERE"
+check "its claim says it can't be woken, and why" "$BODY" '.push | {registered, why: (.lastError != null)}' '{"registered":false,"why":true}'
+ack_claimed
+dead_before=$(token_pushes "$NOWHERE")
+say r3w-4 "Feed the dog"
+/bin/sleep 1
+check "a refused token isn't pushed again" "$(token_pushes "$NOWHERE")" '.' "$dead_before"
+keyed POST /__test/push-key -d '{"key":"not a key"}'
+expect "test mode: a push key that can't be used" 200
+mac_claim mac-dev "$SANDBOXED"
+say r3w-5 "Call the vet"
+/bin/sleep 1
+status
+check "a push key that can't be used is said" "$BODY" '.push.lastError | test("push key")' 'true'
+check "with the device it was waking" "$BODY" '.push.lastError | test("mac-dev")' 'true'
+check "and in that device's own state" "$BODY" '[.push.byDevice[] | select(.device == "mac-dev") | .lastError | test("push key")]' '[true]'
+mac_claim mac-dev "$SANDBOXED"
+check "and in its claim" "$BODY" '.push.lastError | test("push key")' 'true'
+keyed POST /__test/push-key -d '{"key":null}'
+sent=$(token_pushes "$SANDBOXED")
+say r3w-6 "Book the vet"
+wait_token "$SANDBOXED" $((sent + 1))
+/bin/sleep 0.5
+status
+check "a usable key again: its trouble goes" "$BODY" '(.push.lastError // "") | test("push key") | not' 'true'
+mac_claim mac-dev "$SANDBOXED"
+check "and the device is woken again" "$BODY" '.push.lastError' 'null'
+ack_claimed
+claim iphone-test
+ack_claimed
+claim stale-device
+ack_claimed
+
+echo "▸ round 3, 7: a Mac is woken at once; an iPhone only for what no device has taken"
+PHONE="ff$(openssl rand -hex 31)"
+phone_push="{\"token\":\"$PHONE\",\"environment\":\"development\",\"platform\":\"iOS\"}"
+mine='[.items[] | select(.id | startswith("s7-")) | .id] | sort'
+B=$((10 * 60 * 1000)) # ten minutes on: every Mac claim above is more than two minutes old
+clock $B
+claim iphone-7 "$phone_push"
+ack_claimed
+macs=$(token_pushes "$MAC")
+say s7-1 "Pick up the dry cleaning"
+wait_token "$MAC" $((macs + 1))
+check "a Mac is woken at once" "$(token_pushes "$MAC")" '.' "$((macs + 1))"
+check "an iPhone isn't, yet" "$(token_pushes "$PHONE")" '.' '0'
+clock $((B + 29000)); alarm
+/bin/sleep 0.5
+check "29 s on: still not" "$(token_pushes "$PHONE")" '.' '0'
+clock $((B + 31000)); alarm
+wait_token "$PHONE" 1
+check "30 s on and no device took it: the iPhone is woken" "$(token_pushes "$PHONE")" '.' '1'
+claim iphone-7 "$phone_push"
+ack_claimed
+say s7-2 "Return the library books"
+claim mac-test "$mac_push"
+expect "the Mac takes the next one within 30 s" 200 "$mine" '["s7-2"]'
+ack_claimed
+clock $((B + 62000)); alarm
+/bin/sleep 0.5
+check "taken by the Mac: the iPhone isn't woken" "$(token_pushes "$PHONE")" '.' '1'
+say s7-3 "Buy batteries"
+clock $((B + 93000)); alarm
+/bin/sleep 0.5
+check "a Mac claimed in the last two minutes: 30 s on, the iPhone still waits" "$(token_pushes "$PHONE")" '.' '1'
+clock $((B + 138000)); alarm
+wait_token "$PHONE" 2
+check "75 s on and still no device's: the iPhone is woken" "$(token_pushes "$PHONE")" '.' '2'
+claim iphone-7 "$phone_push"
+ack_claimed
+C=$((B + 400000)) # the Mac's last claim is over two minutes old again
+clock $C
+say s7-4 "Charge the camera"
+clock $((C + 10000))
+say s7-5 "Pack the tripod"
+clock $((C + 31000)); alarm
+wait_token "$PHONE" 3
+clock $((C + 41000)); alarm
+/bin/sleep 0.5
+check "two captures 10 s apart: one wake-up (a device at most every 30 s)" "$(token_pushes "$PHONE")" '.' '3'
+claim iphone-7 "$phone_push"
+expect "and the iPhone takes both" 200 "$mine" '["s7-4","s7-5"]'
+ack_claimed
+clock $((C + 300000))
+claim iphone-7 "$phone_push"
+say s7-6 "Water the window boxes"
+start=$(date +%s)
+if wait_token "$PHONE" 4 40; then pass "the inbox's own alarm wakes the iPhone ($(($(date +%s) - start)) s on, nothing run by hand)"
+else fail "the inbox's own alarm wakes the iPhone" "no push in 40 s"; fi
+claim iphone-7 "$phone_push"
+ack_claimed
+clock 0
+
+echo "▸ round 3, 4: a claim left unacked: its device is woken again at 10 and 40 minutes, and it holds an hour"
+mine4='[.items[] | select(.id | startswith("h4-")) | .id]'
+D=$((30 * 60 * 1000))
+clock $D
+claim iphone-7 "$phone_push"
+ack_claimed
+say h4-1 "Renew the car insurance"
+claim iphone-7 "$phone_push"
+expect "the iPhone takes it, and its ack is lost" 200 "$mine4" '["h4-1"]'
+held=$(token_pushes "$PHONE")
+clock $((D + 9 * 60 * 1000)); alarm
+/bin/sleep 0.5
+check "9 minutes on: not woken" "$(token_pushes "$PHONE")" '.' "$held"
+clock $((D + 10 * 60 * 1000 + 1000)); alarm
+wait_token "$PHONE" $((held + 1))
+check "10 minutes on, still unacked: the iPhone is woken again (its check sends the ack first)" "$(token_pushes "$PHONE")" '.' "$((held + 1))"
+clock $((D + 31 * 60 * 1000))
+claim mac-test "$mac_push"
+check "31 minutes on, the Mac gets nothing: the claim holds an hour" "$BODY" "$mine4" '[]'
+clock $((D + 40 * 60 * 1000 + 1000)); alarm
+wait_token "$PHONE" $((held + 2))
+check "40 minutes on, still unacked: woken again" "$(token_pushes "$PHONE")" '.' "$((held + 2))"
+clock $((D + 61 * 60 * 1000))
+claim mac-test "$mac_push"
+check "an hour on, another device may take it" "$BODY" "$mine4" '["h4-1"]'
+ack_claimed
+say h4-2 "Book the dentist"
+claim iphone-7 "$phone_push"
+ack_claimed
+acked=$(token_pushes "$PHONE")
+clock $((D + 72 * 60 * 1000)); alarm
+/bin/sleep 0.5
+check "acked at once: no wake-up 10 minutes on" "$(token_pushes "$PHONE")" '.' "$acked"
 clock 0
 
 echo "▸ review 2: a session the server forgets doesn't spin the relay"

@@ -25,9 +25,11 @@ const SIGNATURE_WINDOW_S = 300;
 const MINUTE_MS = 60_000;
 const DAY_MS = 86_400_000;
 const KEEP_MS = 30 * DAY_MS;
-// A device's claim holds what it took this long: a device that saved a capture and lost its ack has half an hour to
-// come back and ack it before another device may take the capture too (review, finding 4).
-const CLAIM_HOLD_MS = 30 * MINUTE_MS;
+// A device's claim holds what it took this long: a device that saved a capture and lost its ack has an hour to come
+// back and ack it before another device may take the capture too (round 3, finding 4), and is woken again at 10 and
+// 40 minutes while its claim is unacked (its check sends the lost ack first).
+const CLAIM_HOLD_MS = 60 * MINUTE_MS;
+const REWAKE_AFTER_MS = [10 * MINUTE_MS, 40 * MINUTE_MS];
 const CLAIM_LIMIT = 50;
 const ACK_LIMIT = 500;
 const MAX_ID = 256;
@@ -41,8 +43,17 @@ const HASH_KEPT_MS = 60 * MINUTE_MS;
 const REFRESH_EARLY_MS = 5 * MINUTE_MS;
 const OUTBOUND_TIMEOUT_MS = 15_000;
 const PUSH_GAP_MS = 30_000;
+// Who is woken (round 3, finding 7): a Mac at once; an iPhone or iPad only for a capture no device has claimed 30 s
+// on, or 75 s on when a Mac claimed in the last two minutes (it is awake, and takes it). iOS spends one budget of
+// background pushes on these and on iCloud's own, and George's sync must not go short.
+const PHONE_WAIT_MS = 30_000;
+const PHONE_WAIT_MAC_AWAKE_MS = 75_000;
+const MAC_AWAKE_MS = 2 * MINUTE_MS;
 const PROVIDER_TOKEN_MS = 50 * MINUTE_MS;
 const TOKEN_TEXT = /^[A-Za-z0-9_-]{43}$/;
+// A capture's own time is believed only from 2020 on and up to five minutes after the relay got it (round 3, 6).
+const EARLIEST_SAID_MS = Date.UTC(2020, 0, 1);
+const SAID_AHEAD_MS = 5 * MINUTE_MS;
 
 const TEST_TEXT = "Test capture from your Stream ring";
 const CLIENT_NAME = "HITList inbox";
@@ -96,7 +107,7 @@ async function route(request, env) {
       return callbackPage(url, env);
   }
   const keyed = KEYED[name];
-  if (!keyed || (name === "POST /__test/clock" && env.RELAY_TEST_MODE !== "1")) return json({ error: "Not found." }, 404);
+  if (!keyed || (url.pathname.startsWith("/__test/") && env.RELAY_TEST_MODE !== "1")) return json({ error: "Not found." }, 404);
   if (!(await hasInboxKey(request, env))) return json({ error: "Unauthorized." }, 401);
   return keyed(request, env, url);
 }
@@ -149,6 +160,18 @@ const KEYED = {
     const offset = body && Number.isFinite(body.offsetMs) ? body.offsetMs : 0;
     return json(await inbox(env).setTestClock(offset));
   },
+
+  /// test.sh only: the inbox's alarm, run now on its clock (the real alarm fires on the real one).
+  async "POST /__test/alarm"(request, env) {
+    return json(await inbox(env).runTimers());
+  },
+
+  /// test.sh only: signs with this key instead of APNS_KEY (`{"key": null}` goes back to it), so a key that can't be
+  /// used is proved to be said.
+  async "POST /__test/push-key"(request, env) {
+    const body = await readJSON(request);
+    return json(await inbox(env).setTestPushKey(body && typeof body.key === "string" ? body.key : null));
+  },
 };
 
 // MARK: - Stream's webhook
@@ -183,7 +206,7 @@ async function webhook(request, env) {
     : !id ? `interaction_id is missing or over ${MAX_ID} characters` : null;
   const words = problem ? "" : body.text;
   // The interaction's own time, when Stream sends one with its zone (the webhook is sent as the capture is saved).
-  const said = parseTime(first(body, TIME_FIELDS, (v) => parseTime(v) !== null));
+  const said = parseTime(first(body, TIME_FIELDS, (v) => parseTime(v, now) !== null), now);
   const outcome = await inbox(env).receiveWebhook({
     id, text: words, body: text, fields, problem, hash: problem ? null : await textHash(words), said,
   });
@@ -225,6 +248,11 @@ async function signatureVerifies(secret, signature, raw) {
 function interactionID(value) {
   const id = typeof value === "number" && Number.isFinite(value) ? String(value) : value;
   return typeof id === "string" && id.trim() && id.length <= MAX_ID ? id : null;
+}
+
+/// A device's platform as its claim named it: a Mac is woken at once, an iPhone or iPad waits (round 3, finding 7).
+function isMac(platform) {
+  return platform === "macOS";
 }
 
 /// Whether a capture's first word is "Task" (any case, with or without the mark after it): HITList's `SpokenTask`.
@@ -296,10 +324,28 @@ export class StreamInbox extends DurableObject {
       registered_at INTEGER NOT NULL,
       last_claim_at INTEGER,
       last_push_at INTEGER)`);
+    // Round 3: each device's own wake-ups (the push service that took its token, its last success and trouble, a token
+    // Apple refused), added in place on a relay that ran before.
+    const deviceColumns = this.sql.exec("PRAGMA table_info(devices)").toArray().map((c) => c.name);
+    for (const [column, type] of [["proven_environment", "TEXT"], ["last_ok_at", "INTEGER"], ["last_error", "TEXT"],
+      ["last_error_at", "INTEGER"], ["refused_at", "INTEGER"]]) {
+      if (!deviceColumns.includes(column)) this.sql.exec(`ALTER TABLE devices ADD COLUMN ${column} ${type}`);
+    }
+    // Round 3: wake-ups that wait (the inbox's alarm runs them): an iPhone's, for a capture still unclaimed ("phones").
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS timers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      due_at INTEGER NOT NULL,
+      kind TEXT NOT NULL,
+      capture_id TEXT NOT NULL,
+      device TEXT,
+      claimed_at INTEGER)`);
+    this.sql.exec("CREATE INDEX IF NOT EXISTS timers_due ON timers (due_at)");
     this.lastSweep = 0;
     this.polling = null;
     this.rpcID = 1;
-    this.testOffset = 0;
+    // test.sh's clock is kept, so an inbox made again (an alarm after it went idle) runs on the same one.
+    this.testOffset = env.RELAY_TEST_MODE === "1" ? this.getMeta("testOffset", 0) : 0;
+    this.testPushKey = null;
   }
 
   /// The inbox's clock: the real one, moved only by test.sh (`POST /__test/clock`, RELAY_TEST_MODE).
@@ -307,9 +353,20 @@ export class StreamInbox extends DurableObject {
     return Date.now() + this.testOffset;
   }
 
-  setTestClock(offsetMs) {
-    if (this.env.RELAY_TEST_MODE === "1") this.testOffset = offsetMs;
+  async setTestClock(offsetMs) {
+    if (this.env.RELAY_TEST_MODE === "1") {
+      this.testOffset = offsetMs;
+      this.setMeta("testOffset", offsetMs);
+    }
+    await this.armAlarm();
     return { offsetMs: this.testOffset };
+  }
+
+  setTestPushKey(key) {
+    if (this.env.RELAY_TEST_MODE !== "1") return { ok: false };
+    this.testPushKey = key;
+    this.deleteMeta("apnsJWT");
+    return { ok: true };
   }
 
   // MARK: What waits
@@ -348,23 +405,23 @@ export class StreamInbox extends DurableObject {
   }
 
   /// The relay's own test capture: kept whatever the rule says, and it wakes the devices like any other.
-  keepTest(id, text, hash) {
+  async keepTest(id, text, hash) {
     const now = this.now();
     this.sql.exec(
       "INSERT INTO captures (id, source, text, body, text_hash, received_at, captured_at) VALUES (?, 'test', ?, ?, ?, ?, ?)",
       id, text, JSON.stringify({ test: true }), hash, now, now);
-    this.wake();
+    await this.capturesKept([id]);
     return { status: "accepted" };
   }
 
   /// The webhook's body, signed and read: what it carried is noted for the status whatever came of it.
-  receiveWebhook({ id, text, body, fields, problem, hash, said }) {
+  async receiveWebhook({ id, text, body, fields, problem, hash, said }) {
     const now = this.now();
     const outcome = problem ? "invalid"
       : !text.trim() ? "empty"
       : this.keep({ id, text, body, hash, source: "webhook", fields, said });
     this.setMeta("webhook", { at: now, result: outcome, fields });
-    if (outcome === "accepted") this.wake();
+    if (outcome === "accepted") await this.capturesKept([id]);
     return outcome;
   }
 
@@ -379,21 +436,30 @@ export class StreamInbox extends DurableObject {
       id, source, now, now);
   }
 
-  /// What waits and isn't held by another device (held half an hour from its claim; a device re-takes its own at any
-  /// time), oldest first; held for `device` now. A claim also brings the device's push token.
-  claim(device, push) {
+  /// What waits and isn't held by another device (held an hour from its claim; a device re-takes its own at any time),
+  /// oldest first; held for `device` now, which is woken again at 10 and 40 minutes while the claim is unacked. A claim
+  /// also brings the device's push token.
+  async claim(device, push) {
     const now = this.now();
     this.sweep(now);
-    const registered = this.registerDevice(device, push, now);
+    const wakeState = this.registerDevice(device, push, now);
+    this.noteMacClaim(device, push, now);
     const rows = this.sql.exec(
       `SELECT id, text, received_at, captured_at FROM captures
        WHERE done_at IS NULL AND text IS NOT NULL
          AND (claimed_at IS NULL OR claimed_at < ? OR claimed_by = ?)
        ORDER BY received_at, id LIMIT ?`,
       now - CLAIM_HOLD_MS, device, CLAIM_LIMIT).toArray();
+    const rewakes = this.pushConfigured();
     for (const row of rows) {
       this.sql.exec("UPDATE captures SET claimed_by = ?, claimed_at = ? WHERE id = ?", device, now, row.id);
+      this.sql.exec("DELETE FROM timers WHERE kind = 'holder' AND capture_id = ?", row.id);
+      for (const after of rewakes ? REWAKE_AFTER_MS : []) {
+        this.sql.exec("INSERT INTO timers (due_at, kind, capture_id, device, claimed_at) VALUES (?, 'holder', ?, ?, ?)",
+          now + after, row.id, device, now);
+      }
     }
+    if (rows.length && rewakes) await this.armAlarm();
     const last = this.getMeta("last", null);
     return {
       items: rows.map((row) => ({
@@ -401,7 +467,7 @@ export class StreamInbox extends DurableObject {
       })),
       lastReceivedAt: last ? iso(last.at) : null,
       settings: this.settings(),
-      push: { configured: this.pushConfigured(), registered },
+      push: { configured: this.pushConfigured(), ...wakeState },
     };
   }
 
@@ -413,6 +479,7 @@ export class StreamInbox extends DurableObject {
       acked += this.sql.exec(
         "UPDATE captures SET text = NULL, body = NULL, done_at = ? WHERE id = ? AND done_at IS NULL RETURNING id",
         now, id).toArray().length;
+      this.sql.exec("DELETE FROM timers WHERE capture_id = ?", id);
     }
     return { acked };
   }
@@ -433,7 +500,6 @@ export class StreamInbox extends DurableObject {
       "SELECT COUNT(*) AS n FROM captures WHERE done_at IS NULL AND text IS NOT NULL").one().n;
     const last = this.getMeta("last", null);
     const webhook = this.getMeta("webhook", null);
-    const push = this.getMeta("push", {});
     return {
       pending,
       lastReceivedAt: last ? iso(last.at) : null,
@@ -447,12 +513,34 @@ export class StreamInbox extends DurableObject {
         lastFields: webhook ? webhook.fields || [] : [],
       },
       stream: this.streamStatus(),
-      push: {
-        configured: this.pushConfigured(),
-        devices: this.sql.exec("SELECT COUNT(*) AS n FROM devices").one().n,
-        lastSentAt: iso(push.lastSentAt),
-        lastError: push.lastError || null,
-      },
+      push: this.pushStatus(),
+    };
+  }
+
+  /// Wake-ups: whether the relay has a push key, how many devices it can wake, its last trouble with the device it was
+  /// waking (a key that can't be used first, then the newest device's), and each device's own state.
+  pushStatus() {
+    const push = this.getMeta("push", {});
+    const rows = this.sql.exec(
+      `SELECT device, platform, environment, proven_environment, last_claim_at, last_push_at, last_ok_at, last_error,
+         last_error_at, refused_at FROM devices ORDER BY registered_at`).toArray();
+    const newest = rows.filter((row) => row.last_error).sort((a, b) => (b.last_error_at || 0) - (a.last_error_at || 0))[0];
+    const keyError = push.keyError ? `${push.keyError.message} (waking ${push.keyError.devices.join(", ")})` : null;
+    return {
+      configured: this.pushConfigured(),
+      devices: rows.filter((row) => row.refused_at === null).length,
+      lastSentAt: iso(push.lastSentAt),
+      lastError: keyError || (newest ? `${newest.device}: ${newest.last_error}` : null),
+      byDevice: rows.map((row) => ({
+        device: row.device,
+        platform: row.platform,
+        service: (row.proven_environment || row.environment) === "production" ? "production" : "sandbox",
+        lastClaimAt: iso(row.last_claim_at),
+        lastPushAt: iso(row.last_push_at),
+        lastOkAt: iso(row.last_ok_at),
+        lastError: row.last_error || null,
+        refused: row.refused_at !== null,
+      })),
     };
   }
 
@@ -504,8 +592,10 @@ export class StreamInbox extends DurableObject {
     return Boolean(this.env.APNS_KEY && this.env.APNS_KEY_ID && this.env.APNS_TEAM_ID);
   }
 
-  /// A claim's `push: {token, environment, platform}`: one token per device, the newest. A claim without one still
-  /// says the device came for its captures.
+  /// A claim's `push: {token, environment, platform}`: one token per device, the newest (a new one starts over). A
+  /// claim without one still says the device came for its captures. The answer is this device's own wake-ups:
+  /// `registered` (it can be woken: a token Apple hasn't refused), `lastOkAt` (Apple last took a push for it) and
+  /// `lastError` (why the last one didn't go, or why it can't be woken).
   registerDevice(device, push, now) {
     const token = push && typeof push.token === "string" ? push.token.trim().toLowerCase() : "";
     if (/^[0-9a-f]{64,200}$/.test(token)) {
@@ -520,40 +610,136 @@ export class StreamInbox extends DurableObject {
     } else {
       this.sql.exec("UPDATE devices SET last_claim_at = ? WHERE device = ?", now, device);
     }
-    return this.sql.exec("SELECT 1 FROM devices WHERE device = ? LIMIT 1", device).toArray().length > 0;
+    const row = this.sql.exec("SELECT last_ok_at, last_error, refused_at FROM devices WHERE device = ? LIMIT 1", device).toArray()[0];
+    return {
+      registered: Boolean(row && row.refused_at === null),
+      lastOkAt: row ? iso(row.last_ok_at) : null,
+      lastError: (row && row.last_error) || null,
+    };
   }
 
-  /// A capture was kept: each device that hasn't been woken in the last 30 s, or has claimed since it was, is pushed
-  /// now, in the background (`waitUntil`): the webhook answers Stream at once.
-  wake() {
-    if (!this.pushConfigured()) return;
+  /// A Mac came for its captures: it is awake, so an iPhone's wake-up waits longer (finding 7).
+  noteMacClaim(device, push, now) {
+    const named = push && typeof push.platform === "string" ? push.platform : null;
+    const platform = named || (this.sql.exec("SELECT platform FROM devices WHERE device = ? LIMIT 1", device).toArray()[0] || {}).platform;
+    if (isMac(platform) || /^mac-/i.test(device)) this.setMeta("lastMacClaimAt", now);
+  }
+
+  /// Captures were kept (round 3, finding 7): each Mac is woken now, in the background (`waitUntil`), so Stream's
+  /// webhook is answered at once; an iPhone or iPad only by the inbox's alarm, if the capture is still unclaimed 30 s on
+  /// (75 s when a Mac claimed in the last two minutes). A device at most every 30 s until it has claimed since.
+  async capturesKept(ids) {
+    if (!ids.length || !this.pushConfigured()) return;
+    const now = this.now();
+    const lastMac = this.getMeta("lastMacClaimAt", null);
+    const macAwake = lastMac !== null && now - lastMac <= MAC_AWAKE_MS;
+    const sending = this.wakeNow(this.dueDevices(now, (device) => isMac(device.platform)), now);
+    if (sending && this.ctx.waitUntil) this.ctx.waitUntil(sending);
+    const dueAt = now + (macAwake ? PHONE_WAIT_MAC_AWAKE_MS : PHONE_WAIT_MS);
+    for (const id of ids) this.sql.exec("INSERT INTO timers (due_at, kind, capture_id) VALUES (?, 'phones', ?)", dueAt, id);
+    await this.armAlarm();
+  }
+
+  /// Devices that may be pushed now: a token Apple hasn't refused, not pushed in the last 30 s unless it has claimed
+  /// since.
+  dueDevices(now, accept) {
+    return this.sql.exec(
+      `SELECT token, device, environment, proven_environment, platform FROM devices
+       WHERE refused_at IS NULL
+         AND (last_push_at IS NULL OR (last_claim_at IS NOT NULL AND last_claim_at > last_push_at) OR ? - last_push_at >= ?)`,
+      now, PUSH_GAP_MS).toArray().filter(accept);
+  }
+
+  /// Pushes these devices, marked as pushed now; the sending, or null when there is none.
+  wakeNow(devices, now) {
+    if (!devices.length) return null;
+    for (const device of devices) this.sql.exec("UPDATE devices SET last_push_at = ? WHERE token = ?", now, device.token);
+    return this.sendPushes(devices).catch((error) => console.error("push:", error && error.message));
+  }
+
+  /// The inbox's alarm: the wake-ups that waited, run when due.
+  async alarm() {
+    await this.runTimers();
+  }
+
+  /// Every waiting wake-up that is due: an iPhone's for a capture no device has claimed since it was kept; a holder's
+  /// for a claim of its own still unacked (the same claim: a re-take starts its own two).
+  async runTimers() {
     const now = this.now();
     const due = this.sql.exec(
-      `SELECT token, environment FROM devices
-       WHERE last_push_at IS NULL OR (last_claim_at IS NOT NULL AND last_claim_at > last_push_at) OR ? - last_push_at >= ?`,
-      now, PUSH_GAP_MS).toArray();
-    if (!due.length) return;
-    for (const device of due) this.sql.exec("UPDATE devices SET last_push_at = ? WHERE token = ?", now, device.token);
-    const sending = this.sendPushes(due).catch((error) => console.error("push:", error && error.message));
-    if (this.ctx.waitUntil) this.ctx.waitUntil(sending);
+      "SELECT kind, capture_id, device, claimed_at FROM timers WHERE due_at <= ? ORDER BY due_at, id", now).toArray();
+    this.sql.exec("DELETE FROM timers WHERE due_at <= ?", now);
+    let phones = false;
+    const holders = new Set();
+    for (const timer of due) {
+      const capture = this.sql.exec(
+        "SELECT claimed_by, claimed_at, done_at, text FROM captures WHERE id = ? LIMIT 1", timer.capture_id).toArray()[0];
+      if (!capture || capture.done_at !== null || capture.text === null) continue;
+      if (timer.kind === "phones" && capture.claimed_at === null) phones = true;
+      if (timer.kind === "holder" && capture.claimed_by === timer.device && capture.claimed_at === timer.claimed_at) {
+        holders.add(timer.device);
+      }
+    }
+    let woken = [];
+    if ((phones || holders.size) && this.pushConfigured()) {
+      woken = this.dueDevices(now, (device) => (phones && !isMac(device.platform)) || holders.has(device.device));
+      const sending = this.wakeNow(woken, now);
+      if (sending) await sending;
+    }
+    await this.armAlarm();
+    return { ran: due.length, woken: woken.map((device) => device.device) };
   }
 
+  /// The alarm at the next waiting wake-up, on the real clock (test.sh moves only the inbox's), or none.
+  async armAlarm() {
+    const next = this.sql.exec("SELECT MIN(due_at) AS at FROM timers").one().at;
+    if (next === null || next === undefined) {
+      await this.ctx.storage.deleteAlarm();
+      return;
+    }
+    await this.ctx.storage.setAlarm(Math.max(Date.now(), next - this.testOffset));
+  }
+
+  /// Each device's push, at the service its token was last taken by (else the one its build named). BadDeviceToken
+  /// is tried once at the other service, whose answer is remembered for that token: a Release build signed for
+  /// development names the wrong one (round 3, finding 3). A key that can't sign is said, with the devices it was for.
   async sendPushes(devices) {
-    let providerToken = await this.providerToken(false);
+    let providerToken;
+    try {
+      providerToken = await this.providerToken(false);
+    } catch (error) {
+      this.noteKeyTrouble(`The relay's Apple push key couldn't be used (${words(error)}). Run setup.sh again with the .p8 file Apple gave you.`, devices);
+      return;
+    }
     for (const device of devices) {
-      let answer = await this.pushOne(device, providerToken);
+      const first = device.proven_environment || device.environment;
+      let answer = await this.pushOne(device.token, first, providerToken);
       if (answer.status === 403 && answer.reason === "ExpiredProviderToken") {
-        providerToken = await this.providerToken(true);
-        answer = await this.pushOne(device, providerToken);
+        try {
+          providerToken = await this.providerToken(true);
+        } catch (error) {
+          this.noteKeyTrouble(`The relay's Apple push key couldn't be used (${words(error)}). Run setup.sh again with the .p8 file Apple gave you.`, [device]);
+          continue;
+        }
+        answer = await this.pushOne(device.token, first, providerToken);
       }
-      this.notePush(device, answer);
+      let used = first;
+      if (answer.status === 400 && answer.reason === "BadDeviceToken") {
+        const other = first === "production" ? "development" : "production";
+        const again = await this.pushOne(device.token, other, providerToken);
+        if (again.status === 200) used = other;
+        answer = again.status === 400 && again.reason === "BadDeviceToken" ? { ...again, bothServices: true } : again;
+      }
+      this.notePush(device, answer, used);
     }
   }
 
-  async pushOne(device, providerToken) {
-    const host = this.env.APNS_HOST
-      || (device.environment === "production" ? "https://api.push.apple.com" : "https://api.sandbox.push.apple.com");
-    const url = `${host}/3/device/${device.token}`;
+  async pushOne(token, environment, providerToken) {
+    // APNS_HOST and APNS_SANDBOX_HOST are test.sh's pretend Apple; nothing else sets them.
+    const host = environment === "production"
+      ? this.env.APNS_HOST || "https://api.push.apple.com"
+      : this.env.APNS_SANDBOX_HOST || "https://api.sandbox.push.apple.com";
+    const url = `${host}/3/device/${token}`;
     if (!safeURL(url)) return { status: 0, reason: "an address that isn't https" };
     try {
       const response = await fetch(url, {
@@ -575,19 +761,41 @@ export class StreamInbox extends DurableObject {
     }
   }
 
-  /// Apple's answer: a retired token (410) or a refused one (BadDeviceToken, DeviceTokenNotForTopic) is dropped.
-  notePush(device, { status, reason }) {
+  /// Apple's answer, kept on the device's own row: a push Apple took (`last_ok_at`, and the service that took it);
+  /// a token Apple retired (410) or refused (BadDeviceToken at both services, DeviceTokenNotForTopic), kept as refused
+  /// with the reason, so it isn't pushed again and its device hears why until it gives a new one; anything else, said
+  /// as that device's trouble. A key Apple refuses is the relay's trouble, said with the device.
+  notePush(device, { status, reason, bothServices }, used) {
+    const now = this.now();
     const push = this.getMeta("push", {});
     if (status === 200) {
-      push.lastSentAt = this.now();
-      push.lastError = null;
-    } else if (status === 410 || (status === 400 && ["BadDeviceToken", "DeviceTokenNotForTopic"].includes(reason))) {
-      this.sql.exec("DELETE FROM devices WHERE token = ?", device.token);
-      push.lastDropped = { at: this.now(), reason: reason || String(status) };
+      push.lastSentAt = now;
+      push.keyError = null;
+      this.sql.exec(
+        "UPDATE devices SET last_ok_at = ?, last_error = NULL, last_error_at = NULL, proven_environment = ? WHERE token = ?",
+        now, used, device.token);
+    } else if (status === 410 || (status === 400 && (bothServices || reason === "DeviceTokenNotForTopic"))) {
+      const why = status === 410 ? "Apple says its push token is no longer in use (Unregistered)"
+        : reason === "DeviceTokenNotForTopic" ? "Apple says its push token isn't HITList's (DeviceTokenNotForTopic)"
+          : "Apple refused its push token at both of its push services (BadDeviceToken)";
+      this.sql.exec("UPDATE devices SET refused_at = ?, last_error = ?, last_error_at = ? WHERE token = ?",
+        now, `${why}; it isn't woken until HITList on it gives a new one.`, now, device.token);
+    } else if (status === 403 && ["InvalidProviderToken", "MissingProviderToken"].includes(reason)) {
+      this.noteKeyTrouble(`Apple refused the relay's push key (${reason}): check its Key ID and Team ID, then run setup.sh again.`, [device], push);
     } else {
-      push.lastError = status === 0
-        ? `Apple's push service couldn't be reached (${reason}).`
+      const why = status === 0 ? `Apple's push service couldn't be reached (${reason}).`
         : `Apple refused a wake-up push (${status}${reason ? ` ${reason}` : ""}).`;
+      this.sql.exec("UPDATE devices SET last_error = ?, last_error_at = ? WHERE token = ?", why, now, device.token);
+    }
+    this.setMeta("push", push);
+  }
+
+  /// The push key couldn't sign, or Apple refused it: said in status with the devices it was waking, and on each.
+  noteKeyTrouble(message, devices, push = this.getMeta("push", {})) {
+    const now = this.now();
+    push.keyError = { message, at: now, devices: [...new Set(devices.map((device) => device.device))] };
+    for (const device of devices) {
+      this.sql.exec("UPDATE devices SET last_error = ?, last_error_at = ? WHERE token = ?", message, now, device.token);
     }
     this.setMeta("push", push);
   }
@@ -601,7 +809,7 @@ export class StreamInbox extends DurableObject {
         && cached.teamId === this.env.APNS_TEAM_ID) {
       return cached.token;
     }
-    const token = await signProviderToken(this.env.APNS_KEY, this.env.APNS_KEY_ID, this.env.APNS_TEAM_ID,
+    const token = await signProviderToken(this.testPushKey || this.env.APNS_KEY, this.env.APNS_KEY_ID, this.env.APNS_TEAM_ID,
       Math.floor(now / 1000));
     this.setMeta("apnsJWT", { token, issuedAt: now, keyId: this.env.APNS_KEY_ID, teamId: this.env.APNS_TEAM_ID });
     return token;
@@ -728,12 +936,12 @@ export class StreamInbox extends DurableObject {
     const session = { protocolVersion: conn.protocolVersion, sessionId: conn.sessionId, toolSchema: conn.toolSchema,
       toolArguments: conn.toolArguments };
     let update;
-    let added = 0;
+    let keptIDs = [];
     try {
       const result = await this.callTool(server, client, session, grant);
       const taken = await this.take(result, conn, started);
-      added = taken.added;
-      delete taken.added;
+      keptIDs = taken.kept || [];
+      delete taken.kept;
       update = { ...session, ...taken, lastPollAt: started };
     } catch (failure) {
       if (failure instanceof Superseded) return { polled: false };
@@ -752,8 +960,8 @@ export class StreamInbox extends DurableObject {
       update.refreshable = false;
     }
     this.setMeta("stream", { ...latest, ...update });
-    if (added > 0) this.wake();
-    return { polled: true, added };
+    await this.capturesKept(keptIDs);
+    return { polled: true, added: keptIDs.length };
   }
 
   /// `get_recent_interactions`, after the handshake when there is none yet. A 401 refreshes the token once; a session
@@ -865,14 +1073,14 @@ export class StreamInbox extends DurableObject {
   /// the interactions' times when they have them, else every id it sees is kept as seen); after that every new id is
   /// taken, whatever its time says. An answer that can't be read is said, with its shape and never its words.
   async take(result, conn, now) {
-    const read = interactionsFrom(result);
+    const read = interactionsFrom(result, now);
     if (read.error) return { lastError: `Stream's tool said: ${read.error}` };
     if (!read.items) {
       return { lastError: "Stream's answer couldn't be read: the relay found no list of interactions in it.", answerShape: read.shape };
     }
     const items = read.items;
     for (const item of items) item.hash = await textHash(item.text);
-    let added = 0;
+    const kept = [];
     const firstPoll = !conn.baselineDone;
     for (const item of items) {
       if (this.has(item.id)) {
@@ -888,10 +1096,10 @@ export class StreamInbox extends DurableObject {
         continue;
       }
       if (this.keep({ id: item.id, text: item.text, body: JSON.stringify(item.raw), hash: item.hash, source: "stream",
-        fields: item.fields, said: item.at }) === "accepted") added += 1;
+        fields: item.fields, said: item.at }) === "accepted") kept.push(item.id);
     }
     return {
-      baselineDone: true, lastError: null, added, answerShape: null,
+      baselineDone: true, lastError: null, kept, answerShape: null,
       interactionFields: items.length ? items[0].fields : conn.interactionFields || null,
     };
   }
@@ -918,8 +1126,9 @@ function argumentsFor(schema) {
 
 /// The interactions in a `tools/call` result, read tolerantly: from `structuredContent`, or each text content as
 /// JSON; an array of objects, bare or under a key. `items` is null when nothing in the answer is such a list (then
-/// `shape` says what came: content types, whether each text was JSON, the top-level keys, never words).
-function interactionsFrom(result) {
+/// `shape` says what came: content types, whether each text was JSON, the top-level keys, never words). Times are
+/// judged against `receivedAt`, the poll's own.
+function interactionsFrom(result, receivedAt) {
   const candidates = [];
   if (result && result.structuredContent !== undefined) candidates.push(result.structuredContent);
   const json = [];
@@ -935,7 +1144,7 @@ function interactionsFrom(result) {
   }
   for (const value of candidates) {
     const list = objectList(value);
-    if (list) return { items: list.map(interaction).filter(Boolean) };
+    if (list) return { items: list.map((raw) => interaction(raw, receivedAt)).filter(Boolean) };
   }
   for (const value of candidates) {
     if (isPlainObject(value) && value.error) return { error: String(value.error.message || value.error) };
@@ -969,10 +1178,10 @@ function objectList(value, depth = 0) {
 const TIME_FIELDS = ["created_at", "createdAt", "timestamp", "time", "date", "saved_at", "savedAt", "occurred_at",
   "occurredAt", "started_at", "startedAt", "updated_at", "updatedAt"];
 
-function interaction(raw) {
+function interaction(raw, receivedAt) {
   const text = first(raw, ["text", "transcript", "content", "body", "note", "message", "value"], (v) => typeof v === "string");
   if (typeof text !== "string") return null;
-  const at = parseTime(first(raw, TIME_FIELDS, (v) => parseTime(v) !== null));
+  const at = parseTime(first(raw, TIME_FIELDS, (v) => parseTime(v, receivedAt) !== null), receivedAt);
   let id = interactionID(first(raw, ["interaction_id", "interactionId", "id", "uuid"], (v) => interactionID(v) !== null));
   if (!id) id = `words-${simpleHash(`${text}|${at || ""}`)}`;
   return { id, text, at: at === undefined ? null : at, raw, fields: Object.keys(raw).slice(0, 64) };
@@ -985,15 +1194,20 @@ function first(object, keys, accept) {
   return undefined;
 }
 
-/// A moment, only when it can't be misread: epoch seconds or milliseconds, or an ISO 8601 time with its zone. A date
-/// alone, or a time with no zone, would be read as UTC and could be hours off: it counts as no time.
-function parseTime(value) {
-  if (typeof value === "number" && Number.isFinite(value) && value > 0) return value > 100_000_000_000 ? value : value * 1000;
-  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/i.test(value.trim())) {
-    const ms = Date.parse(value.trim());
-    return Number.isNaN(ms) ? null : ms;
+/// A moment, only when it can't be misread and could be the capture's: epoch seconds or milliseconds, or an ISO 8601
+/// time with its zone, after 2020 began and no later than five minutes after the relay got it (`receivedAt`). A date
+/// alone, or a time with no zone, would be read as UTC and could be hours off; `{"time": 12}` would be 1970 (round 3,
+/// finding 6): each counts as no time.
+function parseTime(value, receivedAt) {
+  let ms = null;
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    ms = value > 100_000_000_000 ? value : value * 1000;
+  } else if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/i.test(value.trim())) {
+    const parsed = Date.parse(value.trim());
+    ms = Number.isNaN(parsed) ? null : parsed;
   }
-  return null;
+  if (ms === null || ms < EARLIEST_SAID_MS || ms > receivedAt + SAID_AHEAD_MS) return null;
+  return ms;
 }
 
 /// A JSON-RPC answer: the body as JSON, or, from a stream of server-sent events, the event carrying the message with

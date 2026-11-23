@@ -3,8 +3,8 @@ import Foundation
 /// What HITList asks the Stream ring's inbox relay (`relay/stream-inbox`, brief 176) and what it answers. Pure: the
 /// requests are built here and the answers read here; the app's `StreamInbox` sends them.
 ///
-/// A device claims what waits (`claim`: the captures nobody holds, oldest first, at most 50, held for it half an hour,
-/// with its push token so the relay can wake it), makes tasks of them, then acks the ones it handled (`ack`: the relay
+/// A device claims what waits (`claim`: the captures nobody holds, oldest first, at most 50, held for it an hour, with
+/// its push token so the relay can wake it), makes tasks of them, then acks the ones it handled (`ack`: the relay
 /// deletes their words and keeps their ids 30 days, to catch a redelivery). The "starts with Task" rule is the relay's,
 /// one for every device (`settings`). Every request carries the inbox key as a bearer token; every answer is JSON.
 public enum InboxAPI {
@@ -111,8 +111,19 @@ public struct InboxItem: Decodable, Equatable, Sendable, Identifiable {
         self.capturedAt = capturedAt
     }
 
-    /// The moment the words are read as of ("tomorrow" from the evening it was said, not the morning it was taken).
-    public var saidAt: Date? { capturedAt ?? receivedAt }
+    /// The moment the words are read as of ("tomorrow" from the evening it was said, not the morning it was taken). A
+    /// time before 2020, or more than a day before the capture reached the relay, can't be when it was said (round 3,
+    /// finding 6): then the arrival.
+    public var saidAt: Date? {
+        guard let capturedAt, capturedAt >= Self.earliestSaid,
+              receivedAt.map({ capturedAt >= $0.addingTimeInterval(-Self.saidWithin) }) ?? true else { return receivedAt }
+        return capturedAt
+    }
+
+    /// 2020-01-01T00:00:00Z: nothing said to a Stream ring is older.
+    public static let earliestSaid = Date(timeIntervalSince1970: 1_577_836_800)
+    /// How long before its arrival a capture's own time is believed.
+    public static let saidWithin: TimeInterval = 86_400
 
     /// The relay's test capture, which counts whatever the "starts with Task" rule says.
     public var isTest: Bool { id.hasPrefix(InboxAPI.testIDPrefix) }
@@ -155,16 +166,31 @@ public struct InboxPushRegistration: Encodable, Equatable, Sendable {
     }
 }
 
-/// Whether the relay can wake this device: it has an Apple push key (`configured`) and this device's token
-/// (`registered`).
+/// Whether the relay can wake this device: it has an Apple push key (`configured`) and a token of this device's that
+/// Apple hasn't refused (`registered`); when Apple last took a wake-up push for it (`lastOkAt`), and why the last one
+/// didn't go or why it can't be woken (`lastError`, in words). Round 3: only a push Apple took proves wake-ups work.
 public struct InboxPushState: Decodable, Equatable, Sendable {
     public var configured: Bool
     public var registered: Bool
+    public var lastOkAt: Date?
+    public var lastError: String?
 
-    public init(configured: Bool, registered: Bool) {
+    public init(configured: Bool, registered: Bool, lastOkAt: Date? = nil, lastError: String? = nil) {
         self.configured = configured
         self.registered = registered
+        self.lastOkAt = lastOkAt
+        self.lastError = lastError
     }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        configured = (try? c.decodeIfPresent(Bool.self, forKey: .configured)) ?? false
+        registered = (try? c.decodeIfPresent(Bool.self, forKey: .registered)) ?? false
+        lastOkAt = try? c.decodeIfPresent(Date.self, forKey: .lastOkAt)
+        lastError = try? c.decodeIfPresent(String.self, forKey: .lastError)
+    }
+
+    private enum CodingKeys: String, CodingKey { case configured, registered, lastOkAt, lastError }
 }
 
 /// `POST /inbox/claim`'s answer.
@@ -261,15 +287,21 @@ public struct InboxStatus: Decodable, Equatable, Sendable {
     /// The relay's Apple background pushes.
     public struct Push: Decodable, Equatable, Sendable {
         public var configured: Bool
+        /// Devices it can wake (tokens Apple hasn't refused).
         public var devices: Int
         public var lastSentAt: Date?
+        /// The last trouble, with the device it was waking.
         public var lastError: String?
+        /// Each device's own wake-ups (round 3).
+        public var byDevice: [DeviceWake]?
 
-        public init(configured: Bool, devices: Int = 0, lastSentAt: Date? = nil, lastError: String? = nil) {
+        public init(configured: Bool, devices: Int = 0, lastSentAt: Date? = nil, lastError: String? = nil,
+                    byDevice: [DeviceWake]? = nil) {
             self.configured = configured
             self.devices = devices
             self.lastSentAt = lastSentAt
             self.lastError = lastError
+            self.byDevice = byDevice
         }
 
         public init(from decoder: Decoder) throws {
@@ -278,9 +310,53 @@ public struct InboxStatus: Decodable, Equatable, Sendable {
             devices = (try? c.decodeIfPresent(Int.self, forKey: .devices)) ?? 0
             lastSentAt = try? c.decodeIfPresent(Date.self, forKey: .lastSentAt)
             lastError = try? c.decodeIfPresent(String.self, forKey: .lastError)
+            byDevice = try? c.decodeIfPresent([DeviceWake].self, forKey: .byDevice)
         }
 
-        private enum CodingKeys: String, CodingKey { case configured, devices, lastSentAt, lastError }
+        private enum CodingKeys: String, CodingKey { case configured, devices, lastSentAt, lastError, byDevice }
+    }
+
+    /// One device's wake-ups, as the relay keeps them: never its token.
+    public struct DeviceWake: Decodable, Equatable, Sendable {
+        public var device: String
+        public var platform: String?
+        /// "production" or "sandbox": the Apple push service its token was last taken by, else the one its build named.
+        public var service: String?
+        public var lastClaimAt: Date?
+        public var lastPushAt: Date?
+        /// When Apple last took a push for it.
+        public var lastOkAt: Date?
+        public var lastError: String?
+        /// Apple refused its token: it isn't woken until it gives a new one.
+        public var refused: Bool
+
+        public init(device: String, platform: String? = nil, service: String? = nil, lastClaimAt: Date? = nil,
+                    lastPushAt: Date? = nil, lastOkAt: Date? = nil, lastError: String? = nil, refused: Bool = false) {
+            self.device = device
+            self.platform = platform
+            self.service = service
+            self.lastClaimAt = lastClaimAt
+            self.lastPushAt = lastPushAt
+            self.lastOkAt = lastOkAt
+            self.lastError = lastError
+            self.refused = refused
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            device = (try? c.decodeIfPresent(String.self, forKey: .device)) ?? "?"
+            platform = try? c.decodeIfPresent(String.self, forKey: .platform)
+            service = try? c.decodeIfPresent(String.self, forKey: .service)
+            lastClaimAt = try? c.decodeIfPresent(Date.self, forKey: .lastClaimAt)
+            lastPushAt = try? c.decodeIfPresent(Date.self, forKey: .lastPushAt)
+            lastOkAt = try? c.decodeIfPresent(Date.self, forKey: .lastOkAt)
+            lastError = try? c.decodeIfPresent(String.self, forKey: .lastError)
+            refused = (try? c.decodeIfPresent(Bool.self, forKey: .refused)) ?? false
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case device, platform, service, lastClaimAt, lastPushAt, lastOkAt, lastError, refused
+        }
     }
 
     /// What came back from Stream when the relay couldn't read it: never its words.

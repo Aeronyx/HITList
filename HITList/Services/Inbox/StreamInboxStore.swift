@@ -113,6 +113,8 @@ struct StreamInboxSettings {
     static let addingKey = "streamInbox.addingNow"
     /// This device's push token, in hex, for the relay's wake-ups.
     static let pushTokenKey = "streamInbox.pushToken"
+    /// Ids whose ack iOS is delivering as a background upload (round 3, finding 4).
+    static let ackSendingKey = "streamInbox.ackSending"
 
     static let addedLimit = 500
 
@@ -165,6 +167,19 @@ struct StreamInboxSettings {
     var unackedIDs: [String] {
         get { defaults.stringArray(forKey: Self.unackedKey) ?? [] }
         nonmutating set { defaults.set(newValue, forKey: Self.unackedKey) }
+    }
+
+    var ackSending: [String] {
+        get { defaults.stringArray(forKey: Self.ackSendingKey) ?? [] }
+        nonmutating set { defaults.set(Array(newValue.suffix(Self.addedLimit)), forKey: Self.ackSendingKey) }
+    }
+
+    /// A background ack finished: delivered, its ids leave `unackedIDs` (exactly those: ids handled since stay); either
+    /// way they are no longer in flight, so a later failure hands them to iOS again.
+    func ackFinished(_ ids: [String], delivered: Bool) {
+        let done = Set(ids)
+        ackSending = ackSending.filter { !done.contains($0) }
+        if delivered { unackedIDs = unackedIDs.filter { !done.contains($0) } }
     }
 
     var lastCheckedAt: Date? {

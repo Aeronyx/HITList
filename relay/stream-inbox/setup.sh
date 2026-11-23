@@ -53,7 +53,14 @@ fi
 say ""
 say "The relay is at $url"
 
-secrets="$(wrangler secret list 2>/dev/null || true)"
+# What the relay already has. If wrangler can't say, nothing goes on: a key made now would replace the one your devices
+# use (round 3, finding 5).
+if ! secrets="$(wrangler secret list 2>/dev/null)" || ! printf '%s' "$secrets" | grep -q '^[[:space:]]*\['; then
+  say ""
+  say "Nothing changed: couldn't read the relay's secrets (wrangler secret list failed), so no key was made."
+  say "Check that wrangler is signed in to the account the relay is on (wrangler whoami), then run this again."
+  exit 1
+fi
 has_secret() { printf '%s' "$secrets" | grep -q "\"$1\""; }
 keep_in_keychain() { # the key into this Mac's login keychain, through security's stdin, never its arguments
   printf 'add-generic-password -U -s "%s" -a "%s" -w "%s"\n' "$KEYCHAIN_SERVICE" "$url" "$1" | security -i >/dev/null
@@ -76,8 +83,9 @@ elif [ -z "$key" ] && has_secret INBOX_KEY; then
 fi
 if [ -z "$key" ]; then
   key="$(openssl rand -hex 32)"
-  printf '%s' "$key" | wrangler secret put INBOX_KEY >/dev/null
+  # The keychain first: a key the relay has is then never one this Mac has lost.
   keep_in_keychain "$key"
+  printf '%s' "$key" | wrangler secret put INBOX_KEY >/dev/null
   say "Made a new inbox key."
 elif ! has_secret INBOX_KEY; then
   printf '%s' "$key" | wrangler secret put INBOX_KEY >/dev/null
@@ -98,15 +106,21 @@ relay() { # relay METHOD PATH: one keyed request, tried for up to 30 s
   return 1
 }
 
-# 4. Where captures come from.
+# 4. Where captures come from. Once one is set up (the webhook's secret, or Stream connected), a run again keeps it by
+# default and only prints the link.
+default=1
+if has_secret STREAM_SECRET \
+   || curl -fsS -m 10 -H @"$headers" "$url/inbox/status" 2>/dev/null | grep -q '"connected":true'; then
+  default=4
+fi
 say ""
 say "Where should captures come from?"
 say "  1  Stream's MCP: free. The relay asks Stream every minute; you sign in to Stream once."
 say "  2  Stream's webhook: needs Stream's paid plan (Upstream). Stream sends each capture as it is saved."
 say "  3  Both (with Upstream: the webhook is instant, and the MCP catches anything the webhook missed)"
-say "  4  Keep what is set up"
-choice="$(ask "Choose 1, 2, 3 or 4 [1]:")"
-choice="${choice:-1}"
+say "  4  Keep what is set up, and print HITList's link"
+choice="$(ask "Choose 1, 2, 3 or 4 [$default]:")"
+choice="${choice:-$default}"
 
 if [ "$choice" = 1 ] || [ "$choice" = 3 ]; then
   say ""

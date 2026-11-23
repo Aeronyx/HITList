@@ -1,5 +1,6 @@
 #if DEBUG
 import Foundation
+import os
 import SwiftData
 import HITListCore
 #if os(macOS)
@@ -106,6 +107,10 @@ final class StreamInboxFakeRelay: @unchecked Sendable {
     private var rule = InboxSettings(onlyStartingWithTask: false)
     private var pushKey = false
     private var tokens: [String: String] = [:]
+    /// Each device's wake-ups as the relay keeps them (round 3): when Apple last took a push for it, its trouble.
+    private var wakes: [String: (okAt: Date?, error: String?, refused: Bool)] = [:]
+    private var confirmsWakeUps = false
+    private var answerDelay: TimeInterval = 0
 
     static let demoHost = "demo-relay.example"
     static let demoKey = "demo0000demo1111demo2222demo3333demo4444demo5555demo6666demo7777"
@@ -128,7 +133,14 @@ final class StreamInboxFakeRelay: @unchecked Sendable {
         let approved = now.addingTimeInterval(-Double(90 - daysLeft) * 86_400)
         relay.setStream(connected: daysLeft > 0, approvedAt: approved, lastPollAt: now.addingTimeInterval(-40))
         relay.pushConfigured = true
+        // The demo's device has been woken: Apple took a push for it a minute before it registered.
+        relay.locked { relay.confirmsWakeUps = true }
         return relay
+    }
+
+    /// A device's wake-ups as the relay would say them in its claim (round 3, finding 3).
+    func setWake(device: String, okAt: Date? = nil, error: String? = nil, refused: Bool = false) {
+        locked { wakes[device] = (okAt, error, refused) }
     }
 
     var link: String { "https://\(host)/#\(key)" }
@@ -176,6 +188,12 @@ final class StreamInboxFakeRelay: @unchecked Sendable {
         set { locked { acksFailing = newValue } }
     }
 
+    /// How long each answer takes to arrive (a weak signal): the relay answers at once, the device hears it later.
+    var delay: TimeInterval {
+        get { locked { answerDelay } }
+        set { locked { answerDelay = newValue } }
+    }
+
     var requests: [Received] { locked { received } }
     var waitingIDs: [String] { locked { waiting.map(\.id) } }
     var handedOver: Set<String> { locked { done } }
@@ -210,11 +228,15 @@ final class StreamInboxFakeRelay: @unchecked Sendable {
             switch (method, path) {
             case ("POST", InboxAPI.Endpoint.claim.rawValue):
                 guard let device = json["device"] as? String, !device.isEmpty else { return reply(400, ["error": "device"]) }
-                if let token = (json["push"] as? [String: Any])?["token"] as? String { tokens[device] = token }
+                if let token = (json["push"] as? [String: Any])?["token"] as? String {
+                    tokens[device] = token
+                    if confirmsWakeUps, wakes[device] == nil { wakes[device] = (now.addingTimeInterval(-60), nil, false) }
+                }
+                let wake = wakes[device]
                 var items: [[String: Any]] = []
                 for index in waiting.indices.sorted(by: { waiting[$0].receivedAt < waiting[$1].receivedAt }) {
                     let capture = waiting[index]
-                    let free = capture.claimedAt.map { now.timeIntervalSince($0) > 30 * 60 } ?? true
+                    let free = capture.claimedAt.map { now.timeIntervalSince($0) > 60 * 60 } ?? true
                     guard free || capture.claimedBy == device, items.count < InboxAPI.claimLimit else { continue }
                     waiting[index].claimedBy = device
                     waiting[index].claimedAt = now
@@ -223,7 +245,9 @@ final class StreamInboxFakeRelay: @unchecked Sendable {
                 }
                 return reply(200, ["items": items, "lastReceivedAt": Self.json(lastReceivedAt.map(Self.iso)),
                                    "settings": ["onlyStartingWithTask": rule.onlyStartingWithTask],
-                                   "push": ["configured": pushKey, "registered": tokens[device] != nil]])
+                                   "push": ["configured": pushKey, "registered": tokens[device] != nil && wake?.refused != true,
+                                            "lastOkAt": Self.json(wake?.okAt.map(Self.iso)),
+                                            "lastError": Self.json(wake?.error)]])
             case ("POST", InboxAPI.Endpoint.settings.rawValue):
                 guard let on = json["onlyStartingWithTask"] as? Bool else { return reply(400, ["error": "onlyStartingWithTask"]) }
                 rule = InboxSettings(onlyStartingWithTask: on)
@@ -292,17 +316,25 @@ final class FakeRelayURLProtocol: URLProtocol {
             client?.urlProtocol(self, didFailWithError: URLError(.cannotFindHost))
             return
         }
-        do {
-            let (response, data) = try relay.answer(request, body: Self.body(of: request))
-            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-            client?.urlProtocol(self, didLoad: data)
-            client?.urlProtocolDidFinishLoading(self)
-        } catch {
-            client?.urlProtocol(self, didFailWithError: error)
+        let answer = Result { try relay.answer(request, body: Self.body(of: request)) }
+        let deliver = { [self] in
+            guard !stopped.withLock({ $0 }) else { return }
+            switch answer {
+            case .success(let (response, data)):
+                client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+                client?.urlProtocol(self, didLoad: data)
+                client?.urlProtocolDidFinishLoading(self)
+            case .failure(let error):
+                client?.urlProtocol(self, didFailWithError: error)
+            }
         }
+        let delay = relay.delay
+        if delay > 0 { DispatchQueue.global().asyncAfter(deadline: .now() + delay, execute: deliver) } else { deliver() }
     }
 
-    override func stopLoading() {}
+    private let stopped = OSAllocatedUnfairLock(initialState: false)
+
+    override func stopLoading() { stopped.withLock { $0 = true } }
 
     /// A request's body: a session hands a protocol its body as a stream.
     private static func body(of request: URLRequest) -> Data {
