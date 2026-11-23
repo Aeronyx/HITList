@@ -12,10 +12,12 @@ public struct QuickAddToken: Equatable, Sendable {
     public var isSuperseded = false
 
     /// Said in plain language rather than typed as a code (brief 175): "remind me in an hour", "reminder 1 hour
-    /// before", "Remind me to", "priority 1", and "remind me at 5pm" when it became the due time (a time token).
+    /// before", "Remind me to", "priority 1", "remind me at 5pm" when it became the due time (a time token), and the
+    /// same after a dictated lead-in ("Can you remind me at 5").
     var isSaidInWords: Bool {
         let lower = text.lowercased()
-        return lower.hasPrefix("remind") || lower.hasPrefix("priority")
+        if lower.hasPrefix("remind") || lower.hasPrefix("priority") { return true }
+        return ReminderPhrase.leadIn(lower.split(whereSeparator: \.isWhitespace).map(String.init), at: 0) > 0
     }
 }
 
@@ -73,6 +75,9 @@ public struct QuickAddParser: Sendable {
     /// The task already has a due time (the task editor's title, brief 65): a reminder before the due time
     /// ("!15mb", "!at") counts without a time typed beside it. Off for quick add, where the text is the task.
     public var dueTimeIsSet = false
+    /// A reminder said in words leaves its lead ("Remind me", "Reminder", a dictated lead-in before it) out of its
+    /// token, as the title: how `parse` reads a text with nothing else for a title (the second review of brief 175).
+    var leadIsTitle = false
     /// The task already has a day of its own (the task editor's task with a date, an Upcoming day's row): "at 1" to
     /// "at 6" with no am or pm is the afternoon, as beside a day typed (`hour(_:_:words:hasDay:)`). Off for quick add on its own.
     public var dueDayIsSet = false
@@ -236,16 +241,21 @@ public struct QuickAddParser: Sendable {
                     reading = shorter
                 }
                 let n = lead + reading.length
+                // With nothing else for a title, the lead is the title and the rest the phrase (`leadIsTitle`).
+                let spoken = !w.hasPrefix("!")
+                let kept = leadIsTitle && spoken
+                    ? lead + (DateExpressionParser.normalize(lowers[i + lead]) == "reminder" ? 1 : 2) : 0
                 switch reading.phrase {
                 case .fromNow(let span):
-                    ownReminder = .span(span); win(i, n, .reminder, slot: .reminderFromNow); spokenClock = nil
+                    ownReminder = .span(span); win(i + kept, n - kept, .reminder, slot: .reminderFromNow); spokenClock = nil
                 case .at(let clock):
-                    ownReminder = .clock(clock, open: reading.openHour); win(i, n, .reminder, slot: .reminderFromNow)
-                    spokenClock = w.hasPrefix("!") ? nil : result.tokens.count - 1
+                    ownReminder = .clock(clock, open: reading.openHour)
+                    win(i + kept, n - kept, .reminder, slot: .reminderFromNow)
+                    spokenClock = spoken ? result.tokens.count - 1 : nil
                 case .beforeDue(let minutes):
-                    result.reminderOffsetMinutes = minutes; win(i, n, .reminder, slot: .reminderBeforeDue)
+                    result.reminderOffsetMinutes = minutes; win(i + kept, n - kept, .reminder, slot: .reminderBeforeDue)
                 }
-                if i == 0, !w.hasPrefix("!") { spokenStart = words[0].range.lowerBound }
+                if i == 0, spoken, kept == 0 { spokenStart = words[0].range.lowerBound }
                 i += n; continue
             }
             // "Remind me to …" opening the text, a lead-in before it or not: the words are a token of their own (brief 175).
@@ -329,6 +339,8 @@ public struct QuickAddParser: Sendable {
            let first = result.title.first {
             result.title = first.uppercased() + result.title.dropFirst()
         }
+        // A lead kept as the title starts with a capital too: "reminder in 2 hours" is "Reminder".
+        if leadIsTitle, let first = result.title.first { result.title = first.uppercased() + result.title.dropFirst() }
 
         // Resolve date/time. A date the user typed is kept as typed, even in the past ("yesterday").
         let dateWasTyped = date != nil
@@ -592,8 +604,20 @@ public enum ReminderPhrase: Equatable, Sendable {
         let words = text.split(whereSeparator: \.isWhitespace).map { $0.lowercased() }
         // A dictated lead-in opens it too: "Can you remind me in 10 minutes to".
         let lead = Self.leadIn(words, at: 0)
-        guard let (phrase, n) = Self.match(words, at: lead, atStart: true), lead + n == words.count else { return nil }
-        self = phrase
+        if let (phrase, n) = Self.match(words, at: lead, atStart: true), lead + n == words.count {
+            self = phrase
+            return
+        }
+        // A phrase said in words whose lead went to the title (a text of only the phrase: "Remind me in 10 minutes" is
+        // the title "Remind me" and the token "in 10 minutes"; the second review of brief 175).
+        guard let words0 = words.first, !words0.hasPrefix("!"),
+              let reading = Self.matchBody(words, at: 0, trailingDay: true), reading.length == words.count else { return nil }
+        if reading.openHour, case .at(var clock) = reading.phrase, (1...6).contains(clock.hour) {
+            clock.hour += 12
+            self = .at(clock)
+        } else {
+            self = reading.phrase
+        }
     }
 
     /// The phrase a one-word `!…` code stands for (case and trailing ",.;" ignored), or nil if it isn't one.

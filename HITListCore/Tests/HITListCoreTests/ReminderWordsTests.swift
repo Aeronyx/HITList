@@ -620,8 +620,9 @@ final class ReminderWordsTests: XCTestCase {
     /// Words said in plain language that would leave no title are the title, and set nothing (the review of brief 175,
     /// finding 13): a task has a title. The rest of the text is read as usual.
     func testWordsThatWouldLeaveNoTitleAreTheTitle() {
-        for text in ["Remind me in an hour", "Priority 3", "Remind me to", "remind me 30 minutes before", "Reminder in 10 minutes",
-                     "Remind me at 4pm"] {
+        // (A reminder said in words gives back only its lead, "Remind me" or "Reminder", and keeps its time: the second
+        // review of brief 175, finding 4; `testAReminderAloneKeepsItsTimeWithItsLeadAsTheTitle`.)
+        for text in ["Priority 3", "Remind me to", "remind me 30 minutes before"] {
             let r = parser.parse(text)
             XCTAssertEqual(r.title, text, text)
             XCTAssertNil(r.reminderDate, text)
@@ -632,9 +633,9 @@ final class ReminderWordsTests: XCTestCase {
             XCTAssertTrue(r.tokens.isEmpty, text)
         }
         let work = parser.parse("Remind me in an hour #Work")
-        XCTAssertEqual(work.title, "Remind me in an hour")
+        XCTAssertEqual(work.title, "Remind me")
         XCTAssertEqual(work.projectName, "Work")
-        XCTAssertNil(work.reminderDate)
+        XCTAssertEqual(work.reminderDate, minutes(60))
         let tomorrow = parser.parse("Priority 3 tomorrow")
         XCTAssertEqual(tomorrow.title, "Priority 3")
         XCTAssertEqual(tomorrow.dueDate, Fixed.date(2026, 10, 22))
@@ -646,10 +647,51 @@ final class ReminderWordsTests: XCTestCase {
         let off = parser.parse("Call remind me in an hour", disabling: [QuickAddTokenKey(kind: .reminder, text: "remind me in an hour")])
         XCTAssertEqual(off.title, "Call remind me in an hour")
         XCTAssertEqual(parser.parse("Remind me in an hour", disabling: [QuickAddTokenKey(kind: .date, text: "x")]).title,
-                       "Remind me in an hour")
+                       "Remind me")
         // Live: the same, once the phrase would light.
-        XCTAssertEqual(parser.parse("Remind me in an hour ", mode: .live).title, "Remind me in an hour")
-        XCTAssertTrue(parser.parse("Remind me in an hour ", mode: .live).tokens.isEmpty)
+        XCTAssertEqual(parser.parse("Remind me in an hour ", mode: .live).title, "Remind me")
+        XCTAssertEqual(parser.parse("Remind me in an hour ", mode: .live).tokens.map(\.text), ["in an hour"])
+    }
+
+    /// A reminder said in words with nothing else for a title gives back only its lead as the title, "Remind me" or
+    /// "Reminder", and keeps its time or reminder (the second review of brief 175, finding 4: the whole phrase became the
+    /// title and the time was lost). Monday 2026-11-23, 14:10 Eastern.
+    func testAReminderAloneKeepsItsTimeWithItsLeadAsTheTitle() throws {
+        var ny = Calendar(identifier: .gregorian)
+        ny.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+        func at(_ m: Int, _ d: Int, _ h: Int, _ min: Int) -> Date {
+            ny.date(from: DateComponents(year: 2026, month: m, day: d, hour: h, minute: min))!
+        }
+        let p = QuickAddParser(now: at(11, 23, 14, 10), calendar: ny)
+
+        let ten = p.parse("Remind me in 10 minutes")
+        XCTAssertEqual(ten.title, "Remind me")
+        XCTAssertEqual(ten.reminderDate, at(11, 23, 14, 20))
+        XCTAssertNil(ten.dueDate)
+        XCTAssertEqual(ten.tokens.map(\.text), ["in 10 minutes"])
+        XCTAssertEqual(ReminderPhrase(token: "in 10 minutes"), .fromNow(ReminderSpan(minutes: 10)), "its token still reads")
+
+        let nine = p.parse("Remind me at 9")
+        XCTAssertEqual(nine.title, "Remind me")
+        XCTAssertEqual(nine.dueDate, at(11, 24, 9, 0))
+        XCTAssertEqual(nine.reminderOffsetMinutes, 0, "with its reminder")
+
+        let tomorrow = p.parse("Remind me tomorrow at 9")
+        XCTAssertEqual(tomorrow.title, "Remind me")
+        XCTAssertEqual(tomorrow.dueDate, at(11, 24, 9, 0))
+        XCTAssertEqual(tomorrow.reminderOffsetMinutes, 0)
+
+        let two = p.parse("reminder in 2 hours")
+        XCTAssertEqual(two.title, "Reminder")
+        XCTAssertEqual(two.reminderDate, at(11, 23, 16, 10))
+
+        let asked = p.parse("Can you remind me at 5")
+        XCTAssertEqual(asked.title, "Can you remind me")
+        XCTAssertEqual(asked.dueDate, at(11, 23, 17, 0))
+
+        XCTAssertEqual(p.parse("Priority 3").title, "Priority 3")
+        XCTAssertEqual(p.parse("Priority 3").priority, .p4)
+        XCTAssertEqual(p.parse("Remind me to").title, "Remind me to")
     }
 
 
