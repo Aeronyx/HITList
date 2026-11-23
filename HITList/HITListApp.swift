@@ -69,6 +69,7 @@ struct HITListApp: App {
         WidgetCompletionCenter.start(container: container) // brief 81: completes what the widgets ask, once iCloud can have it
         WidgetRefresh.start() // brief 81: the background refresh (iOS) or the hourly settle (Mac) that keeps widgets true
         ShareInbox.start(container: container) // brief 90: makes the share sheet's tasks, once each, by quick add's road
+        StreamInbox.start(container: container) // brief 176: what the Stream ring heard, from the relay, a few seconds on
         #if DEBUG
         SyncEngineRehearsal.runIfAsked(container: container) // round 32: the move rehearsed from a terminal, side stores only
         #endif
@@ -96,6 +97,9 @@ struct HITListApp: App {
                     guard phase == .active else { return }
                     SyncEngine.shared?.cameForward() // brief 143: everything compared, then a sync (nil on the mirror)
                     SyncEngineAutoMove.Runner.shared?.cameForward() // George's word may have come meanwhile
+                    #if os(iOS)
+                    StreamInbox.shared?.cameForward() // brief 176 (the Mac asks on its app's own activation)
+                    #endif
                     let context = container.mainContext
                     Task { await NotificationScheduler.reschedule(context: context) }
                     if !isTesting { LocalBackup.runIfDue(context: context) }
@@ -111,8 +115,12 @@ struct HITListApp: App {
             #endif
         }
         #if os(iOS)
-        // Brief 81: a background refresh lets CloudKit import, rewrites the widgets' snapshot and drains their outbox.
-        .backgroundTask(.appRefresh(WidgetRefresh.identifier)) { await WidgetRefresh.run() }
+        // Brief 81: a background refresh lets CloudKit import, rewrites the widgets' snapshot and drains their outbox;
+        // then (brief 176) the Stream ring's relay is asked for what was said meanwhile.
+        .backgroundTask(.appRefresh(WidgetRefresh.identifier)) {
+            await WidgetRefresh.run()
+            await StreamInbox.shared?.check(.backgroundRefresh)
+        }
         #endif
     }
 }

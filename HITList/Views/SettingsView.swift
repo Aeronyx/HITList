@@ -45,14 +45,14 @@ struct SettingsSheetRequest: Identifiable {
 /// one home (brief 86's audit). The Mac's sections (`MacSettingsSection`) are the same homes under the same names,
 /// with iCloud & data in two (the Mac shows the sync log inline, which would make one page too long).
 enum SettingsPage: String, CaseIterable, Identifiable, Hashable {
-    case account, general, calendar, reminders, extras, iCloud, claude, about
+    case account, general, calendar, reminders, extras, iCloud, claude, streamRing, about
     /// Second level: iCloud & data → Sync log, About → What's New, General → the quick add guide (brief 98).
     case syncLog, whatsNew, quickAddGuide
 
     var id: String { rawValue }
 
     /// The rows under Appearance on the first screen, in order. Account is the profile row above Appearance.
-    static let list: [SettingsPage] = [.general, .calendar, .reminders, .extras, .iCloud, .claude, .about]
+    static let list: [SettingsPage] = [.general, .calendar, .reminders, .extras, .iCloud, .claude, .streamRing, .about]
 
     var title: String {
         switch self {
@@ -63,6 +63,7 @@ enum SettingsPage: String, CaseIterable, Identifiable, Hashable {
         case .extras: "Extras"
         case .iCloud: "iCloud & data"
         case .claude: "Claude"
+        case .streamRing: StreamRingWords.title
         case .about: "About"
         case .syncLog: "Sync log"
         case .whatsNew: "What's New"
@@ -74,6 +75,7 @@ enum SettingsPage: String, CaseIterable, Identifiable, Hashable {
     var backTitle: String {
         switch self {
         case .iCloud: "iCloud"
+        case .streamRing: "Stream"
         default: title
         }
     }
@@ -88,6 +90,7 @@ enum SettingsPage: String, CaseIterable, Identifiable, Hashable {
         case .extras: "Sounds, companions, effects"
         case .iCloud: "Sync, backups, export and import"
         case .claude: "Let Claude work with your tasks"
+        case .streamRing: StreamRingWords.subtitle
         case .about: "Version, what's new, privacy, feedback"
         case .syncLog: "Everything sync did on this device"
         case .whatsNew: "This version's changes"
@@ -105,6 +108,7 @@ enum SettingsPage: String, CaseIterable, Identifiable, Hashable {
         case .extras: MacSettingsSection.completing.systemImage
         case .iCloud: MacSettingsSection.iCloud.systemImage
         case .claude: MacSettingsSection.claude.systemImage
+        case .streamRing: MacSettingsSection.streamRing.systemImage
         case .about: MacSettingsSection.about.systemImage
         case .syncLog: "list.bullet.rectangle"
         case .whatsNew: "sparkles"
@@ -122,6 +126,7 @@ enum SettingsPage: String, CaseIterable, Identifiable, Hashable {
         case .extras: MacSettingsSection.completing.tint
         case .iCloud, .syncLog: MacSettingsSection.iCloud.tint
         case .claude: MacSettingsSection.claude.tint
+        case .streamRing: MacSettingsSection.streamRing.tint
         case .about, .whatsNew: MacSettingsSection.about.tint
         }
     }
@@ -140,6 +145,7 @@ struct SettingsPageContent: View {
         case .extras: DelightSettingsSection()
         case .iCloud: ICloudDataPage()
         case .claude: ClaudeSettingsSection()
+        case .streamRing: StreamRingSettingsSection()
         case .about: AboutSettingsGroup()
         case .syncLog: SyncLogPage()
         case .whatsNew: WhatsNewGroups()

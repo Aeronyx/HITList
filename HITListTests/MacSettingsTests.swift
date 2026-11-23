@@ -22,18 +22,22 @@ final class MacSettingsTests: XCTestCase {
 
     func testSectionsAreStableInIdsAndOrder() {
         XCTAssertEqual(Set(MacSettingsSection.allCases.map(\.rawValue)),
-                       ["account", "general", "calendar", "iCloud", "reminders", "completing", "appearance", "data", "claude", "about"],
+                       ["account", "general", "calendar", "iCloud", "reminders", "completing", "appearance", "data", "claude",
+                        "streamRing", "about"],
                        "stored in preferences: never rename one")
         // Brief 86: the iPhone's homes in the iPhone's order, Appearance second, iCloud & data as two sections.
         XCTAssertEqual(MacSettingsSection.allCases.map(\.rawValue),
-                       ["account", "appearance", "general", "calendar", "reminders", "completing", "iCloud", "data", "claude", "about"])
+                       ["account", "appearance", "general", "calendar", "reminders", "completing", "iCloud", "data", "claude",
+                        "streamRing", "about"])
         XCTAssertEqual(MacSettingsSection.allCases.map(\.title),
-                       ["Account", "Appearance", "General", "Calendar", "Reminders", "Extras", "iCloud", "Data", "Claude", "About"])
+                       ["Account", "Appearance", "General", "Calendar", "Reminders", "Extras", "iCloud", "Data", "Claude",
+                        "Stream Ring", "About"])
         for section in MacSettingsSection.allCases {
             XCTAssertFalse(section.caption.isEmpty, "\(section) has a caption")
             // One short line: under the page's title, and each section row's tooltip (brief 70 gave the Settings
-            // sidebar the lists' one-line rows).
-            XCTAssertLessThanOrEqual(section.caption.count, 24, "\(section)'s caption fits one line of the 200 pt list")
+            // sidebar the lists' one-line rows, so a caption is no longer drawn in the 200 pt list). 25 since brief 176:
+            // "Tasks you say to the ring", the page's subtitle as George's brief gave it.
+            XCTAssertLessThanOrEqual(section.caption.count, 25, "\(section)'s caption is one short line")
             XCTAssertEqual(section.id, section.rawValue)
         }
         XCTAssertEqual(Set(MacSettingsSection.allCases.map(\.systemImage)).count, MacSettingsSection.allCases.count)

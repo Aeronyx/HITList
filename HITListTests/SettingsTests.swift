@@ -335,9 +335,10 @@ final class SettingsTidyTests: XCTestCase {
     // MARK: Pages
 
     func testTheFirstScreenListsThePagesInTheBriefsOrder() {
-        XCTAssertEqual(SettingsPage.list, [.general, .calendar, .reminders, .extras, .iCloud, .claude, .about],
+        XCTAssertEqual(SettingsPage.list, [.general, .calendar, .reminders, .extras, .iCloud, .claude, .streamRing, .about],
                        "Account is the profile row and Appearance the group above these")
-        XCTAssertEqual(SettingsPage.list.map(\.title), ["General", "Calendar", "Reminders", "Extras", "iCloud & data", "Claude", "About"])
+        XCTAssertEqual(SettingsPage.list.map(\.title), ["General", "Calendar", "Reminders", "Extras", "iCloud & data", "Claude",
+                                                     "Stream Ring", "About"])
         XCTAssertEqual(Set(SettingsPage.allCases.map(\.title)).count, SettingsPage.allCases.count, "a name once")
         XCTAssertEqual(Set(SettingsPage.list.map(\.systemImage)).count, SettingsPage.list.count)
         for page in SettingsPage.allCases {
@@ -363,7 +364,7 @@ final class SettingsTidyTests: XCTestCase {
             if names.last != name { names.append(name) }
         }
         XCTAssertEqual(macAsIPhone, iPhone)
-        for page in [SettingsPage.account, .general, .calendar, .reminders, .claude, .about] {
+        for page in [SettingsPage.account, .general, .calendar, .reminders, .claude, .streamRing, .about] {
             let section = MacSettingsSection.allCases.first { $0.title == page.title }
             XCTAssertEqual(section?.systemImage, page.systemImage, "\(page) keeps the Mac's symbol")
         }
@@ -432,7 +433,8 @@ final class SettingsTidyTests: XCTestCase {
         XCTAssertEqual(BoltStyle.key, "delight.boltStyle")
         XCTAssertEqual(HingeCreak.key, "delight.squeakyHinge")
         XCTAssertEqual(Set(MacSettingsSection.allCases.map(\.rawValue)),
-                       ["account", "appearance", "general", "calendar", "reminders", "completing", "iCloud", "data", "claude", "about"])
+                       ["account", "appearance", "general", "calendar", "reminders", "completing", "iCloud", "data", "claude",
+                        "streamRing", "about"])
     }
 
     func testRowsSayWhatIsWrongOnlyWhenSomethingIs() {
