@@ -395,7 +395,10 @@ struct PopoutHost: ViewModifier {
             // The iPad: the title's reminder list under it, over the panel, above the keyboard (brief 175). The Mac's is
             // drawn by the window's picker layer.
             .background(GeometryReader { geo in
-                Color.clear.onChange(of: geo.size.height - keyboard.height, initial: true) { _, room in panelListRoom = room }
+                // The backdrop already ends at the keyboard when the keyboard's safe area applies; the keyboard's top is
+                // the other bound, for when it does not. The nearer of the two.
+                let keyboardTop = UIScreen.main.bounds.height - keyboard.height - geo.frame(in: .global).minY
+                Color.clear.onChange(of: min(geo.size.height, keyboardTop), initial: true) { _, room in panelListRoom = room }
             })
             .floatingReminderList(.belowTitle, room: panelListRoom - ReminderListMetrics.screenMargin)
             #endif

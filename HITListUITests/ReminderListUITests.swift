@@ -16,8 +16,38 @@ final class ReminderListUITests: XCTestCase {
         app.launchEnvironment["HITLIST_STORE_SUFFIX"] = "r36-175-\(UUID().uuidString.prefix(8))"
         app.launchArguments += ["-disableCloudKit", "YES", "-hideTips"]
         app.launch()
-        XCTAssertTrue(app.buttons["tab-inbox"].waitForExistence(timeout: 30), "the app is up")
+        if name.contains("IPad") {
+            try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .pad, "the iPad's panel")
+            return
+        }
         try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .phone, "the phone's oval card")
+        XCTAssertTrue(app.buttons["tab-inbox"].waitForExistence(timeout: 30), "the app is up")
+    }
+
+    /// The iPad: the card is the panel near the top of the window, and the list hangs under its title, over the panel,
+    /// clear of the keyboard; a pick writes the words as on the iPhone.
+    func testTheIPadPanelHangsTheListUnderTheTitle() {
+        let add = app.buttons["quickAddButton"].firstMatch
+        XCTAssertTrue(add.waitForExistence(timeout: 30), "the iPad's +")
+        add.tap()
+        XCTAssertTrue(title.waitForExistence(timeout: 5), "the panel")
+        pause(1)
+        app.typeText("Call mom 9am !")
+        let list = element("reminderSuggestions")
+        XCTAssertTrue(list.waitForExistence(timeout: 5), "the list opens on \"!\"")
+        list.waitUntilStill()
+        XCTAssertGreaterThanOrEqual(list.frame.minY, title.frame.maxY, "under the title: \(list.frame) / \(title.frame)")
+        XCTAssertLessThanOrEqual(list.frame.minY - title.frame.maxY, 30, "right under it")
+        let keyboard = app.keyboards.firstMatch
+        if keyboard.exists, keyboard.frame.height > 100 {
+            XCTAssertLessThanOrEqual(list.frame.maxY, keyboard.frame.minY, "clear of the keyboard")
+        }
+        XCTAssertTrue(row("before-0").exists, "At time of task first")
+        shot("10 iPad panel's list")
+        row("before-0").tap()
+        XCTAssertTrue(list.waitForNonExistence(timeout: 3))
+        XCTAssertEqual(title.value as? String, "Call mom 9am !At time of task ")
+        shot("11 iPad after the pick")
     }
 
     func testATimedTaskOffersAtTimeOfTaskFirstAndSavesIt() {
