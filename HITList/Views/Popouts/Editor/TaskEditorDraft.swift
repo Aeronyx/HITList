@@ -194,8 +194,9 @@ struct TaskEditorDraft: Equatable {
     /// (a "!" phrase at the very end waits for a space); the rows and Confirm read `.final`. A task with a time of its own
     /// lets "!15mb" count without one typed (`QuickAddParser.dueTimeIsSet`).
     ///
-    /// One stored phrase wakes (brief 127): a reminder before the due time ("!30mb", "!1hb", "!at", "!0mb") is the
-    /// only phrase quick add refuses for want of something the task can gain later, a time. A friend typed "PNHP
+    /// One stored phrase wakes (brief 127): a reminder before the due time ("!30mb", "!1hb", "!at", "!0mb"; with its
+    /// "!" only, `wakesWhenStored`) is the only phrase quick add refuses for want of something the task can gain later,
+    /// a time. A friend typed "PNHP
     /// Working Group tonight !30mb" with no time, so "!30mb" stayed text; given 8 PM by hand, the task's editor
     /// showed it dead in the title. On a task with a due time and no reminder before it of its own, such a stored
     /// phrase is read as if typed (at the very end too: a stored word is not being typed), and the editor sets it at
@@ -230,7 +231,7 @@ struct TaskEditorDraft: Equatable {
             let typedReminder = result.tokens.contains { Self.isBeforeDue($0) && !isStored($0) }
             let stored = result.tokens.compactMap { token -> QuickAddDisabledPhrase? in
                 guard let phrase = QuickAddDisabledPhrase(token, in: title), !off.contains(phrase), isStored(phrase),
-                      !(wakes && !typedReminder && Self.isBeforeDue(token))
+                      !(wakes && !typedReminder && Self.wakesWhenStored(token))
                 else { return nil }
                 return phrase
             }
@@ -253,7 +254,7 @@ struct TaskEditorDraft: Equatable {
     @discardableResult
     mutating func landStoredReminder(on task: TaskItem, parser: QuickAddParser, in context: ModelContext) throws -> Bool {
         guard Self.wakesStoredReminder(on: task) else { return false }
-        let isWinner = { (token: QuickAddToken) in Self.isBeforeDue(token) && !token.isSuperseded }
+        let isWinner = { (token: QuickAddToken) in Self.wakesWhenStored(token) && !token.isSuperseded }
         // The draft's: stored, not switched off, no typed one beside it (that masks it).
         guard let mine = parsed(parser, for: task, .final).tokens.first(where: { isWinner($0) && isStored($0) }),
               case .beforeDue(let minutes)? = ReminderPhrase(token: mine.text),
@@ -281,6 +282,13 @@ struct TaskEditorDraft: Equatable {
 
     static func isBeforeDue(_ token: QuickAddToken) -> Bool {
         token.kind == .reminder && ReminderPhrase(token: token.text)?.isBeforeDue == true
+    }
+
+    /// A stored phrase that wakes (brief 127): a reminder before the due time written with its "!" ("!30mb", "!At time
+    /// of task"). The same words said without it ("Remind me 1 day before the party", "Party! Reminder 1 day before")
+    /// are the title's, and opening the editor leaves them (the review of brief 175).
+    static func wakesWhenStored(_ token: QuickAddToken) -> Bool {
+        isBeforeDue(token) && token.text.hasPrefix("!")
     }
 
     /// The phrase lies inside the stored title's words, untyped in this editing session.

@@ -242,6 +242,34 @@ final class QuickAddReminderListTests: XCTestCase {
         withExtendedLifetime(container) {}
     }
 
+    /// Opening the editor wakes only a stored "!" reminder ("Pack !30mb", brief 127): words said in a title ("Remind me 1
+    /// day before the party", "Party! Reminder 1 day before") are the title's, and opening leaves them, unlit (the review
+    /// of brief 175, finding 10: "Send reminder 1 day before the party" became "Send the party").
+    func testOpeningTheEditorWakesOnlyAStoredCode() throws {
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        let p = parser()
+        for title in ["Send reminder 1 day before the party", "Remind me 1 day before the party", "Party! Reminder 1 day before"] {
+            let task = TaskItem(title: title, dueDate: at(18, day: 2), hasDueTime: true)
+            context.insert(task)
+            try context.save()
+            var draft = TaskEditorDraft(task: task)
+            XCTAssertFalse(try draft.landStoredReminder(on: task, parser: p, in: context), title)
+            XCTAssertEqual(task.title, title)
+            XCTAssertNil(task.reminderOffsetMinutes, title)
+            XCTAssertEqual(draft.title, title)
+            XCTAssertFalse(draft.parsed(p, for: task).tokens.contains { $0.kind == .reminder }, "not lit: \(title)")
+        }
+        let pack = TaskItem(title: "Pack !30mb", dueDate: at(18, day: 2), hasDueTime: true)
+        context.insert(pack)
+        try context.save()
+        var draft = TaskEditorDraft(task: pack)
+        XCTAssertTrue(try draft.landStoredReminder(on: pack, parser: p, in: context), "a code wakes, as before")
+        XCTAssertEqual(pack.title, "Pack")
+        XCTAssertEqual(pack.reminderOffsetMinutes, 30)
+        withExtendedLifetime(container) {}
+    }
+
     /// Saved as the task's own moment, and scheduled like any other reminder.
     func testAClockReminderReachesTheSavedTask() throws {
         let container = ModelContainerFactory.preview()
