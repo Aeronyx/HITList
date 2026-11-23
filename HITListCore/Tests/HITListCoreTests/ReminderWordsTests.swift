@@ -135,6 +135,37 @@ final class ReminderWordsTests: XCTestCase {
         XCTAssertEqual(labels(timed, "15mb"), [])
     }
 
+    /// A word that is already a whole reminder ("!30m", "!1h", "!at", "!6pm") leaves only the rows that set that same
+    /// reminder, so Return (the first row) writes what was typed, never a longer code of the other kind ("!30m" is In
+    /// 30 minutes, never 30 minutes before). None: the list closes and Return adds the task as typed (the review of
+    /// brief 175, finding 1).
+    func testACompleteCodeTypedLeavesOnlyItsOwnReminder() {
+        let timed = rows(hasTime: true), untimed = rows(hasTime: false)
+        func narrowed(_ rows: [ReminderSuggestion], _ q: String) -> [ReminderSuggestion] { ReminderSuggestions.narrowed(rows, by: q) }
+        XCTAssertEqual(narrowed(timed, "30m").map(\.label), ["In 30 minutes"])
+        XCTAssertEqual(narrowed(timed, "30M").map(\.label), ["In 30 minutes"])
+        for q in ["10m", "45m", "1h", "2h", "3h", "1d"] {
+            XCTAssertEqual(narrowed(timed, q).map(\.label), [], "!\(q) is that long from now: no row before the time")
+        }
+        XCTAssertEqual(narrowed(untimed, "1h").map(\.label), ["In 1 hour"])
+        XCTAssertEqual(narrowed(timed, "30mb").map(\.label), ["30 minutes before"])
+        XCTAssertEqual(narrowed(timed, "1hb").map(\.label), ["1 hour before"])
+        XCTAssertEqual(narrowed(timed, "at").map(\.label), ["At time of task"])
+        XCTAssertEqual(narrowed(timed, "0").map(\.label), ["At time of task"])
+        XCTAssertEqual(narrowed(timed, "6pm").map(\.label), ["Later"], "Later is 6:00 PM at 14:30")
+        XCTAssertEqual(narrowed(timed, "4pm").map(\.label), [])
+        // Later on another day than the one "!6pm" means (a task due Friday: "!6pm" is Friday 6 PM, Later today's).
+        let friday = rows(hasTime: true, dueDate: Fixed.date(2026, 10, 23, 9, 0))
+        XCTAssertEqual(narrowed(friday, "6pm").map(\.label), [])
+        // Whatever row a whole code leaves first is the reminder typed.
+        for list in [timed, untimed, friday] {
+            for q in ["5m", "15m", "30m", "1h", "10m", "0mb", "10mb", "30mb", "1db", "at", "0", "6pm", "6p", "1d"] {
+                guard let first = narrowed(list, q).first else { continue }
+                XCTAssertEqual(first.reminder, ReminderPhrase(token: "!" + q), q)
+            }
+        }
+    }
+
     // MARK: The "!" word at the caret, and a pick
 
     func testTheBangWordAtTheCaret() {

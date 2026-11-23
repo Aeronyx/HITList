@@ -109,9 +109,15 @@ public enum ReminderSuggestions {
     /// The rows a typed query leaves (what follows the "!" up to the caret): those whose code starts with it ("!1":
     /// !10mb, !1hb, !1db, !15m, !1h) or with a word of the label starting with it ("!h": the hours; "!in": the In rows;
     /// "!at": At time of task). Nothing typed: every row. None left: the list closes.
+    ///
+    /// A query that is already a whole reminder ("!30m", "!1h", "!at", "!6pm") leaves only the rows that set that same
+    /// reminder: Return picks the first row, and it must write what was typed, never a longer code of the other kind
+    /// ("!30m" is In 30 minutes, not 30 minutes before; the review of brief 175). None: the list closes and Return adds
+    /// the task as typed.
     public static func narrowed(_ rows: [ReminderSuggestion], by query: String) -> [ReminderSuggestion] {
         let q = query.lowercased()
         guard !q.isEmpty else { return rows }
+        if let typed = ReminderPhrase(token: "!" + q) { return rows.filter { $0.reminder == typed } }
         return rows.filter { row in
             row.code.dropFirst().lowercased().hasPrefix(q)
                 || row.label.lowercased().split(separator: " ").contains { $0.hasPrefix(q) }
