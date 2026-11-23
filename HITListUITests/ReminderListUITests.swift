@@ -168,6 +168,24 @@ final class ReminderListUITests: XCTestCase {
         shot("13 !in picked")
     }
 
+    /// The Reminder card's "At time" chip writes "!At time of task", as the list does: a reminder at the time of the
+    /// task's own, which a default reminder in Settings does not replace (the supervisor, after the review of brief 175:
+    /// it wrote nothing).
+    func testTheReminderCardsAtTimeChipWritesTheWords() {
+        openQuickAdd()
+        app.typeText("Call mom 5pm ")
+        let chip = app.buttons["quickAddReminderChip"].firstMatch
+        XCTAssertTrue(chip.waitForExistence(timeout: 5), "the Reminder chip")
+        chip.tap()
+        let atTime = element("reminderOffset0")
+        XCTAssertTrue(atTime.waitForExistence(timeout: 5), "the card's At time")
+        shot("14 the Reminder card")
+        atTime.tap()
+        pause(0.8)
+        XCTAssertEqual(title.value as? String, "Call mom 5pm !At time of task ")
+        shot("15 At time tapped")
+    }
+
     /// The task editor's title is the same field: "!" there opens the same list, under the title, for the task's own
     /// time; a pick lights at once and the Reminder pill reads it before Confirm, and Confirm saves it.
     func testTheEditorsTitleOffersTheListToo() {

@@ -11,7 +11,8 @@ struct ReminderPickerCard: View {
     /// The task's day (nil: today).
     var day: Date?
     var time: PickerTime?
-    /// Minutes before the time; nil or 0 is at the time.
+    /// Minutes before the time; 0 is at the time, the task's own; nil is none of its own (at the time, or Settings'
+    /// default reminder when one is set).
     var offsetMinutes: Int?
     var now = Date()
     /// Nil removes the time.
@@ -192,10 +193,13 @@ struct ReminderPickerCard: View {
         Rectangle().fill(Theme.separator).frame(height: 1).padding(.vertical, isShort ? 2 : HITSpacing.xs)
     }
 
+    /// "At time" sends 0, the task's own reminder at its time, as "!At time of task" typed is: the card has no "default"
+    /// choice beside it, so it is what a person taps for "at the time", and nil let a Settings default reminder replace
+    /// it (the supervisor, after the review of brief 175). A task with no offset of its own shows "At time" chosen too.
     private func offsetChip(_ minutes: Int, _ onOffset: @escaping (Int?) -> Void) -> some View {
         HITChip(Self.chipTitle(minutes: minutes), systemImage: minutes == 0 ? "bell" : "bell.badge",
                 tint: Theme.accent, isSelected: (offsetMinutes ?? 0) == minutes,
-                action: { onOffset(minutes == 0 ? nil : minutes) })
+                action: { onOffset(minutes) })
             .accessibilityLabel(ReminderOffset.label(minutes: minutes))
             .help(ReminderOffset.label(minutes: minutes))
             .accessibilityIdentifier("reminderOffset\(minutes)")

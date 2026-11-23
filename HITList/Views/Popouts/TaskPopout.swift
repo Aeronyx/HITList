@@ -852,12 +852,11 @@ struct TaskPopout: View {
         save()
     }
 
-    /// Nil or 0 reminds at the due time.
+    /// 0 ("At time") is the task's own reminder at its time, which Settings' default does not replace; nil takes the
+    /// task's own away (`TaskActions.setReminderOffset`).
     private func setReminderOffset(_ minutes: Int?) {
         removeTypedReminders(beforeDue: true)
-        let value = (minutes ?? 0) > 0 ? minutes : nil
-        guard task.reminderOffsetMinutes != value else { return }
-        task.reminderOffsetMinutes = value
+        guard TaskActions.setReminderOffset(minutes, of: task) else { return }
         save()
     }
 

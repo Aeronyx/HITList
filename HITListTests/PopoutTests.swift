@@ -621,32 +621,33 @@ final class PopoutTests: XCTestCase {
 
     func testOffsetPresetsWriteTokensThatParseBack() {
         let p = parser()
-        // In words since brief 175, as the list on "!" writes them.
-        let expected: [Int: String] = [5: "!5 minutes before", 10: "!10 minutes before", 15: "!15 minutes before",
-                                       30: "!30 minutes before", 60: "!1 hour before", 1440: "!1 day before"]
+        // In words since brief 175, as the list on "!" writes them; "At time" too since the supervisor's fix after the
+        // review of brief 175 (it wrote nothing, so a Settings default replaced it).
+        let expected: [Int: String] = [0: "!At time of task", 5: "!5 minutes before", 10: "!10 minutes before",
+                                       15: "!15 minutes before", 30: "!30 minutes before", 60: "!1 hour before",
+                                       1440: "!1 day before"]
         for minutes in ReminderPickerCard.offsetPresets {
             var draft = QuickAddDraft(context: .inbox, text: "Haircut tomorrow 11am")
-            draft.setReminderOffset(minutes == 0 ? nil : minutes, p)
-            if let token = expected[minutes] {
-                XCTAssertEqual(draft.text, "Haircut tomorrow 11am \(token) ")
-                XCTAssertEqual(draft.chips(p).reminderOffsetMinutes, minutes)
-            } else {
-                XCTAssertEqual(minutes, 0)
-                XCTAssertEqual(draft.text, "Haircut tomorrow 11am", "At time writes nothing")
-                XCTAssertNil(draft.chips(p).reminderOffsetMinutes)
-            }
+            draft.setReminderOffset(minutes, p)
+            XCTAssertEqual(draft.text, "Haircut tomorrow 11am \(expected[minutes] ?? "?") ")
+            XCTAssertEqual(draft.chips(p).reminderOffsetMinutes, minutes)
             XCTAssertEqual(draft.result(p).title, "Haircut")
             XCTAssertTrue(draft.chips(p).hasDueTime, "the time survives")
         }
     }
 
-    func testOffsetChipReplacesATypedOffsetAndAtTimeRemovesIt() {
+    func testOffsetChipReplacesATypedOffsetAndNilRemovesIt() {
         let p = parser()
         var draft = QuickAddDraft(context: .inbox, text: "Haircut tom 11am p1 !15mb")
         draft.setReminderOffset(60, p)
         XCTAssertEqual(draft.text, "Haircut tom 11am p1 !1 hour before ", "in words (brief 175)")
         XCTAssertEqual(draft.chips(p).reminderOffsetMinutes, 60)
+        // "At time" replaces it with its own words, 0 (the supervisor, after the review of brief 175).
         draft.setReminderOffset(0, p)
+        XCTAssertEqual(draft.text, "Haircut tom 11am p1 !At time of task ")
+        XCTAssertEqual(draft.chips(p).reminderOffsetMinutes, 0)
+        // Nil (the time taken away, No reminder) removes it.
+        draft.setReminderOffset(nil, p)
         XCTAssertEqual(draft.text, "Haircut tom 11am p1 ")
         XCTAssertNil(draft.chips(p).reminderOffsetMinutes)
         XCTAssertEqual(draft.chips(p).priority, .p1)

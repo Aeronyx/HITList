@@ -115,6 +115,17 @@ enum TaskActions {
     /// next due time from the rule's hour and minute (a 2:30 repeat the spring change pushed to 3:00 is back
     /// at 2:30 the next day); an all-day task's rule has no time.
     ///
+    /// The Reminder card's offset for a task (the editor's card): minutes before its time; 0 at the time, the task's own,
+    /// which Settings' default reminder does not replace (the card's "At time", the supervisor after the review of brief
+    /// 175); nil takes the task's own away. True if it changed; the caller saves.
+    @discardableResult
+    static func setReminderOffset(_ minutes: Int?, of task: TaskItem) -> Bool {
+        let value = minutes.map { max(0, $0) }
+        guard task.reminderOffsetMinutes != value else { return false }
+        task.reminderOffsetMinutes = value
+        return true
+    }
+
     /// Subtasks (brief 32) follow: completing a task completes its open subtasks at the same moment, and
     /// un-completing it (the toast's Undo, the Completed list) reopens exactly those, by that shared
     /// `completedAt`; ones ticked by hand earlier stay ticked. A repeating task's next occurrence starts

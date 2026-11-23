@@ -293,13 +293,14 @@ struct QuickAddDraft: Equatable, Codable {
     }
 
     /// Writes the reminder offset in words, as the list on "!" does (brief 175): "!15 minutes before", "!1 hour before",
-    /// "!1 day before"; nil or 0 (at the time) removes it. Before the task has a time nothing is written: the offset
-    /// waits on the chip (`pendingReminderMinutes`) and counts once a time is set (brief 41).
+    /// "!1 day before", and "!At time of task" for 0 (the card's "At time": the task's own, which Settings' default does
+    /// not replace; the supervisor, after the review of brief 175); nil removes it. Before the task has a time nothing is
+    /// written: the offset waits on the chip (`pendingReminderMinutes`) and counts once a time is set (brief 41).
     mutating func setReminderOffset(_ minutes: Int?, _ parser: QuickAddParser) {
         // Only the "before" phrases: a "from now" one ("!15m") is a reminder of its own (brief 48).
         text = Self.removing(reminderTokens(beforeDue: true, parser), from: text)
         pendingReminderMinutes = nil
-        guard let minutes, minutes > 0 else { return }
+        guard let minutes, minutes >= 0 else { return }
         if parsed(parser, .final).hasDueTime {
             append(ReminderOffset.phrase(minutes: minutes))
         } else {
@@ -308,11 +309,11 @@ struct QuickAddDraft: Equatable, Codable {
     }
 
     /// The time is going: a reminder written beside it would be left as plain "!15mb" in the title, so it
-    /// comes out of the text and its offset waits on the chip instead.
+    /// comes out of the text and its offset waits on the chip instead ("!At time of task" too, as 0).
     private mutating func holdReminderForLater(_ parser: QuickAddParser) {
         guard let offset = parsed(parser, .final).reminderOffsetMinutes else { return }
         text = Self.removing(reminderTokens(beforeDue: true, parser), from: text)
-        pendingReminderMinutes = offset > 0 ? offset : nil
+        pendingReminderMinutes = max(0, offset)
     }
 
     /// The Reminder card's "from now" choices (brief 48): a span writes its words ("!In 15 minutes", "!In 1 hour",

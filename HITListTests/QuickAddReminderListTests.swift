@@ -251,6 +251,51 @@ final class QuickAddReminderListTests: XCTestCase {
         withExtendedLifetime(container) {}
     }
 
+    /// The Reminder card's "At time" chip is what a person taps for a reminder at the task's time, and the card has no
+    /// "default" choice beside it ("No reminder" takes the time away): it writes "!At time of task", as the list does, and
+    /// saves 0, so a Settings default of 15 minutes before does not replace what was tapped (the supervisor, after the
+    /// review of brief 175). With no time yet it waits on the chip, as an offset does.
+    func testTheCardsAtTimeChipWritesTheWords() throws {
+        let p = parser()
+        var draft = QuickAddDraft(context: .inbox, text: "Call mom 5pm")
+        draft.setReminderOffset(0, p)
+        XCTAssertEqual(draft.text, "Call mom 5pm !At time of task ")
+        XCTAssertEqual(draft.result(p).reminderOffsetMinutes, 0)
+        let container = ModelContainerFactory.preview()
+        let task = try TaskActions.create(from: draft.result(p), defaultProject: nil, defaultLabel: nil, in: container.mainContext)
+        XCTAssertEqual(task.reminderOffsetMinutes, 0)
+        let plan = NotificationPlan.make(tasks: [NotificationPlan.Item(task, now: now)], now: now, defaultOffsetMinutes: 15,
+                                         calendar: calendar)
+        XCTAssertEqual(plan.requests.map(\.triggerDate), [at(17)], "at the time, not the default's 4:45")
+
+        var untimed = QuickAddDraft(context: .inbox, text: "Call mom")
+        untimed.setReminderOffset(0, p)
+        XCTAssertEqual(untimed.text, "Call mom", "no time: nothing to write yet")
+        XCTAssertEqual(untimed.chips(p).reminderOffsetMinutes, 0, "it waits on the chip")
+        untimed.text = "Call mom 6pm"
+        XCTAssertEqual(untimed.result(p).reminderOffsetMinutes, 0, "a time typed takes it")
+        // A typed "!At time of task" held while the time goes keeps its 0 for the next time, too.
+        var held = QuickAddDraft(context: .inbox, text: "Call 3pm !At time of task ")
+        held.clearTime(p)
+        XCTAssertEqual(held.chips(p).reminderOffsetMinutes, 0)
+        held.text += " 4pm"
+        XCTAssertEqual(held.result(p).reminderOffsetMinutes, 0)
+
+        // The editor's card (`TaskPopout.setReminderOffset`): 0 is stored as 0; nil takes the task's own away.
+        let sam = TaskItem(title: "Call Sam", dueDate: at(18), hasDueTime: true)
+        container.mainContext.insert(sam)
+        XCTAssertTrue(TaskActions.setReminderOffset(0, of: sam))
+        XCTAssertEqual(sam.reminderOffsetMinutes, 0)
+        XCTAssertFalse(TaskActions.setReminderOffset(0, of: sam), "no change")
+        XCTAssertEqual(NotificationPlan.make(tasks: [NotificationPlan.Item(sam, now: now)], now: now, defaultOffsetMinutes: 15,
+                                             calendar: calendar).requests.map(\.triggerDate), [at(18)])
+        XCTAssertTrue(TaskActions.setReminderOffset(30, of: sam))
+        XCTAssertEqual(sam.reminderOffsetMinutes, 30)
+        XCTAssertTrue(TaskActions.setReminderOffset(nil, of: sam))
+        XCTAssertNil(sam.reminderOffsetMinutes)
+        withExtendedLifetime(container) {}
+    }
+
     /// Opening the editor wakes only a stored "!" reminder ("Pack !30mb", brief 127): words said in a title ("Remind me 1
     /// day before the party", "Party! Reminder 1 day before") are the title's, and opening leaves them, unlit (the review
     /// of brief 175, finding 10: "Send reminder 1 day before the party" became "Send the party").
