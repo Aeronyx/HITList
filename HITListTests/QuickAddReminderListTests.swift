@@ -270,6 +270,33 @@ final class QuickAddReminderListTests: XCTestCase {
         withExtendedLifetime(container) {}
     }
 
+    /// A clock reminder on a repeating task that falls after the occurrence completed stays: "Water plants every day
+    /// !8am" typed at 2 pm reminds tomorrow at 8:00, and completing today's took that away before it went off (the
+    /// review of brief 175, finding 12). One for the occurrence done still goes with it, and Undo brings either back.
+    /// Nothing moves it to each new occurrence: re-anchoring a clock reminder every day is not this round's.
+    func testARepeatingTasksClockReminderAfterTheOccurrenceStays() throws {
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        let p = parser()
+        let plants = try TaskActions.create(from: QuickAddDraft(context: .inbox, text: "Water plants every day !8am").result(p),
+                                            defaultProject: nil, defaultLabel: nil, in: context)
+        XCTAssertEqual(plants.dueDate, today)
+        XCTAssertEqual(plants.reminderDate, at(8, day: 1), "8 am has gone today: tomorrow's")
+        let rollOver = TaskActions.RollOver(plants)
+        TaskActions.toggleCompletion(plants, in: context, now: at(14, 10), calendar: calendar)
+        XCTAssertEqual(plants.dueDate, calendar.date(byAdding: .day, value: 1, to: today), "rolled on to tomorrow")
+        XCTAssertEqual(plants.reminderDate, at(8, day: 1), "kept: it goes off for tomorrow's")
+        TaskActions.undo(rollOver, on: plants, in: context)
+        XCTAssertEqual(plants.reminderDate, at(8, day: 1))
+
+        let pills = try TaskActions.create(from: QuickAddDraft(context: .inbox, text: "Pills every day 9pm !4pm").result(p),
+                                           defaultProject: nil, defaultLabel: nil, in: context)
+        XCTAssertEqual(pills.reminderDate, at(16), "today's, before the 9 pm occurrence")
+        TaskActions.toggleCompletion(pills, in: context, now: at(14, 10), calendar: calendar)
+        XCTAssertNil(pills.reminderDate, "it belonged to the occurrence done")
+        withExtendedLifetime(container) {}
+    }
+
     /// Saved as the task's own moment, and scheduled like any other reminder.
     func testAClockReminderReachesTheSavedTask() throws {
         let container = ModelContainerFactory.preview()

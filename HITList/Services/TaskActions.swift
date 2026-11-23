@@ -137,8 +137,13 @@ enum TaskActions {
             if !task.hasDueTime || next.time == nil { next = next.timed(to: due, hasTime: task.hasDueTime, calendar: calendar) }
             task.dueDate = next.nextDueDate(from: due, now: now, calendar: calendar)
             if next.anchorDay != rule.anchorDay || next.time != rule.time { task.recurrence = next.encoded }
-            // A "from now" reminder goes off once (brief 48): it belonged to the occurrence just done.
-            task.reminderDate = nil
+            // A reminder moment of the task's own goes off once (brief 48): one on the occurrence just done goes with it.
+            // One that falls after that occurrence's day and is still to come stays for the next ("Water plants every
+            // day !8am" typed at 2 pm is tomorrow 8:00; the review of brief 175). It is not moved to each occurrence.
+            if let at = task.reminderDate {
+                let dayAfter = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: due)) ?? due
+                if at < dayAfter || at <= now { task.reminderDate = nil }
+            }
         } else {
             task.isCompleted = true
             task.completedAt = now
