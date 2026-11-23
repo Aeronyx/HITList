@@ -512,7 +512,7 @@ final class ReminderWordsTests: XCTestCase {
         XCTAssertEqual(bank.tokens.map(\.kind), [.date])
 
         let inside = p.parse("Call mom, remind me at 4")
-        XCTAssertEqual(inside.title, "Call mom,")
+        XCTAssertEqual(inside.title, "Call mom", "the comma before the phrase goes (finding 10 of the second review)")
         XCTAssertEqual(inside.dueDate, at(11, 23, 16, 0))
         XCTAssertEqual(inside.reminderOffsetMinutes, 0)
 
@@ -918,6 +918,28 @@ final class ReminderWordsTests: XCTestCase {
         XCTAssertEqual(ReminderPhrase(token: "!at 9"), .at(ReminderClock(hour: 9, minute: 0)))
     }
 
+    /// A title word just before a phrase loses a trailing ",", ";", ":" or dash, and a dash on its own goes: what joined
+    /// the phrase to the sentence is not the title's (the second review of brief 175, finding 10). Elsewhere it stays.
+    func testPunctuationLeftBeforeAPhraseLeavesTheTitle() {
+        let cases: [(String, String)] = [
+            ("Stir the soup, reminder in 15 minutes", "Stir the soup"),
+            ("Call mom - remind me at 4", "Call mom"),
+            ("Call mom – remind me at 4", "Call mom"),
+            ("Call mom — remind me at 4", "Call mom"),
+            ("Pay rent; tomorrow", "Pay rent"),
+            ("Agenda: friday 3pm", "Agenda"),
+            ("Lunch, tomorrow, with Sam", "Lunch with Sam"),
+            ("Call mom at 5pm - reminder 30 minutes before", "Call mom"),
+            ("Call mom, then dad tomorrow", "Call mom, then dad"),
+            ("Call mom. Reminder in an hour", "Call mom."),
+            ("Fix sink priority three - then paint", "Fix sink - then paint"),
+        ]
+        for (text, title) in cases {
+            XCTAssertEqual(parser.parse(text).title, title, text)
+        }
+        XCTAssertEqual(parser.parse("Stir the soup, reminder in 15 minutes").reminderDate, minutes(15))
+    }
+
     /// "reminder" with no "me" and no "!" is weak evidence: plenty of titles hold the word. It takes only the relative
     /// forms (before, in, at the time), never a clock time or a day (the supervisor, round 36); "remind me" keeps them
     /// all. Monday 2026-11-23, 14:10 Eastern.
@@ -963,7 +985,7 @@ final class ReminderWordsTests: XCTestCase {
         XCTAssertEqual(water.dueDate, at(11, 23, 14, 20))
         noReminder(water, "Water plants reminder in 10 minutes")
         let watered = p.parse("Water plants, reminder in 10 minutes")
-        XCTAssertEqual(watered.title, "Water plants,")
+        XCTAssertEqual(watered.title, "Water plants", "the comma before the phrase goes (finding 10 of the second review)")
         XCTAssertEqual(watered.reminderFromNow, ReminderSpan(minutes: 10))
         XCTAssertEqual(watered.reminderDate, at(11, 23, 14, 20))
         XCTAssertNil(watered.dueDate, "a reminder from now, not a due time")

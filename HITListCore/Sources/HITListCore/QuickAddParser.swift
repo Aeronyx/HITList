@@ -325,11 +325,17 @@ public struct QuickAddParser: Sendable {
         }
         if case .span(let span)? = ownReminder { result.reminderFromNow = span }
 
-        // Title = whatever was not consumed or was superseded, with surrounding quotes stripped.
+        // Title = whatever was not consumed or was superseded, with surrounding quotes stripped. A word just before a
+        // phrase loses a trailing ",", ";", ":" or dash, and a dash on its own goes: they joined the phrase to the
+        // sentence ("Stir the soup, reminder in 15 minutes", "Call mom - remind me at 4"; the second review of brief 175).
         var titleWords: [String] = []
         for (k, word) in words.enumerated() where !consumed[k] || supersededWords.contains(k) {
             var t = word.text
             if t.count >= 2, t.hasPrefix("\""), t.hasSuffix("\"") { t = String(t.dropFirst().dropLast()) }
+            if k + 1 < words.count, consumed[k + 1], !supersededWords.contains(k + 1) {
+                while let last = t.last, ",;:-–—".contains(last) { t.removeLast() }
+                if t.isEmpty { continue }
+            }
             titleWords.append(t)
         }
         result.title = titleWords.joined(separator: " ")
