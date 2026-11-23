@@ -570,12 +570,13 @@ struct TaskPopout: View {
         let set = timeParts != nil || moment != nil
         let title = ReminderChipText.title(time: timeParts == nil ? nil : due, offsetMinutes: shown.reminderOffsetMinutes,
                                            reminderDate: moment, now: now)
-        return HITChip(title, systemImage: (shown.reminderOffsetMinutes ?? 0) > 0 || moment != nil ? "bell.badge" : "alarm",
+        return HITChip(title, systemImage: ReminderChipText.symbol(offsetMinutes: shown.reminderOffsetMinutes, reminderDate: moment),
                        tint: set ? Theme.accent : Theme.secondaryText,
                        isSelected: set, size: .compact, action: { openChip = .reminder })
             .pickerAnchor(.reminder, isPresented: chipBinding(.reminder)) {
                 ReminderPickerCard(day: due, time: timeParts.map { PickerTime(hour: $0.hour, minute: $0.minute) },
-                                   offsetMinutes: shown.reminderOffsetMinutes, now: now, onTime: { time in
+                                   offsetMinutes: shown.reminderOffsetMinutes,
+                                   defaultOffsetMinutes: Preferences.defaultReminderOffset, now: now, onTime: { time in
                     if let time {
                         openChip = nil
                         setTime(hour: time.hour, minute: time.minute)

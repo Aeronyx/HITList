@@ -433,14 +433,16 @@ struct QuickAddPopout: View {
         let title = ReminderChipText.title(time: chips.hasDueTime ? chips.dueDate : nil, offsetMinutes: chips.reminderOffsetMinutes,
                                            reminderDate: chips.reminderDate, fromNow: chips.reminderFromNow,
                                            now: parser.dateParser.now)
-        return HITChip(title, systemImage: (chips.reminderOffsetMinutes ?? 0) > 0 || chips.reminderDate != nil ? "bell.badge" : "alarm",
+        return HITChip(title, systemImage: ReminderChipText.symbol(offsetMinutes: chips.reminderOffsetMinutes,
+                                                                   reminderDate: chips.reminderDate),
                        tint: set ? Theme.accent : Theme.secondaryText,
                        isSelected: set, size: .compact, action: { openChip = .reminder })
             .accessibilityLabel("Reminder: \(title == "Reminder" ? "none" : title)")
             .accessibilityIdentifier("quickAddReminderChip")
             .pickerAnchor(.reminder, isPresented: chipBinding(.reminder)) {
                 ReminderPickerCard(day: chips.dueDate, time: chips.hasDueTime ? chips.dueDate.map { PickerTime($0) } : nil,
-                                   offsetMinutes: chips.reminderOffsetMinutes, now: parser.dateParser.now,
+                                   offsetMinutes: chips.reminderOffsetMinutes,
+                                   defaultOffsetMinutes: Preferences.defaultReminderOffset, now: parser.dateParser.now,
                                    onTime: { time in
                                        if let time {
                                            draft.setTime(hour: time.hour, minute: time.minute, parser)
