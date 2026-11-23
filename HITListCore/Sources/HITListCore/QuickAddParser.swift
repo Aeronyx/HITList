@@ -395,15 +395,17 @@ public struct QuickAddParser: Sendable {
     }
 
     /// The hour "at 1" to "at 6" with no am or pm stands for (`hour` as typed), a due time's or a reminder clock's:
-    /// what decides is in the rest of the text (brief 175; the supervisor's decision on its review). "morning" or
-    /// "night" among the words: as typed, on a 24-hour clock ("Meditate every morning at 6", "Take pills every night
-    /// at 1", "Catch the bus at 6 in the morning"). Else beside a day (`hasDay`: typed, a repeat's, the task's own) the
-    /// afternoon ("tomorrow at 5", "tonight at 6"). Else the next one to come, morning or afternoon: "at 6" is 6 pm at
-    /// 2 pm, 6 am tomorrow at 10 pm, 6 am today at 5 am.
+    /// what decides is in the rest of the text (brief 175; the supervisor's decision on its review, refined after it).
+    /// "morning" or "night" among the words: as typed, on a 24-hour clock ("Meditate every morning at 6", "Take pills
+    /// every night at 1", "Catch the bus at 6 in the morning"). Else beside a day (`hasDay`: typed, a repeat's, the task's
+    /// own) the afternoon ("tomorrow at 5", "tonight at 6"). Else 1 to 4 are the afternoon too, today's while it is
+    /// still ahead and else tomorrow's (nobody means "Lunch at 1" at one in the morning), and 5 or 6 the next one to
+    /// come, morning or afternoon, as they can mean early morning: "at 6" is 6 pm at 2 pm, 6 am tomorrow at 10 pm, 6 am
+    /// today at 5 am.
     func shortHour(_ hour: Int, _ minute: Int, words: [String], hasDay: Bool) -> Int {
         let sayings: Set<String> = ["morning", "mornings", "night", "nights"]
         if words.contains(where: { sayings.contains(DateExpressionParser.normalize($0)) }) { return hour }
-        if hasDay { return hour + 12 }
+        if hasDay || hour <= 4 { return hour + 12 }
         let today = dateParser.today, now = dateParser.now
         if dateParser.date(today, hour: hour, minute: minute) >= now { return hour }
         return dateParser.date(today, hour: hour + 12, minute: minute) >= now ? hour + 12 : hour

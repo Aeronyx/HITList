@@ -178,15 +178,20 @@ final class QuickAddReminderListTests: XCTestCase {
     }
 
     /// "at 1" to "at 6" with no am or pm beside a day is the afternoon (the review of brief 175, finding 2): an Upcoming
-    /// day's row gives the task its day, and so does the editor's task. With no day it is the next one to come, which at
-    /// 2 pm is 1 AM tomorrow.
+    /// day's row gives the task its day, and so does the editor's task. With no day, 1 to 4 are the afternoon too (1 PM
+    /// gone at 2 PM: tomorrow's), and 5 or 6 the next one to come: at 10 PM "at 6" alone is 6 AM, on a day 6 PM.
     func testAShortHourOnARowsDayOrTheTasksOwnIsTheAfternoon() throws {
         let p = parser()
         let thursday = calendar.date(byAdding: .day, value: 5, to: today)!
         XCTAssertEqual(QuickAddDraft(context: .day(thursday), text: "Dentist at 1").result(p).dueDate, at(13, day: 5))
-        XCTAssertEqual(QuickAddDraft(context: .today, text: "Dentist at 1").result(p).dueDate, at(1, day: 1),
-                       "today's list: the next 1 o'clock to come")
+        XCTAssertEqual(QuickAddDraft(context: .today, text: "Dentist at 1").result(p).dueDate, at(13, day: 1),
+                       "today's list: 1 PM has gone, tomorrow's")
         XCTAssertEqual(QuickAddDraft(context: .inbox, text: "Dentist at 3").result(p).dueDate, at(15))
+
+        let late = QuickAddParser(now: at(22), calendar: calendar, knownProjects: ["Work"], knownLabels: ["calls"])
+        XCTAssertEqual(QuickAddDraft(context: .inbox, text: "Run at 6").result(late).dueDate, at(6, day: 1), "the next 6 to come")
+        XCTAssertEqual(QuickAddDraft(context: .day(thursday), text: "Run at 6").result(late).dueDate, at(18, day: 5),
+                       "the row's day: 6 PM")
 
         let container = ModelContainerFactory.preview()
         let context = container.mainContext
@@ -198,6 +203,10 @@ final class QuickAddReminderListTests: XCTestCase {
         var draft = TaskEditorDraft(task: task)
         draft.title += " at 1"
         XCTAssertEqual(draft.phrases(p, for: task).due?.date, calendar.date(bySettingHour: 13, minute: 0, second: 0, of: friday))
+        var six = TaskEditorDraft(task: task)
+        six.title += " at 6"
+        XCTAssertEqual(six.phrases(late, for: task).due?.date, calendar.date(bySettingHour: 18, minute: 0, second: 0, of: friday),
+                       "the task's own day: 6 PM")
         withExtendedLifetime(container) {}
     }
 
