@@ -1,0 +1,24 @@
+# The Stream ring's inbox for HITList (brief 176). `setup.sh` deploys it to your own Cloudflare account (the free plan
+# covers it: one Worker, one SQLite Durable Object, a cron trigger). Secrets are set with `wrangler secret put`, never
+# written here: INBOX_KEY (HITList's key, made by setup.sh) and STREAM_SECRET (Stream's webhook signing secret).
+name = "stream-inbox"
+main = "worker.js"
+compatibility_date = "2026-04-01"
+workers_dev = true
+preview_urls = false
+
+[[durable_objects.bindings]]
+name = "INBOX"
+class_name = "StreamInbox"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["StreamInbox"]
+
+# Every minute: old captures dropped and, once Stream's MCP is connected, Stream asked for what was said lately.
+[triggers]
+crons = ["* * * * *"]
+
+[vars]
+# Stream's MCP server. test.sh points it at a pretend Stream on this Mac through .dev.vars.
+STREAM_MCP_URL = "https://api.sandbar.com/mcp"

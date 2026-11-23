@@ -10,3 +10,7 @@ xcuserdata/
 crashreports/
 # This Mac's own build settings, included by Config/HITList.xcconfig (brief 166).
 Config/Local.xcconfig
+# The Stream ring's relay (brief 176): local test secrets, wrangler's own state, packages (it uses none).
+relay/**/.dev.vars
+relay/**/.wrangler/
+relay/**/node_modules/
