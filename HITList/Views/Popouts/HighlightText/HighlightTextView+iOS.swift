@@ -104,7 +104,9 @@ struct HighlightTextField: UIViewRepresentable {
                 && range.location != NSNotFound ? range.location : nil
             guard lastCaret != .some(caret) else { return }
             lastCaret = .some(caret)
-            if (textView as? HighlightUITextView)?.isApplyingOwnerText == true {
+            // A letter typed moves the caret before the text reaches the owner: were the owner to update then, its older
+            // text could be written back over the letter. Told a turn later, the text is in step (a guard).
+            if (textView as? HighlightUITextView)?.isApplyingOwnerText == true || parent.text != textView.text {
                 DispatchQueue.main.async { tell(caret) }
             } else {
                 tell(caret)

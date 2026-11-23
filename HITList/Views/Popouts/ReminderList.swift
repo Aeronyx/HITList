@@ -175,7 +175,8 @@ private struct ReminderListAnchor: ViewModifier {
         content.anchorPreference(key: PickerRequestKey.self, value: .bounds) { anchor in
             guard let request else { return nil }
             return PickerRequest(kind: .reminder, anchor: anchor, dismiss: request.onDismiss,
-                                 card: AnyView(ReminderSuggestionList(request: request, visibleRows: 8)),
+                                 // Eight and a half: the part row says there is more below.
+                                 card: AnyView(ReminderSuggestionList(request: request, visibleRows: 8.5)),
                                  list: PickerListMode(width: ReminderListMetrics.macWidth, onKey: request.onKey))
         }
         #else

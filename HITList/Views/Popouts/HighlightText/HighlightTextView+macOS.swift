@@ -119,9 +119,15 @@ struct HighlightTextField: NSViewRepresentable {
             reportCaret(textView)
         }
 
+        /// A typed letter moves the caret before `textDidChange` hands the text to the owner: were the owner to update
+        /// then, its text would still be the old one, written back over the letter. So a move is told a turn later, the
+        /// text in step by then (a guard: not seen happen).
         func textViewDidChangeSelection(_ notification: Notification) {
             guard let textView = notification.object as? HighlightNSTextView else { return }
-            reportCaret(textView)
+            DispatchQueue.main.async { [weak self, weak textView] in
+                guard let self, let textView else { return }
+                self.reportCaret(textView)
+            }
         }
 
         /// Tells the owner where the caret is: nil with a selection, while composing, or without the keyboard. Inside
@@ -134,7 +140,7 @@ struct HighlightTextField: NSViewRepresentable {
                 ? range.location : nil
             guard lastCaret != .some(caret) else { return }
             lastCaret = .some(caret)
-            if textView.isApplyingOwnerText {
+            if textView.isApplyingOwnerText || parent.text != textView.string {
                 DispatchQueue.main.async { tell(caret) }
             } else {
                 tell(caret)
