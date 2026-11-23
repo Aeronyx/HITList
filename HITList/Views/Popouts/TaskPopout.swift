@@ -416,6 +416,10 @@ struct TaskPopout: View {
     }
 
     private func pickReminder(_ row: ReminderSuggestion, word: ReminderSuggestions.BangWord) {
+        // Later as it is now: a list left open a while offered an older one (the second review of brief 175).
+        let p = parser()
+        let due = EditorFields(task: task).applying(draft.phrases(p, for: task)).dueDate
+        let row = ReminderSuggestions.current(row, dueDate: due, now: p.dateParser.now, calendar: p.dateParser.calendar)
         let cursor = draft.pick(row, replacing: word.range)
         caretRequest = HighlightCaretRequest(offset: cursor, serial: (caretRequest?.serial ?? 0) + 1)
         caret = cursor

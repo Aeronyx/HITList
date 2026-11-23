@@ -107,7 +107,9 @@ final class ReminderWordsTests: XCTestCase {
         let evening = Fixed.date(2026, 10, 21, 19, 30)
         let late = rows(hasTime: true, dueDate: Fixed.date(2026, 10, 21, 21, 0), now: evening).last!
         XCTAssertEqual(late.detail, "Tomorrow 9:00 AM")
-        XCTAssertEqual(late.phrase, "!Tomorrow 9:00 AM")
+        // No day in its words: 9:00 AM alone goes off tomorrow, and a draft added after midnight still means the
+        // morning to come (the second review of brief 175, finding 7; it was "!Tomorrow 9:00 AM").
+        XCTAssertEqual(late.phrase, "!9:00 AM")
         XCTAssertEqual(late.code, "!9am")
         let r = QuickAddParser(now: evening, calendar: Fixed.calendar).parse("Bins 9pm " + late.phrase)
         assertDate(r.reminderDate, 2026, 10, 22, 9, 0)
@@ -120,6 +122,60 @@ final class ReminderWordsTests: XCTestCase {
         XCTAssertEqual(other.phrase, "!Today 6:00 PM")
         assertDate(parser.parse("Call mom friday 9am " + other.phrase).reminderDate, 2026, 10, 21, 18, 0)
         assertDate(parser.parse("Call mom friday 9am !6pm").reminderDate, 2026, 10, 23, 18, 0)
+    }
+
+    /// A clock with a day typed whose moment has gone is not read: the words stay text, unlit ("Call mom !today 9am" at
+    /// 2 PM, "!tonight at 8" at 10 PM, a stored draft's "!Today 6:00 PM" added after 6). A clock without a day rolls to
+    /// the next, as before. And Later names a day only when a clock time alone would go off on another (a task due on a
+    /// later day), so its words never hold a day already gone: read back at any time of day, they are Later's moment,
+    /// still ahead (the second review of brief 175, finding 7). Monday 2026-11-23, Eastern.
+    func testAClockWithADayAlreadyGoneIsNotRead() throws {
+        var ny = Calendar(identifier: .gregorian)
+        ny.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+        func at(_ m: Int, _ d: Int, _ h: Int, _ min: Int) -> Date {
+            ny.date(from: DateComponents(year: 2026, month: m, day: d, hour: h, minute: min))!
+        }
+        func parse(_ text: String, _ h: Int, _ min: Int = 0) -> QuickAddResult {
+            QuickAddParser(now: at(11, 23, h, min), calendar: ny).parse(text)
+        }
+        for (text, h) in [("Call mom !today 9am", 14), ("Bins !tonight at 8", 22), ("Pack !Today 6:00 PM", 18),
+                          ("Call mom remind me today at 9am", 14)] {
+            let r = parse(text, h, 30)
+            XCTAssertEqual(r.title, text, text)
+            XCTAssertNil(r.reminderDate, text)
+            XCTAssertNil(r.dueDate, text)
+            XCTAssertTrue(r.tokens.isEmpty, "unlit: \(text)")
+        }
+        // Still ahead: read. With no day: the next one.
+        XCTAssertEqual(parse("Call mom !today 5pm", 14).reminderDate, at(11, 23, 17, 0))
+        XCTAssertEqual(parse("Call mom !9am", 14).reminderDate, at(11, 24, 9, 0))
+        XCTAssertEqual(parse("Call mom !tomorrow 9am", 14).reminderDate, at(11, 24, 9, 0))
+
+        // Later, read back where it was offered.
+        let friday = at(11, 27, 0, 0)
+        for hour in 0..<24 {
+            for minute in [0, 30] {
+                let now = at(11, 23, hour, minute)
+                let today = ny.startOfDay(for: now)
+                for (due, words) in [(nil, ""), (today, "today "), (friday, "friday ")] as [(Date?, String)] {
+                    let row = ReminderSuggestions.rows(hasTime: false, dueDate: due, now: now, calendar: ny).last!
+                    let moment = ReminderSuggestions.later(now: now, calendar: ny)
+                    let read = QuickAddParser(now: now, calendar: ny).parse("Bins " + words + row.phrase)
+                    XCTAssertEqual(read.reminderDate, moment, "\(row.phrase) at \(hour):\(minute) due \(words)")
+                    XCTAssertGreaterThan(moment, now)
+                    let stamped = row.phrase.hasPrefix("!Today") || row.phrase.hasPrefix("!Tomorrow")
+                    let plain = ReminderClock(hour: ny.component(.hour, from: moment), minute: ny.component(.minute, from: moment))
+                    XCTAssertEqual(stamped, plain.date(dueDay: due, now: now, calendar: ny) != moment,
+                                   "a day only where it must: \(row.phrase) at \(hour):\(minute) due \(words)")
+                }
+            }
+        }
+        // A Later row offered a while ago is offered again as it is now when picked.
+        let early = ReminderSuggestions.rows(hasTime: false, now: at(11, 23, 13, 0), calendar: ny).last!
+        XCTAssertEqual(early.phrase, "!4:00 PM")
+        XCTAssertEqual(ReminderSuggestions.current(early, dueDate: nil, now: at(11, 23, 17, 30), calendar: ny).phrase, "!9:00 PM")
+        let other = ReminderSuggestions.rows(hasTime: false, now: at(11, 23, 13, 0), calendar: ny)[0]
+        XCTAssertEqual(ReminderSuggestions.current(other, dueDate: nil, now: at(11, 23, 17, 30), calendar: ny), other)
     }
 
     // MARK: Narrowing

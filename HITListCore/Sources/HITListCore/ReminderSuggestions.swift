@@ -88,6 +88,9 @@ public enum ReminderSuggestions {
                                   phrase: span.phrase, code: span.token, detail: span.token, reminder: .fromNow(span))
     }
 
+    /// Later's words name a day only when the clock time alone would go off on another (the task's due day, a later one):
+    /// a stored draft added after midnight, or later on the day, then holds no day already gone (the second review of
+    /// brief 175). "!9:00 AM" offered at 10 PM is tomorrow's, as "!Tomorrow 9:00 AM" was.
     static func laterRow(dueDate: Date?, now: Date, calendar: Calendar) -> ReminderSuggestion {
         let at = later(now: now, calendar: calendar)
         let parts = calendar.dateComponents([.hour, .minute], from: at)
@@ -95,18 +98,24 @@ public enum ReminderSuggestions {
         let isToday = calendar.isDate(at, inSameDayAs: now)
         let phrase: String
         let clock: ReminderClock
-        if !isToday {
-            clock = ReminderClock(hour: plain.hour, minute: plain.minute, day: 1)
-            phrase = "!Tomorrow " + plain.text
-        } else if plain.date(dueDay: dueDate, now: now, calendar: calendar) == at {
+        if plain.date(dueDay: dueDate, now: now, calendar: calendar) == at {
             clock = plain
             phrase = "!" + plain.text
+        } else if !isToday {
+            clock = ReminderClock(hour: plain.hour, minute: plain.minute, day: 1)
+            phrase = "!Tomorrow " + plain.text
         } else {
             clock = ReminderClock(hour: plain.hour, minute: plain.minute, day: 0)
             phrase = "!Today " + plain.text
         }
         return ReminderSuggestion(kind: .later, id: "later", label: "Later", phrase: phrase, code: plain.code,
                                   detail: isToday ? plain.text : "Tomorrow " + plain.text, reminder: .at(clock))
+    }
+
+    /// `row` as it is offered now, when it is picked: Later moves with the clock (a list left open a while offered an
+    /// older Later); every other row is what it was.
+    public static func current(_ row: ReminderSuggestion, dueDate: Date?, now: Date, calendar: Calendar = .current) -> ReminderSuggestion {
+        row.kind == .later ? laterRow(dueDate: dueDate, now: now, calendar: calendar) : row
     }
 
     /// The rows a typed query leaves (what follows the "!" up to the caret): those whose code starts with it ("!1":

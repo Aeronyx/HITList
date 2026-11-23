@@ -241,6 +241,15 @@ public struct QuickAddParser: Sendable {
                     reading = shorter
                 }
                 let n = lead + reading.length
+                // A clock with a day typed whose moment has gone ("!today 9am" at 2 pm, "!tonight at 8" at 10 pm, a
+                // stored draft's "!Today 6:00 PM" added after 6) is not read: its words stay text, unlit (the second
+                // review of brief 175). Without a day a clock rolls on to the next.
+                if case .at(var clock) = reading.phrase, clock.day != nil {
+                    if reading.openHour { clock.hour = hour(clock.hour, clock.minute, words: lowers, hasDay: true) }
+                    if clock.date(dueDay: nil, now: dateParser.now, calendar: dateParser.calendar) <= dateParser.now {
+                        i += n; continue
+                    }
+                }
                 // With nothing else for a title, the lead is the title and the rest the phrase (`leadIsTitle`).
                 let spoken = !w.hasPrefix("!")
                 let kept = leadIsTitle && spoken
