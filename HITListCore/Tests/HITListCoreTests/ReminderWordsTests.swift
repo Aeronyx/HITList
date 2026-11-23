@@ -219,6 +219,29 @@ final class ReminderWordsTests: XCTestCase {
         XCTAssertEqual(ReminderSuggestions.bangWord(in: "Call !10mb about", cursor: 7)?.range, NSRange(location: 5, length: 5))
     }
 
+    /// "!" typed in front of a word ("Call !|mom", "Call mom !|tomorrow 5pm"): with nothing typed after the "!" a pick
+    /// replaces the "!" alone, never the word after the caret (the second review of brief 175, finding 6). With a query
+    /// the caret is inside a phrase being typed or lit, and the whole of it goes, as before.
+    func testAPickWithNothingTypedAfterTheBangKeepsTheWordsAfterIt() throws {
+        let mom = try XCTUnwrap(ReminderSuggestions.bangWord(in: "Call !mom", cursor: 6))
+        XCTAssertEqual(mom, .init(range: NSRange(location: 5, length: 1), query: ""))
+        let picked = ReminderSuggestions.applying("!In 15 minutes", to: "Call !mom", replacing: mom.range)
+        XCTAssertEqual(picked.text, "Call !In 15 minutes mom")
+        XCTAssertEqual(parser.parse(picked.text).title, "Call mom")
+        XCTAssertEqual(parser.parse(picked.text).reminderDate, minutes(15))
+
+        let text = "Call mom !tomorrow 5pm"
+        let day = try XCTUnwrap(ReminderSuggestions.bangWord(in: text, cursor: 10))
+        XCTAssertEqual(day.range, NSRange(location: 9, length: 1))
+        let kept = ReminderSuggestions.applying("!In 15 minutes", to: text, replacing: day.range).text
+        XCTAssertEqual(kept, "Call mom !In 15 minutes tomorrow 5pm")
+        assertDate(parser.parse(kept).dueDate, 2026, 10, 22, 17, 0)
+        // A query: the word, or the lit phrase, whole.
+        XCTAssertEqual(ReminderSuggestions.bangWord(in: "Call !1mom", cursor: 7)?.range, NSRange(location: 5, length: 5))
+        XCTAssertEqual(ReminderSuggestions.bangWord(in: "Call 5pm !10 minutes before ", cursor: 11)?.range,
+                       NSRange(location: 9, length: 18))
+    }
+
     func testAPickReplacesTheTypedWordAndTheCaretSitsAfterASpace() {
         let picked = ReminderSuggestions.applying("!At time of task", to: "Call mom 9am !", replacing: NSRange(location: 13, length: 1))
         XCTAssertEqual(picked.text, "Call mom 9am !At time of task ")

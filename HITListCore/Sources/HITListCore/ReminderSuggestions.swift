@@ -144,7 +144,8 @@ public enum ReminderSuggestions {
     /// The word around `cursor` (a UTF-16 offset in `text`), when it starts with one "!" (not "!!", a priority) and the
     /// caret is past that "!"; nil otherwise, and after a space (a space ends the word: the list closes). Where the word
     /// starts a reminder phrase of several words, already lit with the caret back inside it ("!1|0 minutes before"), the
-    /// range is the whole phrase: a pick replaces all of it (the review of brief 175).
+    /// range is the whole phrase: a pick replaces all of it (the review of brief 175). With nothing typed after the "!"
+    /// the range is the "!" alone, so a pick keeps the words after the caret.
     public static func bangWord(in text: String, cursor: Int) -> BangWord? {
         let ns = text as NSString
         guard cursor > 0, cursor <= ns.length else { return nil }
@@ -159,6 +160,9 @@ public enum ReminderSuggestions {
         guard start < cursor, ns.character(at: start) == 0x21 /* ! */ else { return nil }
         if start + 1 < ns.length, ns.character(at: start + 1) == 0x21 { return nil }
         let query = ns.substring(with: NSRange(location: start + 1, length: cursor - start - 1))
+        // Nothing typed after the "!": it was typed in front of a word ("Call !|mom", "Call mom !|tomorrow 5pm"), and a
+        // pick takes its place alone (the second review of brief 175).
+        guard !query.isEmpty else { return BangWord(range: NSRange(location: start, length: 1), query: query) }
         return BangWord(range: NSRange(location: start, length: phraseEnd(in: ns, from: start, wordEnd: end) - start), query: query)
     }
 
