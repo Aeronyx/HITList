@@ -383,9 +383,11 @@ final class ReminderWordsTests: XCTestCase {
         XCTAssertNil(first.dueDate)
         XCTAssertEqual(first.tokens.map(\.text), ["Remind me in 30 minutes to"])
         XCTAssertEqual(ReminderPhrase(token: "Remind me in 30 minutes to"), .fromNow(ReminderSpan(minutes: 30)))
-        // Live: "Remind me to" lights once its space is typed.
+        // Live: "Remind me to" lights once a word of the title follows it (alone, it would leave no title: finding 13
+        // of the review).
         XCTAssertTrue(parser.parse("Remind me to", mode: .live).tokens.isEmpty)
-        XCTAssertEqual(parser.parse("Remind me to ", mode: .live).tokens.map(\.text), ["Remind me to"])
+        XCTAssertTrue(parser.parse("Remind me to ", mode: .live).tokens.isEmpty)
+        XCTAssertEqual(parser.parse("Remind me to c", mode: .live).tokens.map(\.text), ["Remind me to"])
     }
 
     func testPriorityInWords() {
@@ -433,6 +435,41 @@ final class ReminderWordsTests: XCTestCase {
         }
         XCTAssertEqual(parser.parse("Fix sink priority 3 tomorrow").dueDate, Fixed.date(2026, 10, 22))
         XCTAssertEqual(parser.parse("Fix sink priority one #Home").projectName, "Home")
+    }
+
+    /// Words said in plain language that would leave no title are the title, and set nothing (the review of brief 175,
+    /// finding 13): a task has a title. The rest of the text is read as usual.
+    func testWordsThatWouldLeaveNoTitleAreTheTitle() {
+        for text in ["Remind me in an hour", "Priority 3", "Remind me to", "remind me 30 minutes before", "Reminder in 10 minutes",
+                     "Remind me at 4pm"] {
+            let r = parser.parse(text)
+            XCTAssertEqual(r.title, text, text)
+            XCTAssertNil(r.reminderDate, text)
+            XCTAssertNil(r.reminderFromNow, text)
+            XCTAssertNil(r.reminderOffsetMinutes, text)
+            XCTAssertNil(r.dueDate, text)
+            XCTAssertEqual(r.priority, .p4, text)
+            XCTAssertTrue(r.tokens.isEmpty, text)
+        }
+        let work = parser.parse("Remind me in an hour #Work")
+        XCTAssertEqual(work.title, "Remind me in an hour")
+        XCTAssertEqual(work.projectName, "Work")
+        XCTAssertNil(work.reminderDate)
+        let tomorrow = parser.parse("Priority 3 tomorrow")
+        XCTAssertEqual(tomorrow.title, "Priority 3")
+        XCTAssertEqual(tomorrow.dueDate, Fixed.date(2026, 10, 22))
+        XCTAssertEqual(tomorrow.priority, .p4)
+        // A code typed alone is still read: the words are the person's own.
+        XCTAssertEqual(parser.parse("!15m").reminderFromNow, ReminderSpan(minutes: 15))
+        XCTAssertEqual(parser.parse("p1").priority, .p1)
+        // Switched off by the card, as before.
+        let off = parser.parse("Call remind me in an hour", disabling: [QuickAddTokenKey(kind: .reminder, text: "remind me in an hour")])
+        XCTAssertEqual(off.title, "Call remind me in an hour")
+        XCTAssertEqual(parser.parse("Remind me in an hour", disabling: [QuickAddTokenKey(kind: .date, text: "x")]).title,
+                       "Remind me in an hour")
+        // Live: the same, once the phrase would light.
+        XCTAssertEqual(parser.parse("Remind me in an hour ", mode: .live).title, "Remind me in an hour")
+        XCTAssertTrue(parser.parse("Remind me in an hour ", mode: .live).tokens.isEmpty)
     }
 
 

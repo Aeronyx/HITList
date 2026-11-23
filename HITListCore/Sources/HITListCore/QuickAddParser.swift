@@ -10,6 +10,16 @@ public struct QuickAddToken: Equatable, Sendable {
     /// highlighted, sets nothing, its words are title text. It applies again once every later phrase of its
     /// kind is switched off (`parse(_:disabling:)`).
     public var isSuperseded = false
+
+    /// Said in plain language rather than typed as a code (brief 175): "remind me in an hour", "reminder 1 hour
+    /// before", "Remind me to", "priority 1".
+    var isSaidInWords: Bool {
+        switch kind {
+        case .reminder: return !text.hasPrefix("!")
+        case .priority: return text.lowercased().hasPrefix("priority")
+        default: return false
+        }
+    }
 }
 
 public struct QuickAddResult: Equatable, Sendable {
@@ -114,7 +124,22 @@ public struct QuickAddParser: Sendable {
         case live
     }
 
+    /// The text read. Words said in plain language ("Remind me in an hour", "Priority 3") that would leave no title are
+    /// the title, and set nothing (the review of brief 175): a task has a title (`parse(_:mode:isOff:)` masks them as a
+    /// switched-off phrase is masked).
     public func parse(_ input: String, mode: Mode = .final) -> QuickAddResult {
+        let result = scan(input, mode: mode)
+        guard Self.leavesNoTitle(result) else { return result }
+        return parse(input, mode: mode) { _, _ in false }
+    }
+
+    /// The title is empty and words said in plain language took it: they give it back.
+    static func leavesNoTitle(_ result: QuickAddResult) -> Bool {
+        result.title.isEmpty && result.tokens.contains { $0.isSaidInWords && !$0.isSuperseded }
+    }
+
+    /// One reading of the text, word by word (`parse` adds what reads the whole result).
+    func scan(_ input: String, mode: Mode) -> QuickAddResult {
         let words = Self.words(in: input)
         let lowers = words.map(\.lower)
         var consumed = [Bool](repeating: false, count: words.count)
