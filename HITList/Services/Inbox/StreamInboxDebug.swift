@@ -2,6 +2,9 @@
 import Foundation
 import SwiftData
 import HITListCore
+#if os(macOS)
+import AppKit
+#endif
 
 /// Debug builds on a side store only (brief 176), for the UI tests, pictures and the whole-path proof on this Mac.
 ///
@@ -20,17 +23,45 @@ enum StreamInboxDebug {
     @MainActor
     static func inbox(container: ModelContainer) -> StreamInbox? {
         guard isSideStore, UserDefaults.standard.bool(forKey: demoKey) else { return nil }
-        let daysLeft = UserDefaults.standard.object(forKey: demoDaysLeftKey) as? Int ?? 87
+        // A launch argument arrives as a string: `integer(forKey:)` reads it, nil only when it isn't there.
+        let daysLeft = UserDefaults.standard.object(forKey: demoDaysLeftKey) == nil ? 87 : UserDefaults.standard.integer(forKey: demoDaysLeftKey)
         let relay = StreamInboxFakeRelay.demo(daysLeft: daysLeft)
         return StreamInbox(container: container, keyStore: MemoryInboxKey(), client: relay.client, isLive: true)
     }
 
+    /// `-openDeepLink hitlist://upcoming` (side store): the screen a capture's task lands on, opened in-process a few
+    /// seconds after launch, for a picture of the whole path with nothing clicked.
+    static let deepLinkKey = "openDeepLink"
+
     @MainActor
     static func connectIfAsked(_ inbox: StreamInbox) {
+        #if os(macOS)
+        openWindowIfAsked()
+        #endif
+        if isSideStore, let text = UserDefaults.standard.string(forKey: deepLinkKey), let url = URL(string: text),
+           let link = DeepLink(url) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { link.open() }
+        }
         guard isSideStore, let link = UserDefaults.standard.string(forKey: connectKey), !link.isEmpty,
               !inbox.isConnected || inbox.link?.text != InboxLink(link)?.text else { return }
         Task { _ = await inbox.connect(linkText: link) }
     }
+
+    #if os(macOS)
+    static let openWindowKey = "openMainWindow"
+
+    /// `-openMainWindow YES` (side store): a Debug Mac app launched in the background here sometimes opens no window
+    /// at all ("No windows open yet", round 19 and again in round 36), so a window capture has nothing to capture. Two
+    /// seconds on, with no window shown, it asks SwiftUI for the one a Dock click would open.
+    @MainActor
+    static func openWindowIfAsked() {
+        guard isSideStore, UserDefaults.standard.bool(forKey: openWindowKey) else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            guard !NSApp.windows.contains(where: { $0.isVisible && $0.styleMask.contains(.titled) }) else { return }
+            _ = NSApp.delegate?.applicationOpenUntitledFile?(NSApp)
+        }
+    }
+    #endif
 }
 
 /// A relay in this process: the endpoints and answers of `relay/stream-inbox/worker.js`, in memory, reached through

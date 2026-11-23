@@ -472,15 +472,16 @@ final class SettingsTidyTests: XCTestCase {
     static let pageRowHeight: CGFloat = 58
 
     /// Round 27 gave the calendar a page of its own, so the first screen has one row more than an iPhone 17 shows at
-    /// once: its last row, About, sits just below the fold. Making room by squeezing every row would put their words
+    /// once: its last row, About, sat just below the fold. Making room by squeezing every row would put their words
     /// 6 pt from their separators (George: text next to a border "looks lazy and unprofessional"), and moving
-    /// Reduce effects or Claude off the screen is his to ask for. Everything above About still fits.
-    func testFirstScreenFitsAnIPhone17ButForItsLastRow() {
+    /// Reduce effects or Claude off the screen is his to ask for. Round 36 (brief 176) put Stream Ring after Claude, so
+    /// the last two rows, Stream Ring and About, are below the fold; everything above them still fits.
+    func testFirstScreenFitsAnIPhone17ButForItsLastTwoRows() {
         let first = height(SettingsHome())
         print("SETTINGS-HEIGHT first screen: \(first) pt of \(Self.iPhone17Room)")
-        XCTAssertLessThanOrEqual(first, Self.iPhone17Room + Self.pageRowHeight,
-                                 "the first screen fits an iPhone 17 without scrolling, but for About")
-        XCTAssertEqual(SettingsPage.list.last, .about, "the row below the fold is About")
+        XCTAssertLessThanOrEqual(first, Self.iPhone17Room + 2 * Self.pageRowHeight,
+                                 "the first screen fits an iPhone 17 without scrolling, but for Stream Ring and About")
+        XCTAssertEqual(SettingsPage.list.suffix(2), [.streamRing, .about], "the rows below the fold are Stream Ring and About")
         var longest: (SettingsPage, CGFloat) = (.general, 0)
         for page in SettingsPage.allCases where page != .syncLog {
             let h = height(SettingsPageContent(page: page))

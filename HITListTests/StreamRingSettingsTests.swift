@@ -47,6 +47,10 @@ final class StreamRingSettingsTests: XCTestCase {
                        "no captures yet")
         XCTAssertEqual(StreamRingWords.status(problem: .offline, source: .everyMinute, lastCapture: now, addedToday: 2, now: now),
                        "This device is offline. Captures wait in your relay.")
+        // Drawn with each short part kept whole, so a line never ends in "· 3".
+        XCTAssertEqual(StreamRingWords.keepingPartsWhole("pushed by Stream, and checked every minute · last capture 5 min ago · 3 added today"),
+                       "pushed by Stream, and checked every minute\u{00A0}· last\u{00A0}capture\u{00A0}5\u{00A0}min\u{00A0}ago\u{00A0}· 3\u{00A0}added\u{00A0}today")
+        XCTAssertEqual(StreamRingWords.keepingPartsWhole(StreamInboxProblem.unreachable.words), StreamInboxProblem.unreachable.words)
     }
 
     func testHowLongAgo() {

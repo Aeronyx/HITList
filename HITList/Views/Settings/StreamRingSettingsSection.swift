@@ -168,7 +168,7 @@ struct StreamRingSettingsSection: View {
                 Text(StreamRingWords.connected)
                     .font(HITType.body)
                     .foregroundStyle(HITColor.text)
-                Text(words)
+                Text(StreamRingWords.keepingPartsWhole(words))
                     .font(HITType.caption)
                     .foregroundStyle(inbox.problem == nil ? Theme.secondaryText : HITColor.dueTomorrow)
                     .fixedSize(horizontal: false, vertical: true)
@@ -260,6 +260,15 @@ enum StreamRingWords {
         parts.append(lastCapture.map { "last capture \(ago($0, now: now))" } ?? "no captures yet")
         if addedToday > 0 { parts.append("\(addedToday) added today") }
         return parts.joined(separator: " · ")
+    }
+
+    /// The line as drawn: a short part ("3 added today", "last capture 5 min ago") never breaks inside itself, and each
+    /// "·" stays at the end of the line before, so a wrap falls between parts ("· 3" at a line's end read as a stray
+    /// number on the Mac; a line opening with "·" on the iPhone).
+    static func keepingPartsWhole(_ line: String) -> String {
+        line.components(separatedBy: " · ")
+            .map { $0.count <= 24 ? $0.replacingOccurrences(of: " ", with: "\u{00A0}") : $0 }
+            .joined(separator: "\u{00A0}· ")
     }
 
     static func sourceWords(_ source: InboxStatus.Source) -> String? {

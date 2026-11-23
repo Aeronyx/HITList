@@ -125,6 +125,7 @@
 		2F81E26CFCF6112502ECC947 /* SharedTasksTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCAF379420B032CE719D2C79 /* SharedTasksTests.swift */; };
 		2F873DA550AA0FE85094E337 /* Inter_18pt-Light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9C832680D598EE37681991A1 /* Inter_18pt-Light.ttf */; };
 		2FF5A3242F9DAE77D98BFBBB /* RareVisitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD386A4BD2EBC4BD7D42B97B /* RareVisitor.swift */; };
+		2FFEC76751E26126C8739C25 /* StreamRingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9F1F5A5C2C03720A29535AD /* StreamRingUITests.swift */; };
 		3001B22517A77E865AE0FBF1 /* Preferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 470E9FA3AA856BA92FBFC6FA /* Preferences.swift */; };
 		314F390CE31AB982B5B4678D /* MacAppearanceSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CB85DA6DE63807E72172494 /* MacAppearanceSection.swift */; };
 		319F2685C0A45338FB35A29C /* CompanionCheers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 302B5D722636EEE0FEE0BEB8 /* CompanionCheers.swift */; };
@@ -1090,6 +1091,7 @@
 		A7B9E9D2B3613BBAC956F8B0 /* LocalBackup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalBackup.swift; sourceTree = "<group>"; };
 		A8604832F30E9E7C59B06C9C /* GeneralSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneralSettingsSection.swift; sourceTree = "<group>"; };
 		A99144E517FB22F3B66072A6 /* TaskRowSpeech.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskRowSpeech.swift; sourceTree = "<group>"; };
+		A9F1F5A5C2C03720A29535AD /* StreamRingUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamRingUITests.swift; sourceTree = "<group>"; };
 		AA06D7A2ABE609BA8A486817 /* FlipboardRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlipboardRules.swift; sourceTree = "<group>"; };
 		AA1BB614B969D4D6C82FE7EE /* HingeCreakSynth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HingeCreakSynth.swift; sourceTree = "<group>"; };
 		AAD451DCD5AC6B49B94C0607 /* HolidayAccent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HolidayAccent.swift; sourceTree = "<group>"; };
@@ -1804,6 +1806,7 @@
 				DACD23C3CE315DB27A101BC8 /* SettingsTidyUITests.swift */,
 				DCB76AF4D5676AE6F706E206 /* ShareExtensionUITests.swift */,
 				D892E34A58AFF7A3EE9A321B /* StrangerSweepUITests.swift */,
+				A9F1F5A5C2C03720A29535AD /* StreamRingUITests.swift */,
 				8A9B7362FAFC8FF6FF427357 /* SweepPolishUITests.swift */,
 				497ECACB37FF5F427681EA06 /* SwitchboardUITests.swift */,
 				BAA2E310A182159BE60C7D9E /* SyncEngineStatusUITests.swift */,
@@ -2706,6 +2709,7 @@
 				E2FAA51761481A222F151CE0 /* SettingsTidyUITests.swift in Sources */,
 				84FF1E12F4EAB33D5B5CCB6E /* ShareExtensionUITests.swift in Sources */,
 				06C17DE0827B597034271AB7 /* StrangerSweepUITests.swift in Sources */,
+				2FFEC76751E26126C8739C25 /* StreamRingUITests.swift in Sources */,
 				BAB2DFFF8F69A96BC781ED9D /* SweepPolishUITests.swift in Sources */,
 				56F5F4059BE7A1AC100FD66B /* SwitchboardUITests.swift in Sources */,
 				DA4D52ED3F73D56CDE79F34A /* SyncEngineStatusUITests.swift in Sources */,
