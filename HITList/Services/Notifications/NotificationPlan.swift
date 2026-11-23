@@ -76,10 +76,13 @@ struct NotificationPlan: Equatable {
         let fingerprint: String
         /// The moment the reminder stands for (`Item.remindAt`); the due time when there is no offset.
         var reminderDate: Date? = nil
+        /// A capture's late reminder (`Arrival`) is remembered under its arrival, not its moment.
+        var ledgerOverride: String? = nil
 
         /// Remembers that this task's reminder for this moment was scheduled, so it is never repeated.
         /// Without an offset that is the due time, as in build 1.
         var ledgerKey: String? {
+            if let ledgerOverride { return ledgerOverride }
             guard let taskID, let at = reminderDate ?? dueDate else { return nil }
             if kind == .reminder { return NotificationPlan.reminderLedgerKey(taskID: taskID, at: at) }
             return NotificationPlan.ledgerKey(taskID: taskID, dueDate: at)
@@ -116,6 +119,8 @@ struct NotificationPlan: Equatable {
         let fireDate: Date
         /// A `.reminder` going out late (it synced in after its moment).
         var isLate = false
+        /// A capture's late reminder (`Arrival`): its ledger key.
+        var ledgerOverride: String? = nil
     }
 
     /// `alreadyScheduled` holds the `ledgerKey`s this device has scheduled before; a task whose
@@ -131,14 +136,33 @@ struct NotificationPlan: Equatable {
     /// one (brief 48), dated or not, within the same horizon and limit; it goes out at that moment, never
     /// repeats, and follows the late rule (set before its moment, missed by less than `lateGrace`: now, once).
     static func make(tasks: [Item], now: Date, limit: Int = defaultLimit, alreadyScheduled: Set<String> = [],
-                     defaultOffsetMinutes: Int = 0, calendar: Calendar = .current) -> NotificationPlan {
+                     defaultOffsetMinutes: Int = 0, calendar: Calendar = .current,
+                     arrivals: [UUID: Arrival] = [:]) -> NotificationPlan {
         let horizon = calendar.date(byAdding: .day, value: horizonDays, to: now)!
         let earliest = now.addingTimeInterval(-lateGrace)
+        // A capture's task, made by the Stream ring's inbox from words said before it arrived (round 3, finding 1): a
+        // moment that fell between the words and the arrival goes off now, once (its own ledger key), however long it
+        // waited in the relay; only while the task is as it arrived. Every other task is planned as before.
+        func arrival(of item: Item) -> Arrival? {
+            guard let arrival = arrivals[item.id], item.updatedAt <= arrival.arrivedAt,
+                  now.timeIntervalSince(arrival.arrivedAt) < lateGrace else { return nil }
+            return arrival
+        }
+        func onArrival(_ item: Item, moment: Date, due: Date?, remindAt: Date, kind: Request.Kind, normalKeys: [String]) -> Candidate? {
+            guard let arrival = arrival(of: item), arrival.saidAt < moment else { return nil }
+            let key = arrivalLedgerKey(taskID: item.id, moment: moment, arrivedAt: arrival.arrivedAt)
+            guard !alreadyScheduled.contains(key), !normalKeys.contains(where: alreadyScheduled.contains) else { return nil }
+            return Candidate(item: item, due: due, remindAt: remindAt, kind: kind, fireDate: now, isLate: kind == .reminder,
+                             ledgerOverride: key)
+        }
         let reminders = tasks.compactMap { item -> Candidate? in
             guard !item.isCompleted, let at = item.reminderDate, at < horizon else { return nil }
             if at > now { return Candidate(item: item, due: item.dueDate, remindAt: at, kind: .reminder, fireDate: at) }
             guard at >= earliest, item.updatedAt < at,
-                  !alreadyScheduled.contains(reminderLedgerKey(taskID: item.id, at: at)) else { return nil }
+                  !alreadyScheduled.contains(reminderLedgerKey(taskID: item.id, at: at)) else {
+                return onArrival(item, moment: at, due: item.dueDate, remindAt: at, kind: .reminder,
+                                 normalKeys: [reminderLedgerKey(taskID: item.id, at: at)])
+            }
             return Candidate(item: item, due: item.dueDate, remindAt: at, kind: .reminder, fireDate: now, isLate: true)
         }
         let candidates = (tasks
@@ -158,7 +182,12 @@ struct NotificationPlan: Equatable {
                 // Late: only if it was set up before it was due (an edit made after the due time means the
                 // user knows) and no reminder for this due time was ever scheduled here.
                 guard due >= earliest, item.updatedAt < due, !alreadyScheduled.contains(key),
-                      !alreadyScheduled.contains(ledgerKey(taskID: item.id, dueDate: due)) else { return nil }
+                      !alreadyScheduled.contains(ledgerKey(taskID: item.id, dueDate: due)) else {
+                    // A capture said before it was due, arriving after: as a task typed when it was said would have
+                    // reminded by now (at the due time, or inside the offset), it goes off on arrival.
+                    return onArrival(item, moment: due, due: due, remindAt: remindAt, kind: .overdue,
+                                     normalKeys: [key, ledgerKey(taskID: item.id, dueDate: due)])
+                }
                 return Candidate(item: item, due: due, remindAt: remindAt, kind: .overdue, fireDate: now)
             } + reminders)
             .sorted { a, b in
@@ -185,7 +214,7 @@ struct NotificationPlan: Equatable {
             if c.remindAt != due { parts.append(String(Int(c.remindAt.timeIntervalSince1970))) }
             return Request(identifier: c.item.id.uuidString, kind: c.kind, taskID: c.item.id,
                            title: title, body: body, triggerDate: c.fireDate, dueDate: due,
-                           fingerprint: fingerprint(parts), reminderDate: c.remindAt)
+                           fingerprint: fingerprint(parts), reminderDate: c.remindAt, ledgerOverride: c.ledgerOverride)
         }
         if let first = dropped.first?.fireDate {
             let sameDay = dropped.filter { calendar.isDate($0.fireDate, inSameDayAs: first) }.count
@@ -208,7 +237,7 @@ struct NotificationPlan: Equatable {
         if c.isLate { parts.append("late") }
         return Request(identifier: c.item.id.uuidString + reminderSuffix, kind: .reminder, taskID: c.item.id,
                        title: c.item.title, body: body, triggerDate: c.fireDate, dueDate: c.due,
-                       fingerprint: fingerprint(parts), reminderDate: c.remindAt)
+                       fingerprint: fingerprint(parts), reminderDate: c.remindAt, ledgerOverride: c.ledgerOverride)
     }
 
     /// The task's title; "in 15 min · Haircut" when the reminder goes out ahead of the due time (the
@@ -304,6 +333,39 @@ struct NotificationPlan: Equatable {
             hash = hash &* 0x0000_0100_0000_01b3
         }
         return String(hash, radix: 16)
+    }
+}
+
+extension NotificationPlan {
+    /// A task the Stream ring's inbox made at `arrivedAt` from words said at `saidAt` (round 3, finding 1). Kept an hour
+    /// (`lateGrace`) after it arrived.
+    struct Arrival: Codable, Equatable {
+        let taskID: UUID
+        let saidAt: Date
+        let arrivedAt: Date
+    }
+
+    static let arrivalsKey = "notifications.arrivals"
+
+    /// Written by the inbox right after a capture's save, before the reschedule that save starts (2 s on) reads it.
+    static func recordArrival(_ arrival: Arrival, defaults: UserDefaults = AppGroup.defaults) {
+        var kept = arrivals(now: arrival.arrivedAt, defaults: defaults)
+        kept[arrival.taskID] = arrival
+        defaults.set(try? JSONEncoder().encode(kept.values.sorted { $0.arrivedAt < $1.arrivedAt }), forKey: arrivalsKey)
+    }
+
+    /// The arrivals of the last hour, by task.
+    static func arrivals(now: Date, defaults: UserDefaults = AppGroup.defaults) -> [UUID: Arrival] {
+        guard let data = defaults.data(forKey: arrivalsKey),
+              let list = try? JSONDecoder().decode([Arrival].self, from: data) else { return [:] }
+        return Dictionary(list.filter { now.timeIntervalSince($0.arrivedAt) < lateGrace }.map { ($0.taskID, $0) },
+                          uniquingKeysWith: { _, last in last })
+    }
+
+    /// A capture's late reminder is remembered under its arrival, so the ledger keeps it as long as the arrival is kept
+    /// (`prunedLedger` reads the time after the "@").
+    static func arrivalLedgerKey(taskID: UUID, moment: Date, arrivedAt: Date) -> String {
+        "\(taskID.uuidString).arrival\(Int(moment.timeIntervalSince1970))@\(Int(arrivedAt.timeIntervalSince1970))"
     }
 }
 

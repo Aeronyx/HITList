@@ -350,9 +350,11 @@ enum NotificationScheduler {
                   due >= now.addingTimeInterval(-NotificationPlan.lateGrace) else { return nil }
             return NotificationPlan.ledgerKey(taskID: item.id, dueDate: remindAt)
         })
-        // `items` already carry the default offset (the ledger seed above needs it too).
+        // `items` already carry the default offset (the ledger seed above needs it too). The Stream ring's captures of
+        // the last hour come with when they were said (round 3: what fell due before they arrived goes off now).
         var plan = isEnabled
-            ? NotificationPlan.make(tasks: planned, now: now, alreadyScheduled: ledger, calendar: calendar)
+            ? NotificationPlan.make(tasks: planned, now: now, alreadyScheduled: ledger, calendar: calendar,
+                                    arrivals: NotificationPlan.arrivals(now: now))
             : NotificationPlan(requests: [], droppedCount: 0)
         // One more request at most (61 + 1 stays under the system's 64), its text computed now.
         let summary = summaryOn

@@ -422,7 +422,13 @@ final class StreamInbox {
             let before = Set(context.insertedModelsArray.map(\.persistentModelID))
             settings.addingNow = .init(id: item.id, title: Self.expectedTitle(text, now: said, in: context), startedAt: clock())
             do {
-                _ = try addTask(text, said, context)
+                let taskID = try addTask(text, said, context)
+                // Said earlier than now: a reminder that fell due between the words and their arrival goes off now
+                // (round 3, finding 1; `NotificationPlan.Arrival`).
+                let arrived = clock()
+                if said < arrived {
+                    NotificationPlan.recordArrival(.init(taskID: taskID, saidAt: said, arrivedAt: arrived), defaults: settings.defaults)
+                }
                 added.append(item.id)
                 handled.append(item.id)
                 result.added += 1

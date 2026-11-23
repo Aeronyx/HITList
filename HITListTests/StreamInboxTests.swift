@@ -389,6 +389,99 @@ final class StreamInboxTests: XCTestCase {
         XCTAssertEqual(request.triggerDate, task.dueDate)
     }
 
+    /// The start of the minute `date` is in.
+    private func minute(_ date: Date) -> Date {
+        Date(timeIntervalSinceReferenceDate: (date.timeIntervalSinceReferenceDate / 60).rounded(.down) * 60)
+    }
+
+    /// "9:05am", as George would say it.
+    private func spoken(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "h:mma"
+        formatter.amSymbol = "am"
+        formatter.pmSymbol = "pm"
+        return formatter.string(from: date)
+    }
+
+    private func task(startingWith words: String) throws -> TaskItem {
+        try XCTUnwrap(try tasks().first { $0.title.hasPrefix(words) }, "“\(words)…” was made")
+    }
+
+    /// Round 3, finding 1: what fell due between the words and their arrival goes off on arrival, as a notification now
+    /// and once: a reminder moment ("remind me in 10 minutes" said 12 minutes ago), a due time from now ("in 2 hours"
+    /// said 2 h 5 min ago), a clock time ("at 9:05" said at 8:55 and taken at 9:10).
+    func testALateCapturesReminderGoesOffOnArrival() async throws {
+        let now = Date()
+        let fiveAgo = minute(now.addingTimeInterval(-300))
+        relay.add("car", "Move the car, remind me in 10 minutes", said: now.addingTimeInterval(-12 * 60))
+        relay.add("mom", "Call mom in 2 hours", said: now.addingTimeInterval(-(2 * 3600 + 5 * 60)))
+        relay.add("sam", "Call Sam at \(spoken(fiveAgo))", said: fiveAgo.addingTimeInterval(-10 * 60))
+        let inbox = try await connected()
+        await inbox.check(.checkNow)
+        let car = try task(startingWith: "Move the car")
+        let mom = try task(startingWith: "Call mom")
+        let sam = try task(startingWith: "Call Sam")
+        XCTAssertEqual(try XCTUnwrap(car.reminderDate).timeIntervalSince(now), -120, accuracy: 2, "said + 10 min")
+        XCTAssertEqual(try XCTUnwrap(mom.dueDate).timeIntervalSince(now), -300, accuracy: 61, "said + 2 h")
+        XCTAssertEqual(sam.dueDate, fiveAgo)
+
+        let planNow = Date()
+        let arrivals = NotificationPlan.arrivals(now: planNow, defaults: defaults)
+        XCTAssertEqual(Set(arrivals.keys), [car.id, mom.id, sam.id], "each capture's task, with when it was said")
+        let items = [car, mom, sam].map { NotificationPlan.Item($0, now: planNow) }
+        let plan = NotificationPlan.make(tasks: items, now: planNow, arrivals: arrivals)
+        for made in [car, mom, sam] {
+            let request = try XCTUnwrap(plan.requests.first { $0.taskID == made.id }, "\(made.title) goes off")
+            XCTAssertEqual(request.triggerDate, planNow, "\(made.title): on arrival")
+        }
+        XCTAssertEqual(plan.requests.first { $0.taskID == car.id }?.kind, .reminder)
+        XCTAssertEqual(plan.requests.first { $0.taskID == mom.id }?.kind, .overdue)
+
+        let ledger = NotificationPlan.prunedLedger(Set(plan.requests.compactMap(\.ledgerKey)), now: planNow)
+        let again = NotificationPlan.make(tasks: items, now: planNow.addingTimeInterval(5), alreadyScheduled: ledger,
+                                          arrivals: arrivals)
+        XCTAssertTrue(again.requests.isEmpty, "once: the next reschedule finds them announced")
+        XCTAssertTrue(NotificationPlan.make(tasks: items, now: planNow).requests.isEmpty,
+                      "the same tasks without their arrival (typed late, or another device's import): nothing, as before")
+    }
+
+    /// Round 3, finding 1: a capture's reminder still ahead when it arrives keeps its time.
+    func testACapturesReminderStillAheadKeepsItsTime() async throws {
+        let said = Date().addingTimeInterval(-3 * 60)
+        relay.add("car", "Move the car, remind me in 10 minutes", said: said)
+        let inbox = try await connected()
+        await inbox.check(.checkNow)
+        let car = try task(startingWith: "Move the car")
+        let planNow = Date()
+        let plan = NotificationPlan.make(tasks: [NotificationPlan.Item(car, now: planNow)], now: planNow,
+                                         arrivals: NotificationPlan.arrivals(now: planNow, defaults: defaults))
+        let request = try XCTUnwrap(plan.requests.first { $0.taskID == car.id })
+        XCTAssertEqual(request.kind, .reminder)
+        XCTAssertEqual(request.triggerDate.timeIntervalSince(said), 600, accuracy: 1, "at its moment, seven minutes on")
+    }
+
+    /// Round 3, finding 1: a capture said and taken in the same minute is planned as if typed then: nothing fell due
+    /// between the words and their arrival, so nothing goes off on arrival.
+    func testACaptureSaidAndTakenInTheSameMinuteIsPlannedAsIfTyped() async throws {
+        let now = Date()
+        let thisMinute = minute(now)
+        let said = thisMinute.addingTimeInterval(now.timeIntervalSince(thisMinute) / 2)
+        relay.add("car", "Move the car, remind me in 10 minutes", said: said)
+        relay.add("sam", "Call Sam at \(spoken(thisMinute))", said: said)
+        let inbox = try await connected()
+        await inbox.check(.checkNow)
+        let planNow = Date()
+        let items = try tasks().map { NotificationPlan.Item($0, now: planNow) }
+        XCTAssertEqual(items.count, 2)
+        let withArrivals = NotificationPlan.make(tasks: items, now: planNow,
+                                                 arrivals: NotificationPlan.arrivals(now: planNow, defaults: defaults))
+        XCTAssertEqual(withArrivals, NotificationPlan.make(tasks: items, now: planNow), "as if typed")
+        let car = try task(startingWith: "Move the car")
+        let request = try XCTUnwrap(withArrivals.requests.first { $0.taskID == car.id })
+        XCTAssertEqual(request.triggerDate.timeIntervalSince(said), 600, accuracy: 1)
+    }
+
     // MARK: The Keychain
 
     func testTheKeyIsKeptInTheKeychainForThisDeviceOnly() throws {
