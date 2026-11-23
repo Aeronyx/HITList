@@ -370,14 +370,16 @@ public struct DateExpressionParser: Sendable {
     /// month or a unit follows ("fri 5 jan", "tom 3 weeks").
     ///
     /// As people say them (brief 175): "5 p.m.", "5 P.M.", "9:30 a.m.", "5pm.", "5 p. m." are the right half of
-    /// the day, every dot taken in. And after "at", an hour from 1 to 6 with no am or pm (`shortHour`) is read here
-    /// as the afternoon (`afternoonAfterAt`): nobody means "pick up the dry cleaning at 6" at six in the morning.
-    /// Quick add reads it from the whole text instead (`QuickAddParser.shortHour`: "every morning at 6" is 6 am).
-    /// "at 7" to "at 11", "at 06:30" (a 24-hour clock's leading zero) and a bare hour after a date word
-    /// ("tomorrow 5") stay as typed. A time field passes `afternoonAfterAt: false`: it reads a clock, digits as
-    /// they stand.
+    /// the day, every dot taken in. And after "at", an hour from 1 to 6 with no am or pm is read here as the
+    /// afternoon (`afternoonAfterAt`): nobody means "pick up the dry cleaning at 6" at six in the morning. "at 7" to
+    /// "at 11", "at 06:30" (a 24-hour clock's leading zero) and a bare hour after a date word ("tomorrow 5") stay as
+    /// typed. A time field passes `afternoonAfterAt: false`: it reads a clock, digits as they stand.
+    ///
+    /// `openHour`: after "at", an hour from 1 to 11 with no am or pm and no leading zero, whose half of the day the
+    /// words around it can say: quick add reads it from the whole text (`QuickAddParser.hour(_:_:words:hasDay:)`:
+    /// "every morning at 6" is 6 am, "dinner at 8" 8 pm; the reviews of brief 175).
     public func matchTime(in words: [String], at i: Int, allowBareHour: Bool = false,
-                          afternoonAfterAt: Bool = true) -> (hour: Int, minute: Int, consumed: Int, shortHour: Bool)? {
+                          afternoonAfterAt: Bool = true) -> (hour: Int, minute: Int, consumed: Int, openHour: Bool)? {
         guard i < words.count else { return nil }
         let w = Self.normalize(words[i])
         let next: String? = i + 1 < words.count ? Self.normalize(words[i + 1]) : nil
@@ -393,8 +395,8 @@ public struct DateExpressionParser: Sendable {
                    let t2 = Self.parseClock(n + meridiem, allowBareHour: true) {
                     return (t2.hour, t2.minute, 2 + length, false)
                 }
-                let short = Self.isAfternoonHour(n, hour: t.hour)
-                return (short && afternoonAfterAt ? t.hour + 12 : t.hour, t.minute, 2, short)
+                let afternoon = afternoonAfterAt && Self.isAfternoonHour(n, hour: t.hour)
+                return (afternoon ? t.hour + 12 : t.hour, t.minute, 2, Self.isOpenHour(n, hour: t.hour))
             }
             if n == "noon" { return (12, 0, 2, false) }
             if n == "midnight" { return (0, 0, 2, false) }
@@ -437,8 +439,14 @@ public struct DateExpressionParser: Sendable {
 
     /// "at 5", "at 5:30": an hour from 1 to 6 with no am or pm and no leading zero ("at 06:00" is a 24-hour clock's).
     static func isAfternoonHour(_ word: String, hour: Int) -> Bool {
+        (1...6).contains(hour) && isOpenHour(word, hour: hour)
+    }
+
+    /// "at 5", "at 9:30": an hour from 1 to 11 with no am or pm and no leading zero, which could be either half of the
+    /// day (`matchTime`'s `openHour`).
+    static func isOpenHour(_ word: String, hour: Int) -> Bool {
         let s = normalize(word)
-        guard (1...6).contains(hour), let first = s.first, first != "0" else { return false }
+        guard (1...11).contains(hour), let first = s.first, first != "0" else { return false }
         return s.allSatisfy { $0.isASCII && ($0.isNumber || $0 == ":") }
     }
 

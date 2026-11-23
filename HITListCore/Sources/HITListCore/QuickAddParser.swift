@@ -74,7 +74,7 @@ public struct QuickAddParser: Sendable {
     /// ("!15mb", "!at") counts without a time typed beside it. Off for quick add, where the text is the task.
     public var dueTimeIsSet = false
     /// The task already has a day of its own (the task editor's task with a date, an Upcoming day's row): "at 1" to
-    /// "at 6" with no am or pm is the afternoon, as beside a day typed (`shortHour`). Off for quick add on its own.
+    /// "at 6" with no am or pm is the afternoon, as beside a day typed (`hour(_:_:words:hasDay:)`). Off for quick add on its own.
     public var dueDayIsSet = false
 
     public init(now: Date = Date(), calendar: Calendar = .current, knownProjects: [String] = [], knownLabels: [String] = [],
@@ -151,8 +151,8 @@ public struct QuickAddParser: Sendable {
         var consumed = [Bool](repeating: false, count: words.count)
         var result = QuickAddResult()
         var time: (Int, Int)? = nil
-        /// The time is "at 1" to "at 6" with no am or pm, its hour as typed: settled once the text is read (`shortHour`).
-        var timeIsShort = false
+        /// The time is "at 1" to "at 11" with no am or pm, its hour as typed: settled once the text is read (`hour`).
+        var timeIsOpen = false
         var date: Date? = nil
         /// "in 2 hours": the due moment itself, unless a time is typed too (then that time on its day).
         var moment: Date? = nil
@@ -240,7 +240,7 @@ public struct QuickAddParser: Sendable {
                 case .fromNow(let span):
                     ownReminder = .span(span); win(i, n, .reminder, slot: .reminderFromNow); spokenClock = nil
                 case .at(let clock):
-                    ownReminder = .clock(clock, short: reading.shortHour); win(i, n, .reminder, slot: .reminderFromNow)
+                    ownReminder = .clock(clock, open: reading.openHour); win(i, n, .reminder, slot: .reminderFromNow)
                     spokenClock = w.hasPrefix("!") ? nil : result.tokens.count - 1
                 case .beforeDue(let minutes):
                     result.reminderOffsetMinutes = minutes; win(i, n, .reminder, slot: .reminderBeforeDue)
@@ -264,7 +264,7 @@ public struct QuickAddParser: Sendable {
             }
             // Time
             if let t = dateParser.matchTime(in: lowers, at: i, afternoonAfterAt: false) {
-                time = (t.hour, t.minute); timeIsShort = t.shortHour; win(i, t.consumed, .time); i += t.consumed; continue
+                time = (t.hour, t.minute); timeIsOpen = t.openHour; win(i, t.consumed, .time); i += t.consumed; continue
             }
             // Date (a plain day drops the moment of an earlier "in 2 hours"); "starting friday" too
             if let (pd, n, isStart) = matchDateOrStart(lowers, at: i) {
@@ -275,7 +275,7 @@ public struct QuickAddParser: Sendable {
                 // where "9" would read 09:00 (brief 127): it stays in the title.
                 if time == nil, !isTonight, i < words.count, !consumed[i],
                    let t = dateParser.matchTime(in: lowers, at: i, allowBareHour: true, afternoonAfterAt: false) {
-                    time = (t.hour, t.minute); timeIsShort = t.shortHour; win(i, t.consumed, .time); i += t.consumed
+                    time = (t.hour, t.minute); timeIsOpen = t.openHour; win(i, t.consumed, .time); i += t.consumed
                 }
                 continue
             }
@@ -286,10 +286,10 @@ public struct QuickAddParser: Sendable {
         // day or time of the task's own (typed, or the editor's task's), is when the task is due, reminded at the time
         // (the review of brief 175: it made an undated task). Its words are a time token, or a date token with their
         // day. A repeat typed beside it gives the day. "!4pm" stays a reminder moment of its own.
-        if case .clock(let clock, let short)? = ownReminder, let index = spokenClock, date == nil, time == nil, moment == nil,
+        if case .clock(let clock, let open)? = ownReminder, let index = spokenClock, date == nil, time == nil, moment == nil,
            !dueDayIsSet {
             time = (clock.hour, clock.minute)
-            timeIsShort = short
+            timeIsOpen = open
             if let day = clock.day { date = dateParser.day(day) }
             ownReminder = nil
             result.tokens[index].kind = clock.day == nil ? .time : .date
@@ -333,7 +333,7 @@ public struct QuickAddParser: Sendable {
         // Resolve date/time. A date the user typed is kept as typed, even in the past ("yesterday").
         let dateWasTyped = date != nil
         let hasDay = dateWasTyped || result.recurrence != nil || dueDayIsSet
-        if timeIsShort, let typed = time { time = (shortHour(typed.0, typed.1, words: lowers, hasDay: hasDay), typed.1) }
+        if timeIsOpen, let typed = time { time = (hour(typed.0, typed.1, words: lowers, hasDay: hasDay), typed.1) }
         if date == nil, let rule = result.recurrence {
             date = rule.firstOccurrence(onOrAfter: dateParser.today, calendar: dateParser.calendar)
         } else if dateIsStart, let start = date, let rule = result.recurrence {
@@ -373,8 +373,8 @@ public struct QuickAddParser: Sendable {
         switch ownReminder {
         case .span(let span)?:
             result.reminderDate = span.date(from: dateParser.now, calendar: dateParser.calendar)
-        case .clock(var clock, let short)?:
-            if short { clock.hour = shortHour(clock.hour, clock.minute, words: lowers, hasDay: hasDay || clock.day != nil) }
+        case .clock(var clock, let open)?:
+            if open { clock.hour = hour(clock.hour, clock.minute, words: lowers, hasDay: hasDay || clock.day != nil) }
             result.reminderClock = clock
             result.reminderDate = clock.date(dueDay: result.dueDate, now: dateParser.now, calendar: dateParser.calendar)
         case nil:
@@ -391,28 +391,56 @@ public struct QuickAddParser: Sendable {
         case reminderFromNow, reminderBeforeDue
     }
 
-    /// The task's own reminder moment as typed. `short`: the clock is "at 1" to "at 6" with no am or pm, its hour as
-    /// typed (`shortHour`).
+    /// The task's own reminder moment as typed. `open`: the clock is "at 1" to "at 11" with no am or pm, its hour as
+    /// typed (`hour(_:_:words:hasDay:)`).
     enum OwnReminder {
         case span(ReminderSpan)
-        case clock(ReminderClock, short: Bool)
+        case clock(ReminderClock, open: Bool)
     }
 
-    /// The hour "at 1" to "at 6" with no am or pm stands for (`hour` as typed), a due time's or a reminder clock's:
-    /// what decides is in the rest of the text (brief 175; the supervisor's decision on its review, refined after it).
-    /// "morning" or "night" among the words: as typed, on a 24-hour clock ("Meditate every morning at 6", "Take pills
-    /// every night at 1", "Catch the bus at 6 in the morning"). Else beside a day (`hasDay`: typed, a repeat's, the task's
-    /// own) the afternoon ("tomorrow at 5", "tonight at 6"). Else 1 to 4 are the afternoon too, today's while it is
-    /// still ahead and else tomorrow's (nobody means "Lunch at 1" at one in the morning), and 5 or 6 the next one to
-    /// come, morning or afternoon, as they can mean early morning: "at 6" is 6 pm at 2 pm, 6 am tomorrow at 10 pm, 6 am
-    /// today at 5 am.
-    func shortHour(_ hour: Int, _ minute: Int, words: [String], hasDay: Bool) -> Int {
-        let sayings: Set<String> = ["morning", "mornings", "night", "nights"]
-        if words.contains(where: { sayings.contains(DateExpressionParser.normalize($0)) }) { return hour }
+    /// The hour "at 1" to "at 11" with no am or pm stands for (`hour` as typed), a due time's or a reminder clock's:
+    /// what decides is in the rest of the text (brief 175; the supervisor's decisions on its two reviews).
+    /// - A morning cue among the words (wake, waking, wake up, get up, breakfast, sunrise, dawn, early, morning): as
+    ///   typed ("Wake up at 6 tomorrow", "Breakfast at 6:30", "Early flight at 6", "Meditate every morning at 6").
+    /// - An evening cue (night, tonight, evening, dinner, supper): 5 to 11 the evening ("Game night at 6", "Dinner at 8",
+    ///   "Remind me tonight at 9"); 1 to 4 as typed with "night" ("Take pills every night at 1"), else the afternoon
+    ///   ("Dinner at 4").
+    /// - No cue: 7 to 11 as typed. 1 to 6 beside a day (`hasDay`: typed, a repeat's, the task's own) the afternoon
+    ///   ("tomorrow at 5"); with no day, 1 to 4 the afternoon, today's while it is still ahead and else tomorrow's
+    ///   ("Lunch at 1"), and 5 or 6 the next one to come, as they can mean early morning: "at 6" is 6 pm at 2 pm, 6 am
+    ///   tomorrow at 10 pm, 6 am today at 5 am.
+    func hour(_ hour: Int, _ minute: Int, words: [String], hasDay: Bool) -> Int {
+        let cues = DayHalfCues(words)
+        if cues.morning { return hour }
+        if cues.evening { return hour >= 5 || !cues.night ? hour + 12 : hour }
+        guard hour <= 6 else { return hour }
         if hasDay || hour <= 4 { return hour + 12 }
         let today = dateParser.today, now = dateParser.now
         if dateParser.date(today, hour: hour, minute: minute) >= now { return hour }
         return dateParser.date(today, hour: hour + 12, minute: minute) >= now ? hour + 12 : hour
+    }
+
+    /// The words in a text that say which half of the day an open hour is (`hour(_:_:words:hasDay:)`), as words: "Nightly"
+    /// is none, nor "#Dinner".
+    struct DayHalfCues {
+        var morning = false
+        var evening = false
+        /// "night" itself, with which 1 to 4 stay in the small hours.
+        var night = false
+
+        init(_ words: [String]) {
+            let plain = words.map { $0.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: ",.;:!?\"'()")) }
+            let mornings: Set<String> = ["wake", "wakes", "waking", "woke", "breakfast", "sunrise", "dawn", "early", "morning",
+                                         "mornings"]
+            let evenings: Set<String> = ["night", "nights", "tonight", "evening", "evenings", "dinner", "supper"]
+            for (k, word) in plain.enumerated() {
+                if mornings.contains(word) { morning = true }
+                // "get up", "gets up", "getting up"
+                if ["get", "gets", "getting"].contains(word), k + 1 < plain.count, plain[k + 1] == "up" { morning = true }
+                if evenings.contains(word) { evening = true }
+                if word == "night" || word == "nights" { night = true }
+            }
+        }
     }
 
     static func priority(from w: String) -> Priority? {

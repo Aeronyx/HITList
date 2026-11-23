@@ -792,6 +792,67 @@ final class ReminderWordsTests: XCTestCase {
         XCTAssertEqual(ReminderPhrase(token: "!at 4"), .at(ReminderClock(hour: 16, minute: 0)))
     }
 
+    /// Cues in the words decide the half of the day for "at 1" to "at 11" with no am or pm (the supervisor's decision on
+    /// the second review of brief 175, finding 3). Morning cues (wake, waking, wake up, get up, breakfast, sunrise,
+    /// dawn, early, morning): as typed. Evening cues (night, tonight, evening, dinner, supper): 5 to 11 the evening; 1 to
+    /// 4 with "night" as typed, with the others the afternoon. No cue: the rule before (1 to 4 the afternoon, 5 and 6 the
+    /// next to come with no day, 7 to 11 as typed). Monday 2026-11-23, Eastern.
+    func testCuesInTheWordsDecideTheHalfOfTheDay() throws {
+        var ny = Calendar(identifier: .gregorian)
+        ny.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+        func at(_ m: Int, _ d: Int, _ h: Int, _ min: Int) -> Date {
+            ny.date(from: DateComponents(year: 2026, month: m, day: d, hour: h, minute: min))!
+        }
+        func due(_ text: String, _ h: Int = 14, _ min: Int = 10) -> Date? {
+            QuickAddParser(now: at(11, 23, h, min), calendar: ny).parse(text).dueDate
+        }
+        // Morning cues.
+        XCTAssertEqual(due("Wake up at 6 tomorrow"), at(11, 24, 6, 0))
+        XCTAssertEqual(due("Breakfast at 6:30 tomorrow"), at(11, 24, 6, 30))
+        XCTAssertEqual(due("Early flight at 6"), at(11, 24, 6, 0))
+        XCTAssertEqual(due("Get up at 5 tomorrow"), at(11, 24, 5, 0))
+        XCTAssertEqual(due("Sunrise hike at 6 friday"), at(11, 27, 6, 0))
+        XCTAssertEqual(due("Breakfast meeting at 9"), at(11, 24, 9, 0))
+        let wake = QuickAddParser(now: at(11, 23, 14, 10), calendar: ny).parse("Remind me at 5 to wake up")
+        XCTAssertEqual(wake.title, "Wake up")
+        XCTAssertEqual(wake.dueDate, at(11, 24, 5, 0))
+        // Evening cues: 5 to 11 the evening.
+        XCTAssertEqual(due("Game night at 6"), at(11, 23, 18, 0))
+        XCTAssertEqual(due("Movie night Friday at 6"), at(11, 27, 18, 0))
+        XCTAssertEqual(due("Dinner at 8"), at(11, 23, 20, 0))
+        XCTAssertEqual(due("Call grandma tonight at 7"), at(11, 23, 19, 0), "tonight at 7 was 7 am")
+        XCTAssertEqual(due("Supper at 6:30"), at(11, 23, 18, 30))
+        XCTAssertEqual(due("Call at 9 this evening"), at(11, 23, 21, 0))
+        let trash = QuickAddParser(now: at(11, 23, 14, 10), calendar: ny).parse("Remind me tonight at 9 to take out the trash")
+        XCTAssertEqual(trash.title, "Take out the trash")
+        XCTAssertEqual(trash.dueDate, at(11, 23, 21, 0))
+        XCTAssertEqual(trash.reminderOffsetMinutes, 0)
+        // 1 to 4: "night" as typed; "dinner" and "evening" the afternoon.
+        XCTAssertEqual(due("Take pills every night at 1"), at(11, 24, 1, 0))
+        XCTAssertEqual(due("Dinner at 4"), at(11, 23, 16, 0))
+        XCTAssertEqual(due("Call at 3 this evening"), at(11, 23, 15, 0))
+        // No cue: as last round.
+        XCTAssertEqual(due("Lunch at 1", 14, 30), at(11, 24, 13, 0))
+        XCTAssertEqual(due("Call at 2", 9, 0), at(11, 23, 14, 0))
+        XCTAssertEqual(due("Pick up dry cleaning at 6"), at(11, 23, 18, 0))
+        XCTAssertEqual(due("Wake up at 6", 22, 0), at(11, 24, 6, 0))
+        XCTAssertEqual(due("Run at 5", 3, 0), at(11, 23, 5, 0))
+        XCTAssertEqual(due("Run at 5"), at(11, 23, 17, 0))
+        XCTAssertEqual(due("Run at 9"), at(11, 24, 9, 0))
+        // As words only: a cue inside another word or a group's name is none.
+        XCTAssertEqual(due("Nightly backup at 6"), at(11, 23, 18, 0), "no cue: the next 6 to come")
+        XCTAssertEqual(due("Call #Dinner at 8"), at(11, 24, 8, 0))
+        // Reminder clocks read the same way.
+        func reminder(_ text: String) -> Date? { QuickAddParser(now: at(11, 23, 14, 10), calendar: ny).parse(text).reminderDate }
+        XCTAssertEqual(reminder("Dinner !at 7"), at(11, 23, 19, 0))
+        XCTAssertEqual(reminder("Breakfast !at 7"), at(11, 24, 7, 0))
+        XCTAssertEqual(reminder("Game night friday !at 6"), at(11, 27, 18, 0))
+        XCTAssertEqual(reminder("Pills every night !at 1"), at(11, 24, 1, 0))
+        // Alone, a phrase reads 1 to 6 as the afternoon and 7 to 11 as typed.
+        XCTAssertEqual(ReminderPhrase(token: "!at 4"), .at(ReminderClock(hour: 16, minute: 0)))
+        XCTAssertEqual(ReminderPhrase(token: "!at 9"), .at(ReminderClock(hour: 9, minute: 0)))
+    }
+
     /// "reminder" with no "me" and no "!" is weak evidence: plenty of titles hold the word. It takes only the relative
     /// forms (before, in, at the time), never a clock time or a day (the supervisor, round 36); "remind me" keeps them
     /// all. Monday 2026-11-23, 14:10 Eastern.

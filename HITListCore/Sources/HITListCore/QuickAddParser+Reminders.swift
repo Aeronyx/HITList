@@ -23,27 +23,29 @@ import Foundation
 // `!0`) still work (`ReminderPhrase(code:)`).
 extension ReminderPhrase {
     /// One reading of a reminder phrase: what it means, how many words it takes, and whether its clock time is "at 1"
-    /// to "at 6" with no am or pm (`shortHour`), which `phrase` holds as typed (24-hour). The parser settles that hour
-    /// from the whole text (`QuickAddParser.shortHour`: "every morning, remind me at 5" is 5 am); read alone
-    /// (`match`), it is the afternoon.
+    /// to "at 11" with no am or pm (`openHour`), which `phrase` holds as typed (24-hour). The parser settles that hour
+    /// from the whole text (`QuickAddParser.hour(_:_:words:hasDay:)`: "every morning, remind me at 5" is 5 am, "dinner
+    /// !at 7" 7 pm); read alone (`match`), 1 to 6 are the afternoon.
     struct Reading {
         var phrase: ReminderPhrase
         var length: Int
-        var shortHour = false
+        var openHour = false
     }
 
     /// The reminder phrase starting at `words[i]` (the parser's lowercased words, punctuation as typed): what it means
     /// and how many words it takes, the longest reading. `atStart`: the words open the text, where a "to" right after a
-    /// phrase said in words belongs to it ("Remind me in 30 minutes to call mom" leaves "Call mom"). A short hour with
-    /// nothing around it to say otherwise is the afternoon ("!at 4" is 4 pm).
+    /// phrase said in words belongs to it ("Remind me in 30 minutes to call mom" leaves "Call mom"). An hour from 1 to 6
+    /// with nothing around it to say otherwise is the afternoon ("!at 4" is 4 pm).
     static func match(_ words: [String], at i: Int, atStart: Bool = false) -> (ReminderPhrase, Int)? {
         guard let reading = reading(words, at: i, atStart: atStart) else { return nil }
-        guard reading.shortHour, case .at(var clock) = reading.phrase else { return (reading.phrase, reading.length) }
+        guard reading.openHour, case .at(var clock) = reading.phrase, (1...6).contains(clock.hour) else {
+            return (reading.phrase, reading.length)
+        }
         clock.hour += 12
         return (.at(clock), reading.length)
     }
 
-    /// `match`, with a short hour as typed and said to be one. `afterPhrase`: the word before `words[i]` belongs to a
+    /// `match`, with an open hour as typed and said to be one. `afterPhrase`: the word before `words[i]` belongs to a
     /// phrase already read (a time, a date, a priority), which ends the sentence before it as punctuation does.
     static func reading(_ words: [String], at i: Int, atStart: Bool = false, afterPhrase: Bool = false) -> Reading? {
         guard i < words.count else { return nil }
@@ -172,7 +174,7 @@ extension ReminderPhrase {
         return (.fromNow(reach), span.consumed + 1)
     }
 
-    /// "4pm", "4:00 pm", "4 p.m.", "16:00", "noon", "at 4pm", "at 4" (a short hour, read as a due time's is), and a
+    /// "4pm", "4:00 pm", "4 p.m.", "16:00", "noon", "at 4pm", "at 4" (an open hour, read as a due time's is), and a
     /// day before it, with a part of the day after that if said: "today 4pm", "tomorrow 9am", "tomorrow at 9", "tomorrow
     /// morning at 6". With `trailingDay` (said with "remind me"), the day may come after the time instead: "at 5
     /// tomorrow", "at 6 tomorrow morning", "at 9 tonight" (the second review of brief 175). A bare "4" is not one ("!15"
@@ -200,7 +202,7 @@ extension ReminderPhrase {
             if isPartOfDay(k) { k += 1 }
         }
         return Reading(phrase: .at(ReminderClock(hour: time.hour, minute: time.minute, day: day)),
-                       length: k - j, shortHour: time.shortHour)
+                       length: k - j, openHour: time.openHour)
     }
 }
 
