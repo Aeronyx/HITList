@@ -26,7 +26,9 @@ struct AddTaskIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<TaskEntity> & ProvidesDialog {
         let context = try IntentStore.context()
-        let added = try IntentActions.addTask(text, group: group?.id, in: context)
+        // Brief 176: spoken words as the card's ("Task: buy milk tomorrow." → "Buy milk tomorrow"), as the ring's are.
+        guard let spoken = SpokenTask.text(from: text) else { throw IntentFailure.emptyTitle }
+        let added = try IntentActions.addTask(spoken, group: group?.id, in: context)
         guard let task = IntentActions.task(id: added.id, in: context) else { throw IntentFailure.taskNotFound }
         return .result(value: TaskEntity(task), dialog: IntentDialog(stringLiteral: added.dialog))
     }

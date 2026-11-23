@@ -16,7 +16,9 @@ final class SettingsTidyUITests: XCTestCase {
     }
 
     /// The pages in the first screen's order, by the identifier of their row.
-    private static let pages = ["general", "reminders", "extras", "iCloud", "claude", "about"]
+    private static let pages = ["general", "reminders", "extras", "iCloud", "claude", "streamRing", "about"]
+    /// The rows below an iPhone 17's fold since brief 176 put Stream Ring after Claude (`SettingsTidyTests`).
+    private static let belowTheFold: Set<String> = ["streamRing", "about"]
 
     // MARK: The tour
 
@@ -26,7 +28,7 @@ final class SettingsTidyUITests: XCTestCase {
         XCTAssertTrue(element("settings-profile").isHittable, "the profile, first")
         let swatch = app.buttons["Slate theme"].firstMatch
         XCTAssertTrue(swatch.isHittable, "the themes, second, without scrolling")
-        for page in Self.pages {
+        for page in Self.pages where !Self.belowTheFold.contains(page) {
             XCTAssertTrue(element("settings-page-\(page)").isHittable, "\(page) is on the first screen without scrolling")
         }
         shot("01 First screen")
@@ -57,6 +59,8 @@ final class SettingsTidyUITests: XCTestCase {
             }
             back()
         }
+        // The tour ends on About, below the fold since brief 176: the first screen comes back scrolled to it.
+        scroll(to: element("settings-profile"))
         XCTAssertTrue(element("settings-profile").isHittable, "back on the first screen")
     }
 
@@ -90,7 +94,7 @@ final class SettingsTidyUITests: XCTestCase {
         shotDown("02 Account")
         back()
         var number = 3
-        for page in ["general", "calendar", "reminders", "extras", "iCloud", "claude", "about"] {
+        for page in ["general", "calendar", "reminders", "extras", "iCloud", "claude", "streamRing", "about"] {
             open("settings-page-\(page)")
             shotDown(String(format: "%02d %@", number, page))
             number += 1
@@ -255,6 +259,8 @@ final class SettingsTidyUITests: XCTestCase {
 
     private func open(_ id: String) {
         let row = element(id)
+        // Stream Ring and About sit below the first screen's fold (brief 176).
+        if row.waitForExistence(timeout: 5), !row.isHittable { scroll(to: row) }
         XCTAssertTrue(row.waitForHittable(timeout: 5), "\(id) on screen")
         row.tap()
         XCTAssertTrue(app.buttons["sheetBack"].firstMatch.waitForExistence(timeout: 5), "\(id) opened a page")

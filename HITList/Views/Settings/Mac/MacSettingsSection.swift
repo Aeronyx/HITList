@@ -5,7 +5,7 @@ import SwiftUI
 /// are stored (`Preferences.macSettingsSection`), so keep them stable once shipped; the order may change (Appearance
 /// moved up to second in 0.9.3). `completing` is Extras' id from before it was called Extras.
 enum MacSettingsSection: String, CaseIterable, Identifiable {
-    case account, appearance, general, calendar, reminders, completing, iCloud, data, claude, about
+    case account, appearance, general, calendar, reminders, completing, iCloud, data, claude, streamRing, about
 
     var id: String { rawValue }
 
@@ -20,6 +20,7 @@ enum MacSettingsSection: String, CaseIterable, Identifiable {
         case .appearance: "Appearance"
         case .data: "Data"
         case .claude: "Claude"
+        case .streamRing: StreamRingWords.title
         case .about: "About"
         }
     }
@@ -36,6 +37,7 @@ enum MacSettingsSection: String, CaseIterable, Identifiable {
         case .appearance: "Themes and effects"
         case .data: "Counts, export, backups"
         case .claude: "Connector and privacy"
+        case .streamRing: StreamRingWords.subtitle
         case .about: "Version and what's new"
         }
     }
@@ -51,6 +53,7 @@ enum MacSettingsSection: String, CaseIterable, Identifiable {
         case .appearance: "paintpalette.fill"
         case .data: "externaldrive.fill"
         case .claude: "sparkles"
+        case .streamRing: "waveform"
         case .about: "info.circle.fill"
         }
     }
@@ -68,6 +71,7 @@ enum MacSettingsSection: String, CaseIterable, Identifiable {
         case .appearance: Color(hex: "#A855F7")
         case .data: Color(hex: "#F59E0B")
         case .claude: Color(hex: "#D97757")
+        case .streamRing: Color(hex: "#EC4899")
         case .about: Color(hex: "#64748B")
         }
     }

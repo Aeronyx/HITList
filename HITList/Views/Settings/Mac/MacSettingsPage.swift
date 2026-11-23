@@ -214,6 +214,8 @@ struct MacSettingsSectionContent: View {
                 MacDataSection()
             case .claude:
                 ClaudeSettingsSection()
+            case .streamRing:
+                StreamRingSettingsSection()
             case .about:
                 MacAboutSection()
             }
