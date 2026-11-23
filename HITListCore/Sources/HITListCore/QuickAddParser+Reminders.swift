@@ -15,9 +15,12 @@ import Foundation
 // 4pm", "remind me at the time"). "reminder" alone is weaker evidence (plenty of titles hold the word: "Send reminder
 // at 3pm", "Pay bill reminder tomorrow 9am"), so it takes only the forms measured from something, never a clock time
 // or a day: "reminder 1 hour before", "reminder in 10 minutes", "reminder at the time" (the supervisor, round 36).
-// Not followed by one, they are title words ("Remind Sam about the party", "Reminder: pay rent"). "!10 minutes" (no
-// "before", no "in") is not a phrase. The one-word codes (`!15m`, `!15mb`, `!at`, `!0`) still work
-// (`ReminderPhrase(code:)`).
+// Not followed by one, they are title words ("Remind Sam about the party", "Reminder: pay rent"). And they are said to
+// the app, not part of a sentence (the review of brief 175): "reminder" counts only where it opens the text, or after
+// punctuation or another phrase ("Call mom 5pm, reminder 30 minutes before"), never after a title word ("Set a reminder
+// in 10 minutes to check the oven", "Send reminder in 2 days"); "remind me" never right after "to" ("Ask Sam to remind
+// me in 2 days"). "!10 minutes" (no "before", no "in") is not a phrase. The one-word codes (`!15m`, `!15mb`, `!at`,
+// `!0`) still work (`ReminderPhrase(code:)`).
 extension ReminderPhrase {
     /// One reading of a reminder phrase: what it means, how many words it takes, and whether its clock time is "at 1"
     /// to "at 6" with no am or pm (`shortHour`), which `phrase` holds as typed (24-hour). The parser settles that hour
@@ -40,8 +43,9 @@ extension ReminderPhrase {
         return (.at(clock), reading.length)
     }
 
-    /// `match`, with a short hour as typed and said to be one.
-    static func reading(_ words: [String], at i: Int, atStart: Bool = false) -> Reading? {
+    /// `match`, with a short hour as typed and said to be one. `afterPhrase`: the word before `words[i]` belongs to a
+    /// phrase already read (a time, a date, a priority), which ends the sentence before it as punctuation does.
+    static func reading(_ words: [String], at i: Int, atStart: Bool = false, afterPhrase: Bool = false) -> Reading? {
         guard i < words.count else { return nil }
         let first = words[i]
         if first.hasPrefix("!") {
@@ -54,9 +58,17 @@ extension ReminderPhrase {
         let lead: Int
         // "reminder" on its own reads only the relative forms: never a clock time or a day.
         var clocks = true
+        let previous = i > 0 ? words[i - 1] : nil
         switch DateExpressionParser.normalize(first) {
-        case "remind" where i + 1 < words.count && DateExpressionParser.normalize(words[i + 1]) == "me": lead = 2
-        case "reminder": lead = 1; clocks = false
+        case "remind" where i + 1 < words.count && DateExpressionParser.normalize(words[i + 1]) == "me":
+            // "Ask Sam to remind me in 2 days": someone else's to do.
+            guard previous.map(DateExpressionParser.normalize) != "to" else { return nil }
+            lead = 2
+        case "reminder":
+            // Said to the app where it opens the text or a clause; after a title word ("Set a reminder", "Send
+            // reminder", "my reminder") it is the sentence's.
+            guard previous.map({ afterPhrase || endsClause($0) }) ?? true else { return nil }
+            lead = 1; clocks = false
         default: return nil
         }
         guard var reading = matchBody(words, at: i + lead, clocks: clocks) else { return nil }
@@ -65,6 +77,12 @@ extension ReminderPhrase {
             reading.length += 1
         }
         return reading
+    }
+
+    /// A word that ends a clause: one ending in ",", ".", ";", ":", "!", "?" or ")", or a dash on its own.
+    static func endsClause(_ word: String) -> Bool {
+        if ["-", "–", "—"].contains(word) { return true }
+        return word.last.map { ",.;:!?)".contains($0) } ?? false
     }
 
     /// The words after the "!" (or after "remind me" / "reminder"), longest reading first. `clocks: false` leaves out the

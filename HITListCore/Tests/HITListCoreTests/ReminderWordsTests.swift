@@ -562,11 +562,17 @@ final class ReminderWordsTests: XCTestCase {
         XCTAssertEqual(dentist.dueDate, at(11, 27, 15, 0))
         XCTAssertEqual(dentist.reminderOffsetMinutes, 60)
 
+        // In the middle of the words, after a title word, it is the title's (finding 3 of the review): "in 10 minutes"
+        // is the due time, as before brief 175. After punctuation it opens a clause and counts.
         let water = p.parse("Water plants reminder in 10 minutes")
-        XCTAssertEqual(water.title, "Water plants")
-        XCTAssertEqual(water.reminderFromNow, ReminderSpan(minutes: 10))
-        XCTAssertEqual(water.reminderDate, at(11, 23, 14, 20))
-        XCTAssertNil(water.dueDate, "a reminder from now, not a due time")
+        XCTAssertEqual(water.title, "Water plants reminder")
+        XCTAssertEqual(water.dueDate, at(11, 23, 14, 20))
+        noReminder(water, "Water plants reminder in 10 minutes")
+        let watered = p.parse("Water plants, reminder in 10 minutes")
+        XCTAssertEqual(watered.title, "Water plants,")
+        XCTAssertEqual(watered.reminderFromNow, ReminderSpan(minutes: 10))
+        XCTAssertEqual(watered.reminderDate, at(11, 23, 14, 20))
+        XCTAssertNil(watered.dueDate, "a reminder from now, not a due time")
 
         let mom = p.parse("Call mom 5pm remind me at 4pm")
         XCTAssertEqual(mom.title, "Call mom")
@@ -576,6 +582,52 @@ final class ReminderWordsTests: XCTestCase {
 
         // And at the time, as the relative forms do.
         XCTAssertEqual(p.parse("Standup 9:30am reminder at the time").reminderOffsetMinutes, 0)
+    }
+
+    /// Words in the middle of a sentence are the sentence's (the review of brief 175, finding 3): "reminder" alone is said
+    /// to the app only where it opens the text, or after punctuation or another phrase, never after an article, a
+    /// possessive or a verb; "remind me" never right after "to" (someone else is to do it). These read as they did
+    /// before brief 175. Monday 2026-11-23, 14:10 Eastern.
+    func testReminderWordsInTheMiddleOfASentenceStayItsWords() throws {
+        var ny = Calendar(identifier: .gregorian)
+        ny.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+        func at(_ m: Int, _ d: Int, _ h: Int, _ min: Int) -> Date {
+            ny.date(from: DateComponents(year: 2026, month: m, day: d, hour: h, minute: min))!
+        }
+        let p = QuickAddParser(now: at(11, 23, 14, 10), calendar: ny)
+        let cases: [(String, String, Date, Bool)] = [
+            ("Set a reminder in 10 minutes to check the oven", "Set a reminder to check the oven", at(11, 23, 14, 20), true),
+            ("Send reminder in 2 days", "Send reminder", at(11, 25, 0, 0), false),
+            ("Email reminder in 1 hour", "Email reminder", at(11, 23, 15, 10), true),
+            ("Ask Sam to remind me in 2 days", "Ask Sam to remind me", at(11, 25, 0, 0), false),
+            ("Tell Bob to remind me at 5pm about rent", "Tell Bob to remind me about rent", at(11, 23, 17, 0), true),
+            ("Post my reminder in 10 minutes", "Post my reminder", at(11, 23, 14, 20), true),
+            ("Check the reminder in an hour", "Check the reminder", at(11, 23, 15, 10), true),
+        ]
+        for (text, title, due, timed) in cases {
+            let r = p.parse(text)
+            XCTAssertEqual(r.title, title, text)
+            XCTAssertEqual(r.dueDate, due, text)
+            XCTAssertEqual(r.hasDueTime, timed, text)
+            XCTAssertNil(r.reminderOffsetMinutes, text)
+            XCTAssertNil(r.reminderDate, text)
+            XCTAssertNil(r.reminderFromNow, text)
+            XCTAssertFalse(r.tokens.contains { $0.kind == .reminder }, text)
+        }
+
+        // Where they are said to the app.
+        let opens = p.parse("Reminder in 10 minutes to call mom")
+        XCTAssertEqual(opens.title, "Call mom")
+        XCTAssertEqual(opens.reminderDate, at(11, 23, 14, 20))
+        XCTAssertNil(opens.dueDate)
+        let afterStop = p.parse("Call mom. Reminder in an hour")
+        XCTAssertEqual(afterStop.title, "Call mom.")
+        XCTAssertEqual(afterStop.reminderDate, at(11, 23, 15, 10))
+        XCTAssertEqual(p.parse("Call mom at 5pm, reminder 30 minutes before").reminderOffsetMinutes, 30)
+        XCTAssertEqual(p.parse("Call mom at 5pm - reminder 30 minutes before").reminderOffsetMinutes, 30)
+        XCTAssertEqual(p.parse("Dentist friday 3pm reminder 1 hour before").reminderOffsetMinutes, 60, "after a time")
+        XCTAssertEqual(p.parse("Call mom remind me at 4pm").reminderClock, ReminderClock(hour: 16, minute: 0))
+        XCTAssertEqual(p.parse("Call mom 5pm and remind me 30 minutes before").reminderOffsetMinutes, 30)
     }
 
     // MARK: What a pick writes

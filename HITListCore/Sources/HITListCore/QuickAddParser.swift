@@ -189,7 +189,7 @@ public struct QuickAddParser: Sendable {
             // (brief 175): "!10 minutes before", "!In 5 minutes", "!At time of task", "!4:00 PM", "remind me 30 minutes
             // before", "reminder in an hour". One token however many words, and while its last word is still being
             // typed at the very end, all of it is plain text.
-            if let reading = ReminderPhrase.reading(lowers, at: i, atStart: i == 0) {
+            if let reading = ReminderPhrase.reading(lowers, at: i, atStart: i == 0, afterPhrase: i > 0 && consumed[i - 1]) {
                 let n = reading.length
                 if mode == .live, words[i + n - 1].range.upperBound == input.endIndex { i += n; continue }
                 switch reading.phrase {
