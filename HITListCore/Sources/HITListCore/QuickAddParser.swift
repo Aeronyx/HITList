@@ -169,7 +169,7 @@ public struct QuickAddParser: Sendable {
             if let p = Self.priority(from: w) {
                 result.priority = p; win(i, 1, .priority); i += 1; continue
             }
-            if let p = Self.spokenPriority(lowers, at: i) {
+            if let p = Self.spokenPriority(lowers, at: i), endsTheWords(lowers, at: i + 2) {
                 result.priority = p; win(i, 2, .priority); i += 2; continue
             }
             // Project: #Name, #"Two Words", or #two words matching a known project
@@ -360,11 +360,36 @@ public struct QuickAddParser: Sendable {
         return Priority(rawValue: n)
     }
 
-    /// "priority 1" to "priority 4", "priority one" to "priority four" (brief 175): as "p1" to "p4" are.
+    /// "priority 1" to "priority 4", "priority one" to "priority four" (brief 175): as "p1" to "p4" are. The parser reads
+    /// them only where they end the words (`endsTheWords`).
     static func spokenPriority(_ words: [String], at i: Int) -> Priority? {
         guard i + 1 < words.count, DateExpressionParser.normalize(words[i]) == "priority" else { return nil }
         let levels = ["1": 1, "2": 2, "3": 3, "4": 4, "one": 1, "two": 2, "three": 3, "four": 4]
-        return levels[DateExpressionParser.normalize(words[i + 1])].flatMap(Priority.init(rawValue:))
+        let level = words[i + 1].lowercased().trimmingCharacters(in: CharacterSet(charactersIn: ",.;:!?"))
+        return levels[level].flatMap(Priority.init(rawValue:))
+    }
+
+    /// Words said to the app end at `words[k]` rather than run on as part of a sentence (the review of brief 175): `k`
+    /// is the end of the text, the word before it ends in punctuation, or a dash or another phrase starts there. "Fix
+    /// sink priority 1", "… priority 1, then paint", "… priority 1 tomorrow"; not "Fix priority 1 bugs".
+    func endsTheWords(_ words: [String], at k: Int) -> Bool {
+        guard k < words.count else { return true }
+        if ReminderPhrase.endsClause(words[k - 1]) || ["-", "–", "—"].contains(words[k]) { return true }
+        return startsPhrase(words, at: k)
+    }
+
+    /// A phrase the parser reads starts at `words[k]`: a "!" word, a priority, a group, a label, a reminder, a repeat,
+    /// a date or a time.
+    func startsPhrase(_ words: [String], at k: Int) -> Bool {
+        guard k < words.count else { return false }
+        let w = words[k]
+        if w.hasPrefix("!") || Self.priority(from: w) != nil { return true }
+        if (w.hasPrefix("#") || w.hasPrefix("@")) && w.count > 1 { return true }
+        if ReminderPhrase.reading(words, at: k, afterPhrase: true) != nil || Self.matchRecurrence(words, at: k) != nil {
+            return true
+        }
+        if dateParser.matchRelativeTime(in: words, at: k) != nil || dateParser.matchTime(in: words, at: k) != nil { return true }
+        return matchDateOrStart(words, at: k) != nil
     }
 
     /// The text opens with "Remind me to" (any case; brief 175).

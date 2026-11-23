@@ -403,6 +403,39 @@ final class ReminderWordsTests: XCTestCase {
         }
     }
 
+    /// "priority N" is said to the app only where it ends the words: at the end of the text, before punctuation, or
+    /// before another phrase. In the middle of a sentence it is the sentence's (the review of brief 175, finding 9).
+    func testPriorityInWordsOnlyWhereItEndsTheWords() {
+        for text in ["Fix priority 1 bugs", "Discuss priority four with Sam", "Make it priority 2 for the team",
+                     "Priority 1 customers first"] {
+            let r = parser.parse(text)
+            XCTAssertEqual(r.title, text, text)
+            XCTAssertEqual(r.priority, .p4, text)
+            XCTAssertTrue(r.tokens.isEmpty, text)
+        }
+        let cases: [(String, String, Priority)] = [
+            ("Fix sink priority 1", "Fix sink", .p1),
+            ("Fix sink priority 2, then paint", "Fix sink then paint", .p2),
+            ("Fix sink priority 1: urgent", "Fix sink urgent", .p1),
+            ("Fix sink priority three - then paint", "Fix sink - then paint", .p3),
+            ("Fix sink priority 3 tomorrow", "Fix sink", .p3),
+            ("Fix sink priority one #Home", "Fix sink", .p1),
+            ("Fix sink priority 2 @calls", "Fix sink", .p2),
+            ("Fix sink priority 2 !15m", "Fix sink", .p2),
+            ("Fix sink priority 1 every day", "Fix sink", .p1),
+            ("Fix sink priority 1 at 5pm", "Fix sink", .p1),
+        ]
+        for (text, title, priority) in cases {
+            let r = parser.parse(text)
+            XCTAssertEqual(r.title, title, text)
+            XCTAssertEqual(r.priority, priority, text)
+            XCTAssertTrue(r.tokens.contains { $0.kind == .priority }, text)
+        }
+        XCTAssertEqual(parser.parse("Fix sink priority 3 tomorrow").dueDate, Fixed.date(2026, 10, 22))
+        XCTAssertEqual(parser.parse("Fix sink priority one #Home").projectName, "Home")
+    }
+
+
     // MARK: Times as people say them (§4)
 
     func testTimesAsPeopleSayThem() {
