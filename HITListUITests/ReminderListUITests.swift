@@ -136,6 +136,38 @@ final class ReminderListUITests: XCTestCase {
         XCTAssertFalse(list.waitForExistence(timeout: 1.5), "nothing matches: no list")
     }
 
+    /// A keystroke that leaves the rows as they were still hands the list the word as it now stands (the review of brief
+    /// 175, finding 5): "!a" then "t" shows At time of task both times, and a tap replaces all of "!at", not "!a" with the
+    /// "t" left after it; "!i" then "n", and In 15 minutes leaves no "n".
+    func testATapAfterAKeystrokeThatKeptTheRowsReplacesTheWholeWord() {
+        openQuickAdd()
+        app.typeText("Call mom 9am !a")
+        let list = element("reminderSuggestions")
+        XCTAssertTrue(list.waitForExistence(timeout: 5), "the list")
+        XCTAssertTrue(row("before-0").waitForExistence(timeout: 2), "At time of task")
+        pause(0.5)
+        app.typeText("t")
+        pause(0.8)
+        XCTAssertTrue(row("before-0").exists, "still At time of task")
+        row("before-0").tap()
+        XCTAssertTrue(list.waitForNonExistence(timeout: 3))
+        XCTAssertEqual(title.value as? String, "Call mom 9am !At time of task ")
+        shot("12 !at picked")
+
+        app.buttons["quickAddSave"].tap()
+        XCTAssertTrue(title.waitForNonExistence(timeout: 5), "Add closes the card")
+        openQuickAdd()
+        app.typeText("Buy milk !i")
+        XCTAssertTrue(row("in-15").waitForExistence(timeout: 5), "the In rows")
+        pause(0.5)
+        app.typeText("n")
+        pause(0.8)
+        row("in-15").tap()
+        XCTAssertTrue(list.waitForNonExistence(timeout: 3))
+        XCTAssertEqual(title.value as? String, "Buy milk !In 15 minutes ")
+        shot("13 !in picked")
+    }
+
     /// The task editor's title is the same field: "!" there opens the same list, under the title, for the task's own
     /// time; a pick lights at once and the Reminder pill reads it before Confirm, and Confirm saves it.
     func testTheEditorsTitleOffersTheListToo() {

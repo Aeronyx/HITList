@@ -247,7 +247,7 @@ struct QuickAddPopout: View {
         guard !rows.isEmpty else { return nil }
         let highlighted = min(max(listHighlight, 0), rows.count - 1)
         return ReminderListRequest(
-            rows: rows, highlighted: highlighted,
+            rows: rows, highlighted: highlighted, word: word.range,
             onPick: { pickReminder($0, word: word) },
             onHighlight: { listHighlight = $0 },
             onKey: { key in
