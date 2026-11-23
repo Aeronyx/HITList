@@ -34,7 +34,8 @@ final class RealCalendarTests: XCTestCase {
         let p = parser(now: at(2027, 3, 13, 20))
         assertWall(p.parse("Feed cat tom 1:30am").dueDate, 2027, 3, 14, 1, 30)
         // 2:30 doesn't exist that night: the first moment after the gap, never a missing date.
-        for text in ["Feed cat tom 2:30", "Feed cat tom 2", "Feed cat tom 2am", "Feed cat at 2:30"] {
+        // "at 2:30am": since brief 175 "at 2:30" with no am is the afternoon, which that night has.
+        for text in ["Feed cat tom 2:30", "Feed cat tom 2", "Feed cat tom 2am", "Feed cat at 2:30am"] {
             let r = p.parse(text)
             XCTAssertEqual(r.title, "Feed cat", text)
             XCTAssertTrue(r.hasDueTime, text)

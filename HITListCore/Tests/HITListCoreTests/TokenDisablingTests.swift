@@ -147,10 +147,10 @@ final class TokenDisablingTests: XCTestCase {
         XCTAssertEqual(noTime.tokens.map(\.text), ["tom"])
         assertRangesMatch(noTime, in: input)
 
-        // "at 5" is 05:00 whatever is switched off around it; "5pm" is 17:00.
+        // "at 5" is 5 pm whatever is switched off around it (brief 175: it was 05:00, so tomorrow's at 14:30).
         let at5 = parser.parse("Run tom at 5", disabling: [key(.date, "tom")])
         XCTAssertEqual(at5.title, "Run tom")
-        assertDate(at5.dueDate, 2026, 10, 22, 5, 0)
+        assertDate(at5.dueDate, 2026, 10, 21, 17, 0)
         XCTAssertEqual(parser.parse("Run fri 9 p1", disabling: [key(.priority, "p1")]).title, "Run p1")
         assertDate(parser.parse("Run fri 9 p1", disabling: [key(.priority, "p1")]).dueDate, 2026, 10, 23, 9, 0)
         // A repeat switched off: the time typed after today's is plain today/tomorrow again, not "next".

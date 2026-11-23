@@ -201,7 +201,8 @@ final class QuickAddParserTests: XCTestCase {
         assertDate(fri9.dueDate, 2026, 10, 23, 9, 0)
 
         // Time only, now 14:30.
-        assertDate(parser.parse("Gym at 5").dueDate, 2026, 10, 22, 5, 0)
+        // Brief 175: "at 5" is 5 pm (it was tomorrow 05:00); "5:30" alone stays 05:30.
+        assertDate(parser.parse("Gym at 5").dueDate, 2026, 10, 21, 17, 0)
         assertDate(parser.parse("Dinner at 19").dueDate, 2026, 10, 21, 19, 0)
         assertDate(parser.parse("Run 5:30").dueDate, 2026, 10, 22, 5, 30)
         assertDate(parser.parse("Call 5pm").dueDate, 2026, 10, 21, 17, 0)
