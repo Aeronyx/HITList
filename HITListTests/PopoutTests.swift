@@ -421,7 +421,7 @@ final class PopoutTests: XCTestCase {
         XCTAssertEqual(task.priority, 1)
         XCTAssertTrue(task.hasDueTime)
         let atTime = try TaskActions.create(from: QuickAddParser().parse("Call 5pm !at"), defaultProject: nil, defaultLabel: nil, in: context)
-        XCTAssertNil(atTime.reminderOffsetMinutes, "!at is the same as no offset")
+        XCTAssertEqual(atTime.reminderOffsetMinutes, 0, "!at is a reminder of its own, at the time: the default doesn't win (review of brief 175)")
     }
 
     // MARK: Tapping a highlight switches its token off (brief 28)

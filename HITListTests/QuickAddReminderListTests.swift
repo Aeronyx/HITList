@@ -201,6 +201,47 @@ final class QuickAddReminderListTests: XCTestCase {
         withExtendedLifetime(container) {}
     }
 
+    /// "At time of task" is the task's own reminder: saved as an explicit 0 from quick add, the editor's title and Review
+    /// Inbox, so a Settings default of 15 minutes before does not win over it, and the editor's row reads it (the review
+    /// of brief 175, finding 7).
+    func testAtTimeOfTaskIsSavedAsTheTasksOwn() throws {
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        let p = parser()
+        let task = try TaskActions.create(from: QuickAddDraft(context: .inbox, text: "Call mom 5pm !At time of task").result(p),
+                                          defaultProject: nil, defaultLabel: nil, in: context)
+        XCTAssertEqual(task.reminderOffsetMinutes, 0)
+        let plan = NotificationPlan.make(tasks: [NotificationPlan.Item(task, now: now)], now: now, defaultOffsetMinutes: 15,
+                                         calendar: calendar)
+        XCTAssertEqual(plan.requests.map(\.triggerDate), [at(17)], "at the time, not the default's 4:45")
+
+        let sam = TaskItem(title: "Call Sam", dueDate: at(18), hasDueTime: true)
+        context.insert(sam)
+        try context.save()
+        var draft = TaskEditorDraft(task: sam)
+        draft.title += " !at"
+        XCTAssertEqual(EditorFields(task: sam).applying(draft.phrases(p, for: sam)).reminderOffsetMinutes, 0, "the row reads At time")
+        XCTAssertTrue(try draft.commit(to: sam, in: context, parser: p))
+        XCTAssertEqual(sam.title, "Call Sam")
+        XCTAssertEqual(sam.reminderOffsetMinutes, 0)
+
+        // A stored "!at" the editor sets when the task has a time (brief 127's wake).
+        let stored = TaskItem(title: "Pack !at", dueDate: at(20), hasDueTime: true)
+        context.insert(stored)
+        try context.save()
+        var wake = TaskEditorDraft(task: stored)
+        XCTAssertTrue(try wake.landStoredReminder(on: stored, parser: p, in: context))
+        XCTAssertEqual(stored.reminderOffsetMinutes, 0)
+        XCTAssertEqual(stored.title, "Pack")
+
+        let reviewed = TaskItem(title: "Pack")
+        context.insert(reviewed)
+        try context.save()
+        ReviewTitleEdit.apply("Pack 9pm !at", parser: p, to: reviewed, in: context)
+        XCTAssertEqual(reviewed.reminderOffsetMinutes, 0)
+        withExtendedLifetime(container) {}
+    }
+
     /// Saved as the task's own moment, and scheduled like any other reminder.
     func testAClockReminderReachesTheSavedTask() throws {
         let container = ModelContainerFactory.preview()

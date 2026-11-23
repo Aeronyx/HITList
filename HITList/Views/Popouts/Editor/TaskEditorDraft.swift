@@ -267,7 +267,8 @@ struct TaskEditorDraft: Equatable {
         guard !stored.isEmpty else { return false }
         title = Self.removing(here.start..<(here.start + here.length), from: title)
         task.title = stored
-        task.reminderOffsetMinutes = minutes > 0 ? minutes : nil
+        // Zero ("!at") is kept: the task's own, at the time (the review of brief 175).
+        task.reminderOffsetMinutes = max(0, minutes)
         task.touch()
         try context.save()
         return true

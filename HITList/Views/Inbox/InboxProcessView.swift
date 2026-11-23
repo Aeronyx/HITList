@@ -870,8 +870,8 @@ enum ReviewTitleEdit {
                   !(task.labels ?? []).contains(where: { $0.id == label.id }) else { continue }
             task.labels = (task.labels ?? []) + [label]
         }
-        // "!at" (0) is the default, at the time.
-        if let minutes = parsed.reminderOffsetMinutes { task.reminderOffsetMinutes = minutes > 0 ? minutes : nil }
+        // "!at" (0) is kept: at the time, the task's own, which Settings' default does not replace (the review of brief 175).
+        if let minutes = parsed.reminderOffsetMinutes { task.reminderOffsetMinutes = max(0, minutes) }
         if let date = parsed.reminderDate { task.reminderDate = date }
         task.touch()
         try? context.save()

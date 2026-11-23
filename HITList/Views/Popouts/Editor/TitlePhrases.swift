@@ -118,7 +118,8 @@ struct TitlePhrases: Equatable {
             }
             task.labels = labels
         }
-        if let reminderOffsetMinutes { task.reminderOffsetMinutes = reminderOffsetMinutes > 0 ? reminderOffsetMinutes : nil }
+        // Zero is kept: at the due time, the task's own (Settings' default fills only nil; the review of brief 175).
+        if let reminderOffsetMinutes { task.reminderOffsetMinutes = max(0, reminderOffsetMinutes) }
         if let reminderDate { task.reminderDate = reminderDate }
         task.touch()
         try context.save()
@@ -173,7 +174,7 @@ struct EditorFields: Equatable {
             fields.labelNames.append(name)
         }
         fields.labelNames.sort()
-        if let minutes = phrases.reminderOffsetMinutes { fields.reminderOffsetMinutes = minutes > 0 ? minutes : nil }
+        if let minutes = phrases.reminderOffsetMinutes { fields.reminderOffsetMinutes = max(0, minutes) }
         if let date = phrases.reminderDate { fields.reminderDate = date }
         return fields
     }

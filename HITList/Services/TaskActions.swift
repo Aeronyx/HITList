@@ -20,8 +20,9 @@ enum TaskActions {
 
         let task = TaskItem(title: title, priority: parsed.priority.rawValue, dueDate: parsed.dueDate, hasDueTime: parsed.hasDueTime,
                             project: project, labels: labels, recurrence: parsed.recurrence)
-        // Zero ("!at") is the same as no offset: remind at the due time.
-        if let offset = parsed.reminderOffsetMinutes, offset > 0 { task.reminderOffsetMinutes = offset }
+        // Zero ("!at", "!At time of task") is kept: a reminder at the due time of the task's own, which Settings' default
+        // reminder does not replace (nil takes the default; the review of brief 175).
+        if let offset = parsed.reminderOffsetMinutes { task.reminderOffsetMinutes = max(0, offset) }
         // "!15m": a reminder at a moment of its own, dated or not (brief 48).
         task.reminderDate = parsed.reminderDate
         if let deadline = parsed.deadline { task.deadline = Calendar.current.startOfDay(for: deadline) }
