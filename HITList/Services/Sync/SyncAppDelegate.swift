@@ -138,7 +138,8 @@ final class SyncAppDelegate: NSObject, UIApplicationDelegate {
                      fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
         guard !SyncAppDelegateSupport.isTesting else { completionHandler(.noData); return }
         // Brief 176: the Stream ring's relay says a capture just arrived (`{"hitlist":{"inbox":1}}`, never CloudKit's).
-        // The inbox's check runs, and the handler answers once it has (25 s at most).
+        // The inbox's own check runs after any already under way, and the handler answers when it ends or at 25 s,
+        // whichever is first: the wait for the check under way counts inside the 25 s.
         if StreamInbox.isWakePush(userInfo) {
             Task { @MainActor in completionHandler(await StreamInbox.handleWakePush(userInfo).fetchResult) }
             return

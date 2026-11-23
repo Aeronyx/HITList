@@ -57,6 +57,18 @@ final class StreamInboxTests: XCTestCase {
         return inbox
     }
 
+    /// Waits for `condition`, up to `seconds`; whether it came.
+    private func eventually(_ seconds: TimeInterval = 3, _ condition: () -> Bool) async -> Bool {
+        let end = Date().addingTimeInterval(seconds)
+        while !condition() {
+            guard Date() < end else { return false }
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        return true
+    }
+
+    private var claims: Int { relay.requests.filter { $0.path == InboxAPI.Endpoint.claim.rawValue }.count }
+
     private func tasks() throws -> [TaskItem] {
         try container.mainContext.fetch(FetchDescriptor<TaskItem>()).sorted { $0.title < $1.title }
     }
@@ -541,6 +553,45 @@ final class StreamInboxTests: XCTestCase {
     }
 
     // MARK: Round 3
+
+    /// Finding 2: a wake-up's handler answers within its limit even behind a check already under way (one a CloudKit
+    /// wake started on a weak signal): the wait for that check counts inside the limit, not before it.
+    func testAWakeUpAnswersWithinItsLimitBehindASlowCheck() async throws {
+        let inbox = try await connected()
+        inbox.wakeLimit = .milliseconds(300)
+        relay.delay = 0.8
+        let before = claims
+        let slow = Task { await inbox.check(.checkNow) }
+        let underWay = await eventually { self.claims == before + 1 }
+        XCTAssertTrue(underWay, "the slow check has claimed")
+        let started = Date()
+        let answer = await inbox.handleWakePush()
+        let took = Date().timeIntervalSince(started)
+        XCTAssertLessThan(took, 0.7, "answered at its limit, not after the slow check (\(took) s)")
+        XCTAssertEqual(answer, .noData)
+        relay.delay = 0
+        _ = await slow.value
+        let settled = await eventually(5) { self.claims == before + 2 && !inbox.isChecking }
+        XCTAssertTrue(settled, "the wake-up's own check still ran, after the slow one")
+    }
+
+    /// Finding 2, the Mac: a wake-up (`checkSoon(.wakePush)`) runs a check of its own after the one under way instead of
+    /// joining it: that one claimed before the capture arrived.
+    func testAWakeUpNeverJoinsACheckAlreadyUnderWay() async throws {
+        let inbox = try await connected()
+        relay.delay = 0.4
+        let before = claims
+        let first = Task { await inbox.check(.checkNow) }
+        let claimed = await eventually { self.claims == before + 1 }
+        XCTAssertTrue(claimed)
+        relay.add("late", "Buy milk")
+        inbox.checkSoon(.wakePush)
+        _ = await first.value
+        relay.delay = 0
+        let own = await eventually(5) { self.claims == before + 2 && !inbox.isChecking }
+        XCTAssertTrue(own, "the wake-up's own claim, after the first check's")
+        XCTAssertEqual(try tasks().map(\.title), ["Buy milk"])
+    }
 
     /// Finding 3a: the push service a token belongs to is read from the build's signed entitlement, not from whether
     /// it is a Debug build: a Release build signed for development (an Xcode Run in Release, as George's speed probes

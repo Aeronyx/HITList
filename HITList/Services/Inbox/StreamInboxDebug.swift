@@ -1,5 +1,6 @@
 #if DEBUG
 import Foundation
+import os
 import SwiftData
 import HITListCore
 #if os(macOS)
@@ -109,6 +110,7 @@ final class StreamInboxFakeRelay: @unchecked Sendable {
     /// Each device's wake-ups as the relay keeps them (round 3): when Apple last took a push for it, its trouble.
     private var wakes: [String: (okAt: Date?, error: String?, refused: Bool)] = [:]
     private var confirmsWakeUps = false
+    private var answerDelay: TimeInterval = 0
 
     static let demoHost = "demo-relay.example"
     static let demoKey = "demo0000demo1111demo2222demo3333demo4444demo5555demo6666demo7777"
@@ -184,6 +186,12 @@ final class StreamInboxFakeRelay: @unchecked Sendable {
     var acksFail: Bool {
         get { locked { acksFailing } }
         set { locked { acksFailing = newValue } }
+    }
+
+    /// How long each answer takes to arrive (a weak signal): the relay answers at once, the device hears it later.
+    var delay: TimeInterval {
+        get { locked { answerDelay } }
+        set { locked { answerDelay = newValue } }
     }
 
     var requests: [Received] { locked { received } }
@@ -308,17 +316,25 @@ final class FakeRelayURLProtocol: URLProtocol {
             client?.urlProtocol(self, didFailWithError: URLError(.cannotFindHost))
             return
         }
-        do {
-            let (response, data) = try relay.answer(request, body: Self.body(of: request))
-            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-            client?.urlProtocol(self, didLoad: data)
-            client?.urlProtocolDidFinishLoading(self)
-        } catch {
-            client?.urlProtocol(self, didFailWithError: error)
+        let answer = Result { try relay.answer(request, body: Self.body(of: request)) }
+        let deliver = { [self] in
+            guard !stopped.withLock({ $0 }) else { return }
+            switch answer {
+            case .success(let (response, data)):
+                client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+                client?.urlProtocol(self, didLoad: data)
+                client?.urlProtocolDidFinishLoading(self)
+            case .failure(let error):
+                client?.urlProtocol(self, didFailWithError: error)
+            }
         }
+        let delay = relay.delay
+        if delay > 0 { DispatchQueue.global().asyncAfter(deadline: .now() + delay, execute: deliver) } else { deliver() }
     }
 
-    override func stopLoading() {}
+    private let stopped = OSAllocatedUnfairLock(initialState: false)
+
+    override func stopLoading() { stopped.withLock { $0 = true } }
 
     /// A request's body: a session hands a protocol its body as a stream.
     private static func body(of request: URLRequest) -> Data {

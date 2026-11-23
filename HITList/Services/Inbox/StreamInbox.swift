@@ -219,10 +219,15 @@ final class StreamInbox {
         Task { await check(.cameForward) }
     }
 
-    /// A check that nothing waits on: a wake in the background (`WidgetRefresh.settle`).
+    /// A check that nothing waits on: a wake in the background (`WidgetRefresh.settle`), or the relay's wake-up on the
+    /// Mac. A wake-up's capture arrived after a check under way had claimed, so its own check comes after that one,
+    /// never joined to it (round 3, finding 2).
     func checkSoon(_ reason: Reason) {
         guard isConnected else { return }
-        Task { await check(reason) }
+        Task {
+            if reason == .wakePush { _ = await running?.value }
+            await check(reason)
+        }
     }
 
     private func updateTimer() {
@@ -355,11 +360,15 @@ final class StreamInbox {
             return .didNotRun
         }
         lastStartedAt = clock()
-        let task = Task { await self.perform(link: link, reason: reason) }
+        let task = Task { () -> CheckResult in
+            let result = await self.perform(link: link, reason: reason)
+            // Cleared as the check ends, before anything waiting on it goes on: a wake-up or a test capture waiting for
+            // it then starts a check of its own, never joins one that has finished (round 3, finding 2).
+            self.running = nil
+            return result
+        }
         running = task
-        let result = await task.value
-        running = nil
-        return result
+        return await task.value
     }
 
     private func perform(link: InboxLink, reason: Reason) async -> CheckResult {
@@ -609,14 +618,20 @@ final class StreamInbox {
 
     /// How long a wake-up's check may hold the push handler: iOS allows about 30 s.
     static let wakeLimit: Duration = .seconds(25)
+    /// This inbox's limit (the tests' is shorter).
+    @ObservationIgnored var wakeLimit: Duration = StreamInbox.wakeLimit
 
-    /// A wake-up push: a check runs now (after any already under way, which claimed before this capture), and the
-    /// answer comes once it has finished, or at `wakeLimit` (the check goes on under its own background time).
+    /// A wake-up push: its own check runs (after any already under way, which claimed before this capture), and the
+    /// answer comes once that has finished or at `wakeLimit`, whichever is first. The wait for the check under way is
+    /// inside the limit (round 3, finding 2): one a CloudKit wake started on a weak signal took 30-80 s. What is still
+    /// running at the limit goes on under its own background time.
     func handleWakePush() async -> WakeResult {
         guard isConnected else { return .noData }
-        _ = await running?.value
-        let checking = Task { await self.check(.wakePush) }
-        let limit = Self.wakeLimit
+        let checking = Task { () -> CheckResult in
+            _ = await self.running?.value
+            return await self.check(.wakePush)
+        }
+        let limit = wakeLimit
         let result: CheckResult? = await withCheckedContinuation { (answer: CheckedContinuation<CheckResult?, Never>) in
             let once = FirstAnswer(answer)
             Task { once.give(await checking.value) }
