@@ -406,13 +406,29 @@ struct TaskPopout: View {
                 switch key {
                 case .up: listHighlight = max(0, highlighted - 1)
                 case .down: listHighlight = min(rows.count - 1, highlighted + 1)
-                // Return picks: it does not confirm while the list is open.
-                case .pick: pickReminder(rows[highlighted], word: word)
+                // Return picks: it does not confirm while the list is open. It acts on the list as the title and caret
+                // are now, not the one a keystroke still queued before it was drawn from (the second review of brief
+                // 175); none now, and Return is the title's.
+                case .pick:
+                    guard let now = currentReminderList(),
+                          let row = ReminderSuggestions.rowForReturn(shown: rows, highlighted: highlighted, current: now.rows)
+                    else { return false }
+                    pickReminder(row, word: now.word)
                 case .dismiss: listClosedAt = word.range.location
                 }
                 return true
             },
             onDismiss: { listClosedAt = word.range.location })
+    }
+
+    /// The "!" word and its rows for the title and caret as they are now (Return on the Mac, `reminderList(shown:)`).
+    private func currentReminderList() -> (word: ReminderSuggestions.BangWord, rows: [ReminderSuggestion])? {
+        guard let word = bangWord else { return nil }
+        let p = parser()
+        let shown = EditorFields(task: task).applying(draft.phrases(p, for: task))
+        let all = ReminderSuggestions.rows(hasTime: shown.hasDueTime && shown.dueDate != nil, dueDate: shown.dueDate,
+                                           now: p.dateParser.now, calendar: p.dateParser.calendar)
+        return (word, ReminderSuggestions.narrowed(all, by: word.query))
     }
 
     private func pickReminder(_ row: ReminderSuggestion, word: ReminderSuggestions.BangWord) {

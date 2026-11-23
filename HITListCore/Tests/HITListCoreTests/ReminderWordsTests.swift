@@ -230,6 +230,23 @@ final class ReminderWordsTests: XCTestCase {
         }
     }
 
+    /// Return on the Mac picks from the list as the text is now, not the list a keystroke still queued before it was
+    /// drawn from (the second review of brief 175, finding 11): "!30" shown, "m" typed, Return: In 30 minutes, not 30
+    /// minutes before. The same list: the highlighted row; none now: Return is the title's.
+    func testReturnPicksFromTheListAsTheTextIsNow() {
+        let timed = rows(hasTime: true)
+        let shown = ReminderSuggestions.narrowed(timed, by: "30")
+        XCTAssertEqual(shown.map(\.label), ["30 minutes before", "In 30 minutes"])
+        let now = ReminderSuggestions.narrowed(timed, by: "30m")
+        XCTAssertEqual(ReminderSuggestions.rowForReturn(shown: shown, highlighted: 0, current: now)?.label, "In 30 minutes")
+        XCTAssertEqual(ReminderSuggestions.rowForReturn(shown: shown, highlighted: 1, current: shown)?.label, "In 30 minutes",
+                       "the same list: the highlighted row")
+        XCTAssertEqual(ReminderSuggestions.rowForReturn(shown: shown, highlighted: 0, current: shown)?.label, "30 minutes before")
+        XCTAssertNil(ReminderSuggestions.rowForReturn(shown: shown, highlighted: 0, current: []), "no list now")
+        XCTAssertEqual(ReminderSuggestions.rowForReturn(shown: shown, highlighted: 5, current: shown)?.label, "30 minutes before",
+                       "a highlight past the end: the first")
+    }
+
     // MARK: The "!" word at the caret, and a pick
 
     func testTheBangWordAtTheCaret() {

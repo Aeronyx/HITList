@@ -112,6 +112,17 @@ public enum ReminderSuggestions {
                                   detail: isToday ? plain.text : "Tomorrow " + plain.text, reminder: .at(clock))
     }
 
+    /// The row Return picks on the Mac (the second review of brief 175): `current` is the list for the text and caret as
+    /// they are when the key arrives; when it is the list shown, its highlighted row, else its first (a Return queued
+    /// behind a keystroke acts on the list that keystroke makes: "!30", "m", Return is In 30 minutes); nil when there is
+    /// no list now, and Return is the title's.
+    public static func rowForReturn(shown: [ReminderSuggestion], highlighted: Int,
+                                    current: [ReminderSuggestion]) -> ReminderSuggestion? {
+        guard let first = current.first else { return nil }
+        guard current.map(\.id) == shown.map(\.id), current.indices.contains(highlighted) else { return first }
+        return current[highlighted]
+    }
+
     /// `row` as it is offered now, when it is picked: Later moves with the clock (a list left open a while offered an
     /// older Later); every other row is what it was.
     public static func current(_ row: ReminderSuggestion, dueDate: Date?, now: Date, calendar: Calendar = .current) -> ReminderSuggestion {
