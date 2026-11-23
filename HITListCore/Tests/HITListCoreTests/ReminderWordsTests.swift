@@ -200,7 +200,12 @@ final class ReminderWordsTests: XCTestCase {
             XCTAssertEqual(ReminderPhrase(token: text), phrase, text)
             let words = String(text.dropFirst())
             XCTAssertEqual(ReminderPhrase(token: "remind me " + words), phrase, "remind me " + words)
-            XCTAssertEqual(ReminderPhrase(token: "Reminder " + words), phrase, "Reminder " + words)
+            // "reminder" alone: only the forms measured from something; a clock time or a day is not its.
+            if case .at = phrase {
+                XCTAssertNil(ReminderPhrase(token: "Reminder " + words), "Reminder " + words)
+            } else {
+                XCTAssertEqual(ReminderPhrase(token: "Reminder " + words), phrase, "Reminder " + words)
+            }
         }
         // The codes, as before.
         XCTAssertEqual(ReminderPhrase(token: "!0mb"), .beforeDue(minutes: 0))
@@ -221,7 +226,7 @@ final class ReminderWordsTests: XCTestCase {
         XCTAssertNil(tea.dueDate, "a reminder from now gives the task no date")
 
         // A clock time: today if still ahead, else tomorrow; on the due day when there is one and it is still to come.
-        for text in ["Bins !4pm", "Bins !4:00 PM", "Bins remind me at 4pm", "Bins reminder at 4 p.m."] {
+        for text in ["Bins !4pm", "Bins !4:00 PM", "Bins remind me at 4pm", "Bins remind me at 4 p.m."] {
             let r = parser.parse(text)
             XCTAssertEqual(r.title, "Bins", text)
             assertDate(r.reminderDate, 2026, 10, 21, 16, 0)
@@ -431,6 +436,60 @@ final class ReminderWordsTests: XCTestCase {
         XCTAssertEqual(remind.title, "Call mom")
         XCTAssertEqual(remind.dueDate, at(11, 23, 14, 40))
         XCTAssertEqual(remind.reminderOffsetMinutes, 0, "at the time of the task")
+    }
+
+    /// "reminder" with no "me" and no "!" is weak evidence: plenty of titles hold the word. It takes only the relative
+    /// forms (before, in, at the time), never a clock time or a day (the supervisor, round 36); "remind me" keeps them
+    /// all. Monday 2026-11-23, 14:10 Eastern.
+    func testABareReminderTakesOnlyTheRelativeForms() throws {
+        var ny = Calendar(identifier: .gregorian)
+        ny.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+        func at(_ m: Int, _ d: Int, _ h: Int, _ min: Int) -> Date {
+            ny.date(from: DateComponents(year: 2026, month: m, day: d, hour: h, minute: min))!
+        }
+        let now = at(11, 23, 14, 10)
+        let p = QuickAddParser(now: now, calendar: ny)
+        func noReminder(_ r: QuickAddResult, _ text: String, file: StaticString = #filePath, line: UInt = #line) {
+            XCTAssertNil(r.reminderOffsetMinutes, text, file: file, line: line)
+            XCTAssertNil(r.reminderDate, text, file: file, line: line)
+            XCTAssertNil(r.reminderClock, text, file: file, line: line)
+            XCTAssertFalse(r.tokens.contains { $0.kind == .reminder }, text, file: file, line: line)
+        }
+
+        let send = p.parse("Send reminder at 3pm")
+        XCTAssertEqual(send.title, "Send reminder")
+        XCTAssertEqual(send.dueDate, at(11, 23, 15, 0))
+        noReminder(send, "Send reminder at 3pm")
+
+        let bill = p.parse("Pay bill reminder tomorrow 9am")
+        XCTAssertEqual(bill.title, "Pay bill reminder")
+        XCTAssertEqual(bill.dueDate, at(11, 24, 9, 0))
+        noReminder(bill, "Pay bill reminder tomorrow 9am")
+
+        let email = p.parse("Email the reminder at 6")
+        XCTAssertEqual(email.title, "Email the reminder")
+        XCTAssertEqual(email.dueDate, at(11, 23, 18, 0), "at 6 is the afternoon")
+        noReminder(email, "Email the reminder at 6")
+
+        let dentist = p.parse("Dentist friday 3pm reminder 1 hour before")
+        XCTAssertEqual(dentist.title, "Dentist")
+        XCTAssertEqual(dentist.dueDate, at(11, 27, 15, 0))
+        XCTAssertEqual(dentist.reminderOffsetMinutes, 60)
+
+        let water = p.parse("Water plants reminder in 10 minutes")
+        XCTAssertEqual(water.title, "Water plants")
+        XCTAssertEqual(water.reminderFromNow, ReminderSpan(minutes: 10))
+        XCTAssertEqual(water.reminderDate, at(11, 23, 14, 20))
+        XCTAssertNil(water.dueDate, "a reminder from now, not a due time")
+
+        let mom = p.parse("Call mom 5pm remind me at 4pm")
+        XCTAssertEqual(mom.title, "Call mom")
+        XCTAssertEqual(mom.dueDate, at(11, 23, 17, 0))
+        XCTAssertEqual(mom.reminderClock, ReminderClock(hour: 16, minute: 0), "remind me keeps the clock form")
+        XCTAssertEqual(mom.reminderDate, at(11, 23, 16, 0))
+
+        // And at the time, as the relative forms do.
+        XCTAssertEqual(p.parse("Standup 9:30am reminder at the time").reminderOffsetMinutes, 0)
     }
 
     // MARK: What a pick writes

@@ -11,10 +11,13 @@ import Foundation
 //   !In 5 minutes, !in an hour, !in half an hour, !in 2 days  that long from now
 //   !4pm, !4:00 PM, !4 p.m., !16:00, !at 4pm, !tomorrow 9am   at that clock time (`ReminderClock`)
 //
-// "remind me" or "reminder" before any of these, without the "!", is the same reminder ("remind me 30 minutes
-// before", "reminder in an hour", "remind me at 4pm", "remind me at the time"). Not followed by one, they are title
-// words ("Remind Sam about the party", "Reminder: pay rent"). "!10 minutes" (no "before", no "in") is not a phrase.
-// The one-word codes (`!15m`, `!15mb`, `!at`, `!0`) still work (`ReminderPhrase(code:)`).
+// "remind me" before any of these, without the "!", is the same reminder ("remind me 30 minutes before", "remind me at
+// 4pm", "remind me at the time"). "reminder" alone is weaker evidence (plenty of titles hold the word: "Send reminder
+// at 3pm", "Pay bill reminder tomorrow 9am"), so it takes only the forms measured from something, never a clock time
+// or a day: "reminder 1 hour before", "reminder in 10 minutes", "reminder at the time" (the supervisor, round 36).
+// Not followed by one, they are title words ("Remind Sam about the party", "Reminder: pay rent"). "!10 minutes" (no
+// "before", no "in") is not a phrase. The one-word codes (`!15m`, `!15mb`, `!at`, `!0`) still work
+// (`ReminderPhrase(code:)`).
 extension ReminderPhrase {
     /// The reminder phrase starting at `words[i]` (the parser's lowercased words, punctuation as typed): what it means
     /// and how many words it takes, the longest reading. `atStart`: the words open the text, where a "to" right after a
@@ -30,23 +33,26 @@ extension ReminderPhrase {
             return ReminderPhrase(code: first).map { ($0, 1) }
         }
         let lead: Int
+        // "reminder" on its own reads only the relative forms: never a clock time or a day.
+        var clocks = true
         switch DateExpressionParser.normalize(first) {
         case "remind" where i + 1 < words.count && DateExpressionParser.normalize(words[i + 1]) == "me": lead = 2
-        case "reminder": lead = 1
+        case "reminder": lead = 1; clocks = false
         default: return nil
         }
-        guard let (phrase, n) = matchBody(words, at: i + lead) else { return nil }
+        guard let (phrase, n) = matchBody(words, at: i + lead, clocks: clocks) else { return nil }
         var length = lead + n
         if atStart, i + length < words.count, DateExpressionParser.normalize(words[i + length]) == "to" { length += 1 }
         return (phrase, length)
     }
 
-    /// The words after the "!" (or after "remind me"), longest reading first.
-    static func matchBody(_ words: [String], at j: Int) -> (ReminderPhrase, Int)? {
+    /// The words after the "!" (or after "remind me" / "reminder"), longest reading first. `clocks: false` leaves out the
+    /// clock times and days ("reminder" alone, `match`).
+    static func matchBody(_ words: [String], at j: Int, clocks: Bool = true) -> (ReminderPhrase, Int)? {
         guard j < words.count, !words[j].isEmpty else { return nil }
-        let readings = [matchAtTheTime(words, at: j), matchBefore(words, at: j), matchFromNow(words, at: j),
-                        matchClock(words, at: j)].compactMap { $0 }
-        return readings.max { $0.1 < $1.1 }
+        var readings = [matchAtTheTime(words, at: j), matchBefore(words, at: j), matchFromNow(words, at: j)]
+        if clocks { readings.append(matchClock(words, at: j)) }
+        return readings.compactMap { $0 }.max { $0.1 < $1.1 }
     }
 
     private static func word(_ words: [String], _ k: Int) -> String? {

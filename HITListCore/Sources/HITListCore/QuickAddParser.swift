@@ -432,7 +432,8 @@ public struct QuickAddParser: Sendable {
 /// `!15`, `!30m15h`, `!29d`, `!0h30mb`).
 ///
 /// And in words (brief 175, `QuickAddParser+Reminders`): `!At time of task`, `!10 minutes before`, `!In 5 minutes`,
-/// a clock time (`!4pm`, `!4:00 PM`), or "remind me" / "reminder" before the same words without the "!".
+/// a clock time (`!4pm`, `!4:00 PM`), or "remind me" before the same words without the "!"; "reminder" alone takes
+/// only the relative ones (before, in, at the time), never a clock time or a day.
 public enum ReminderPhrase: Equatable, Sendable {
     case fromNow(ReminderSpan)
     /// 0 is at the due time.
