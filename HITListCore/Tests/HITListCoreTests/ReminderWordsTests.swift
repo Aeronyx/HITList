@@ -83,7 +83,15 @@ final class ReminderWordsTests: XCTestCase {
         assertDate(later(21, 59), 2026, 10, 22, 9, 0)
         assertDate(later(22, 0), 2026, 10, 22, 9, 0)
         assertDate(later(23, 30), 2026, 10, 22, 9, 0)
-        assertDate(later(0, 30), 2026, 10, 21, 4, 0)
+        // After midnight: before 7 AM is 9:00 AM that morning (the review of brief 175, finding 11: 00:30 was 4:00 AM).
+        assertDate(later(0, 30), 2026, 10, 21, 9, 0)
+        assertDate(later(3, 0), 2026, 10, 21, 9, 0)
+        assertDate(later(3, 59), 2026, 10, 21, 7, 0)
+        assertDate(later(4, 0), 2026, 10, 21, 7, 0)
+        assertDate(later(6, 30), 2026, 10, 21, 10, 0)
+        let early = rows(hasTime: false, now: Fixed.date(2026, 10, 21, 0, 30)).last!
+        XCTAssertEqual(early.detail, "9:00 AM")
+        XCTAssertEqual(early.phrase, "!9:00 AM")
         // Seconds past the hour don't push it an hour on.
         XCTAssertEqual(ReminderSuggestions.later(now: Fixed.date(2026, 10, 21, 13, 0).addingTimeInterval(30), calendar: Fixed.calendar),
                        Fixed.date(2026, 10, 21, 16, 0))

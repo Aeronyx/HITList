@@ -41,7 +41,8 @@ public enum ReminderSuggestions {
     /// No time: from now, then Later.
     public static let untimedFromNowMinutes = [5, 15, 30, 60]
 
-    /// Later: three hours from now, rounded up to the next whole hour; if that is after 10 PM, 9:00 AM tomorrow.
+    /// Later: three hours from now, rounded up to the next whole hour; if that is after 10 PM, 9:00 AM tomorrow; if it is
+    /// before 7 AM (after midnight), 9:00 AM that morning (the review of brief 175: at 00:30 it was 4:00 AM).
     public static func later(now: Date, calendar: Calendar = .current) -> Date {
         // To the minute, as "in 2 hours" counts: 1:00:30 PM is 4:00 PM, not 5.
         let minute = calendar.dateInterval(of: .minute, for: now)?.start ?? now
@@ -50,6 +51,8 @@ public enum ReminderSuggestions {
         let rounded = hourStart < ahead ? calendar.date(byAdding: .hour, value: 1, to: hourStart) ?? ahead : hourStart
         let today = calendar.startOfDay(for: now)
         let tenPM = calendar.date(bySettingHour: 22, minute: 0, second: 0, of: today) ?? today
+        let sevenAM = calendar.date(bySettingHour: 7, minute: 0, second: 0, of: today) ?? today
+        if rounded < sevenAM { return calendar.date(bySettingHour: 9, minute: 0, second: 0, of: today) ?? rounded }
         guard rounded > tenPM else { return rounded }
         let tomorrow = calendar.date(byAdding: .day, value: 1, to: today) ?? today
         return calendar.date(bySettingHour: 9, minute: 0, second: 0, of: tomorrow) ?? tomorrow
