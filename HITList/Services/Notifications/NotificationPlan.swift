@@ -141,7 +141,7 @@ struct NotificationPlan: Equatable {
                   !alreadyScheduled.contains(reminderLedgerKey(taskID: item.id, at: at)) else { return nil }
             return Candidate(item: item, due: item.dueDate, remindAt: at, kind: .reminder, fireDate: now, isLate: true)
         }
-        let candidates = (tasks
+        let dueCandidates = tasks
             .map { $0.withDefaultOffset(defaultOffsetMinutes) }
             .compactMap { item -> Candidate? in
                 guard !item.isCompleted, item.hasDueTime, let due = item.dueDate, due < horizon else { return nil }
@@ -160,7 +160,12 @@ struct NotificationPlan: Equatable {
                 guard due >= earliest, item.updatedAt < due, !alreadyScheduled.contains(key),
                       !alreadyScheduled.contains(ledgerKey(taskID: item.id, dueDate: due)) else { return nil }
                 return Candidate(item: item, due: due, remindAt: remindAt, kind: .overdue, fireDate: now)
-            } + reminders)
+            }
+        // A reminder moment that is the due-time reminder's own moment ("Call mom 5pm !5pm", "Standup every weekday at
+        // 9am !9am", Later on the hour) goes out as that one request: one banner (the second review of brief 175).
+        let dueMoments = Set(dueCandidates.map { "\($0.item.id.uuidString)@\($0.remindAt.timeIntervalSinceReferenceDate)" })
+        let ownMoments = reminders.filter { !dueMoments.contains("\($0.item.id.uuidString)@\($0.remindAt.timeIntervalSinceReferenceDate)") }
+        let candidates = (dueCandidates + ownMoments)
             .sorted { a, b in
                 if a.fireDate != b.fireDate { return a.fireDate < b.fireDate }
                 let aDue = a.due ?? a.remindAt, bDue = b.due ?? b.remindAt
