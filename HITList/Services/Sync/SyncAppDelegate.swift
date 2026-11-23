@@ -131,6 +131,17 @@ final class SyncAppDelegate: NSObject, UIApplicationDelegate {
         CloudSyncMonitor.shared.pushRegistrationFailed(error)
     }
 
+    /// Brief 176, round 3: iOS finished the Stream ring inbox's background ack (an ack that failed went again as a
+    /// background upload) and woke the app to say how it went; the only background session the app has.
+    func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String,
+                     completionHandler: @escaping () -> Void) {
+        guard !SyncAppDelegateSupport.isTesting,
+              StreamInbox.handleBackgroundEvents(identifier: identifier, completion: completionHandler) else {
+            completionHandler()
+            return
+        }
+    }
+
     /// A silent CloudKit push wakes the app; it stays awake until the import it triggers finishes (or
     /// 25 s pass), so the import completes in the background instead of on the next launch. An import
     /// that finished before the wait began counts (`ImportWaiter`), so the app is not held for nothing.

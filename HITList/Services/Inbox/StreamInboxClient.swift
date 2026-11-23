@@ -68,6 +68,97 @@ struct StreamInboxClient {
     }
 }
 
+/// Delivers an ack that didn't reach the relay some other way (round 3, finding 4): on the iPhone, a background upload.
+@MainActor
+protocol StreamInboxAckSender: AnyObject {
+    func send(ids: [String], link: InboxLink)
+}
+
+#if os(iOS)
+/// The iPhone's ack of last resort (round 3, finding 4): an ack that failed goes again as a background upload, which iOS
+/// carries out when it can, after the app is suspended or quit, and then wakes the app to say how it went
+/// (`SyncAppDelegate`, `handleEventsForBackgroundURLSession`). A 2xx takes exactly its ids out of the ids waiting to be
+/// acked (`StreamInboxSettings.ackFinished`, on the main actor); anything else leaves them for the next check. One
+/// session per store (a Debug side store's is its own). The request carries the inbox key in its header, as every
+/// request to the relay does, and iOS keeps it with the upload until it is sent.
+final class BackgroundAck: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    static let shared = BackgroundAck()
+
+    /// The inbox's side of it, on the main actor.
+    @MainActor
+    final class Sender: StreamInboxAckSender {
+        func send(ids: [String], link: InboxLink) { BackgroundAck.shared.send(ids: ids, link: link) }
+    }
+
+    let identifier = "com.trammells.hitlist.stream-inbox.ack." + ModelContainerFactory.storeName
+    private let lock = NSLock()
+    private var finishEvents: (() -> Void)?
+    private lazy var session: URLSession = {
+        let configuration = URLSessionConfiguration.background(withIdentifier: identifier)
+        configuration.sessionSendsLaunchEvents = true
+        configuration.isDiscretionary = false
+        return URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
+    }()
+
+    /// Where an upload's body waits for iOS: the app's own Application Support, readable after the first unlock.
+    private static var folder: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("StreamInboxAcks", isDirectory: true)
+    }
+
+    private struct Upload: Codable {
+        let ids: [String]
+        let file: String
+    }
+
+    func send(ids: [String], link: InboxLink) {
+        var request = InboxAPI.ack(ids: ids, link: link)
+        guard let body = request.httpBody else { return }
+        request.httpBody = nil
+        let file = Self.folder.appendingPathComponent("ack-\(UUID().uuidString).json")
+        do {
+            try FileManager.default.createDirectory(at: Self.folder, withIntermediateDirectories: true)
+            try body.write(to: file, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        } catch {
+            return
+        }
+        let task = lock.withLock { session }.uploadTask(with: request, fromFile: file)
+        task.taskDescription = (try? JSONEncoder().encode(Upload(ids: ids, file: file.lastPathComponent)))
+            .flatMap { String(data: $0, encoding: .utf8) }
+        task.resume()
+    }
+
+    /// iOS woke the app to hand over this session's results: the session is made again (it finds its tasks), and
+    /// `completion` runs once they have all been heard. False for another session's.
+    func handleEvents(identifier: String, completion: @escaping () -> Void) -> Bool {
+        guard identifier == self.identifier else { return false }
+        lock.withLock {
+            finishEvents = completion
+            _ = session
+        }
+        return true
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        guard let text = task.taskDescription, let upload = try? JSONDecoder().decode(Upload.self, from: Data(text.utf8)) else { return }
+        let status = (task.response as? HTTPURLResponse)?.statusCode ?? 0
+        let delivered = error == nil && (200..<300).contains(status)
+        try? FileManager.default.removeItem(at: Self.folder.appendingPathComponent(upload.file))
+        DispatchQueue.main.async {
+            StreamInboxSettings(defaults: AppGroup.defaults).ackFinished(upload.ids, delivered: delivered)
+        }
+    }
+
+    func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
+        let completion = lock.withLock { () -> (() -> Void)? in
+            defer { finishEvents = nil }
+            return finishEvents
+        }
+        DispatchQueue.main.async { completion?() }
+    }
+}
+#endif
+
 /// What went wrong, in words for Settings. None names how HITList syncs (`StreamRingSettingsTests`).
 enum StreamInboxProblem: Error, Equatable, Sendable {
     case notALink

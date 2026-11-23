@@ -686,6 +686,40 @@ final class StreamInboxTests: XCTestCase {
         XCTAssertEqual(try tasks().map(\.title), ["Buy milk"])
     }
 
+    /// Finding 4, the iPhone: an ack that fails is handed to iOS as a background upload (once while it is in flight),
+    /// which iOS finishes after the app is suspended or quit; its success takes exactly its ids out of those waiting to
+    /// be acked. Until then the next check still sends them first, and a capture offered again is never added twice.
+    func testAnAckThatFailsGoesAgainAsABackgroundUpload() async throws {
+        final class Recording: StreamInboxAckSender {
+            var sent: [[String]] = []
+            func send(ids: [String], link: InboxLink) { sent.append(ids) }
+        }
+        let iOS = Recording()
+        relay.add("a", "Buy milk")
+        let inbox = StreamInbox(container: container, defaults: defaults, keyStore: MemoryInboxKey(), client: relay.client,
+                                storeIsReal: { true }, ackSender: iOS, log: { _, _ in })
+        _ = await inbox.connect(linkText: relay.link, checkAfter: false)
+        relay.acksFail = true
+        await inbox.check(.checkNow)
+        XCTAssertEqual(iOS.sent, [["a"]], "the failed ack, handed to iOS")
+        let settings = StreamInboxSettings(defaults: defaults)
+        XCTAssertEqual(settings.unackedIDs, ["a"], "and still sent first by the next check until it lands")
+        await inbox.check(.checkNow)
+        XCTAssertEqual(iOS.sent, [["a"]], "not again while iOS has it")
+        // iOS delivered it while the app was suspended.
+        relay.acksFail = false
+        _ = try await relay.client.ack(ids: ["a"], link: XCTUnwrap(inbox.link))
+        settings.ackFinished(["a"], delivered: true)
+        XCTAssertEqual(settings.unackedIDs, [])
+        XCTAssertEqual(settings.ackSending, [])
+        relay.add("b", "Buy bread")
+        let before = relay.requests.count
+        await inbox.check(.checkNow)
+        XCTAssertEqual(relay.requests.dropFirst(before).first?.path, InboxAPI.Endpoint.claim.rawValue, "nothing left to ack first")
+        XCTAssertEqual(try tasks().map(\.title), ["Buy bread", "Buy milk"], "each once")
+        XCTAssertEqual(relay.waitingIDs, [])
+    }
+
     /// Finding 3a: the push service a token belongs to is read from the build's signed entitlement, not from whether
     /// it is a Debug build: a Release build signed for development (an Xcode Run in Release, as George's speed probes
     /// are) has a development token, and the relay sent it to the wrong service.

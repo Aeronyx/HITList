@@ -103,6 +103,9 @@ final class StreamInbox {
     @ObservationIgnored private let storeIsReal: () -> Bool
     @ObservationIgnored private let isActive: @MainActor () -> Bool
     @ObservationIgnored private let pushEnvironment: @MainActor () -> InboxPushRegistration.Environment
+    /// The iPhone's: an ack that failed goes again as a background upload iOS finishes after suspension (round 3,
+    /// finding 4). None on the Mac and in the tests' inboxes (theirs records).
+    @ObservationIgnored private let ackSender: StreamInboxAckSender?
     @ObservationIgnored private let addTask: @MainActor (String, Date, ModelContext) throws -> UUID
     @ObservationIgnored private let log: @MainActor (String, SyncLogEntry.Level) -> Void
     /// The app's own inbox: timers, observers, background time. Off for the hosted tests' inboxes.
@@ -126,6 +129,7 @@ final class StreamInbox {
          storeIsReal: @escaping () -> Bool = { !ModelContainerFactory.isRunningInMemory },
          isActive: @escaping @MainActor () -> Bool = StreamInbox.appIsActive,
          pushEnvironment: @escaping @MainActor () -> InboxPushRegistration.Environment = StreamInbox.signedPushEnvironment,
+         ackSender: StreamInboxAckSender? = nil,
          addTask: @escaping @MainActor (String, Date, ModelContext) throws -> UUID = StreamInbox.addThroughQuickAdd,
          log: @escaping @MainActor (String, SyncLogEntry.Level) -> Void = { line, level in
              CloudSyncMonitor.shared.write(.note, line, level: level)
@@ -140,6 +144,7 @@ final class StreamInbox {
         self.storeIsReal = storeIsReal
         self.isActive = isActive
         self.pushEnvironment = pushEnvironment
+        self.ackSender = ackSender
         self.addTask = addTask
         self.log = log
         deviceID = settings.deviceID(platform: Self.platform)
@@ -183,10 +188,16 @@ final class StreamInbox {
     /// From `HITListApp.init`: observers and the minute's timer now, the first check a few seconds later.
     static func start(container: ModelContainer) {
         guard shared == nil else { return }
-        #if DEBUG
-        let inbox = StreamInboxDebug.inbox(container: container) ?? StreamInbox(container: container, isLive: true)
+        #if os(iOS)
+        let ackSender: StreamInboxAckSender? = BackgroundAck.Sender()
         #else
-        let inbox = StreamInbox(container: container, isLive: true)
+        let ackSender: StreamInboxAckSender? = nil
+        #endif
+        #if DEBUG
+        let inbox = StreamInboxDebug.inbox(container: container)
+            ?? StreamInbox(container: container, isLive: true, ackSender: ackSender)
+        #else
+        let inbox = StreamInbox(container: container, isLive: true, ackSender: ackSender)
         #endif
         shared = inbox
         inbox.install()
@@ -383,8 +394,9 @@ final class StreamInbox {
         if !unacked.isEmpty {
             do {
                 _ = try await client.ack(ids: unacked, link: link)
-                settings.unackedIDs = []
+                acked(unacked)
             } catch {
+                handToIOS(unacked, link: link)
                 return finish(CheckResult(problem: StreamInboxProblem(error)), reason: reason)
             }
         }
@@ -455,9 +467,10 @@ final class StreamInbox {
         if !handled.isEmpty {
             do {
                 _ = try await client.ack(ids: handled, link: link)
-                settings.unackedIDs = []
+                acked(handled)
             } catch {
                 result.problem = result.problem ?? StreamInboxProblem(error)
+                handToIOS(handled, link: link)
             }
         }
 
@@ -473,6 +486,27 @@ final class StreamInbox {
             await refreshStatus()
         }
         return finish(result, reason: reason)
+    }
+
+    /// The relay has these ids: nothing waits to be acked, and none is in flight with iOS any more.
+    private func acked(_ ids: [String]) {
+        settings.unackedIDs = []
+        let done = Set(ids)
+        if settings.ackSending.contains(where: done.contains) { settings.ackSending = settings.ackSending.filter { !done.contains($0) } }
+    }
+
+    /// An ack that didn't reach the relay, handed to iOS as a background upload, which it finishes after the app is
+    /// suspended or quit (round 3, finding 4): once while it is in flight. Its success takes exactly its ids out of
+    /// `unackedIDs` (`StreamInboxSettings.ackFinished`); until then the next check still sends them first (the relay
+    /// counts an id once), and a capture offered again meanwhile is never added twice (`addedIDs`). The note written
+    /// before a save (`addingNow`) is about that save, not its ack, and isn't touched.
+    private func handToIOS(_ ids: [String], link: InboxLink) {
+        guard let ackSender else { return }
+        let inFlight = Set(settings.ackSending)
+        let fresh = ids.filter { !inFlight.contains($0) }
+        guard !fresh.isEmpty else { return }
+        settings.ackSending += fresh
+        ackSender.send(ids: fresh, link: link)
     }
 
     /// The note written before a save, still there: the app stopped between the save and writing the id down. The task
@@ -656,6 +690,14 @@ final class StreamInbox {
         guard let inbox = shared else { return .noData }
         return await inbox.handleWakePush()
     }
+
+    #if os(iOS)
+    /// From `SyncAppDelegate`: iOS finished the inbox's background ack and woke the app to say how it went. False for
+    /// a session that isn't the inbox's.
+    nonisolated static func handleBackgroundEvents(identifier: String, completion: @escaping () -> Void) -> Bool {
+        BackgroundAck.shared.handleEvents(identifier: identifier, completion: completion)
+    }
+    #endif
 
     /// The status line's word on wake-ups (iPhone and iPad; the Mac checks every minute while it runs): on, or what
     /// stops them. Nil while the relay has no Apple push key (they are off, not wrong).
