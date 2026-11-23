@@ -37,9 +37,10 @@ final class StreamInboxTests: XCTestCase {
         throw SaveFailed()
     }
 
-    private func inbox(failing: Set<String> = [], storeIsReal: Bool = true, active: Bool = true) -> StreamInbox {
+    private func inbox(failing: Set<String> = [], storeIsReal: Bool = true, active: Bool = true,
+                       pushEnvironment: InboxPushRegistration.Environment = .development) -> StreamInbox {
         StreamInbox(container: container, defaults: defaults, keyStore: MemoryInboxKey(), client: relay.client,
-                    storeIsReal: { storeIsReal }, isActive: { active },
+                    storeIsReal: { storeIsReal }, isActive: { active }, pushEnvironment: { pushEnvironment },
                     addTask: { text, now, context in
                         if failing.contains(text) { return try Self.failingSave(text, in: context) }
                         return try StreamInbox.addThroughQuickAdd(text, now, context)
@@ -47,8 +48,9 @@ final class StreamInboxTests: XCTestCase {
                     log: { [weak self] line, _ in self?.logged.append(line) })
     }
 
-    private func connected(failing: Set<String> = [], storeIsReal: Bool = true, active: Bool = true) async throws -> StreamInbox {
-        let inbox = inbox(failing: failing, storeIsReal: storeIsReal, active: active)
+    private func connected(failing: Set<String> = [], storeIsReal: Bool = true, active: Bool = true,
+                           pushEnvironment: InboxPushRegistration.Environment = .development) async throws -> StreamInbox {
+        let inbox = inbox(failing: failing, storeIsReal: storeIsReal, active: active, pushEnvironment: pushEnvironment)
         let problem = await inbox.connect(linkText: relay.link, checkAfter: false)
         XCTAssertNil(problem)
         XCTAssertTrue(inbox.isConnected)
@@ -504,13 +506,13 @@ final class StreamInboxTests: XCTestCase {
     // MARK: Wake-ups
 
     func testThePushTokenTravelsWithEachClaim() async throws {
-        let inbox = try await connected()
+        let inbox = try await connected(pushEnvironment: .production)
         StreamInbox.pushTokenArrived(Data([0xAB, 0x12, 0x00, 0xFF]), defaults: defaults)
         await inbox.check(.checkNow)
         let claim = try XCTUnwrap(relay.requests.last { $0.path == InboxAPI.Endpoint.claim.rawValue })
         let push = try XCTUnwrap(claim.json["push"] as? [String: String])
         XCTAssertEqual(push["token"], "ab1200ff")
-        XCTAssertEqual(push["environment"], "development", "a Debug build's token is a development one")
+        XCTAssertEqual(push["environment"], "production", "the push service the build's signed profile names")
         #if os(macOS)
         XCTAssertEqual(push["platform"], "macOS")
         #else
@@ -536,5 +538,52 @@ final class StreamInboxTests: XCTestCase {
         relay.isDown = true
         let third = await inbox.handleWakePush()
         XCTAssertEqual(third, .failed)
+    }
+
+    // MARK: Round 3
+
+    /// Finding 3a: the push service a token belongs to is read from the build's signed entitlement, not from whether
+    /// it is a Debug build: a Release build signed for development (an Xcode Run in Release, as George's speed probes
+    /// are) has a development token, and the relay sent it to the wrong service.
+    func testThePushServiceIsReadFromTheSignedProfile() {
+        func profile(_ entitlements: String) -> Data {
+            var data = Data([0x30, 0x82, 0x0F, 0x1A, 0x06, 0x09, 0x2A, 0x86])  // the signature's wrapper around the plist
+            data.append(Data("""
+                <?xml version="1.0" encoding="UTF-8"?>
+                <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+                <plist version="1.0"><dict><key>Name</key><string>HITList</string>\
+                <key>Entitlements</key><dict>\(entitlements)</dict></dict></plist>
+                """.utf8))
+            data.append(Data([0x00, 0xA0, 0x82, 0x0B, 0xFF]))
+            return data
+        }
+        let phoneDevelopment = profile("<key>aps-environment</key><string>development</string>")
+        let macDevelopment = profile("<key>com.apple.developer.aps-environment</key><string>development</string>")
+        let production = profile("<key>aps-environment</key><string>production</string>")
+        XCTAssertEqual(StreamInbox.pushEnvironment(profile: phoneDevelopment, isSimulator: false), .development)
+        XCTAssertEqual(StreamInbox.pushEnvironment(profile: macDevelopment, isSimulator: false), .development)
+        XCTAssertEqual(StreamInbox.pushEnvironment(profile: production, isSimulator: false), .production)
+        XCTAssertEqual(StreamInbox.pushEnvironment(profile: nil, isSimulator: false), .production,
+                       "TestFlight and the App Store carry no profile")
+        XCTAssertEqual(StreamInbox.pushEnvironment(profile: Data("not a profile".utf8), isSimulator: false), .production)
+        XCTAssertEqual(StreamInbox.pushEnvironment(profile: profile(""), isSimulator: false), .production, "no push entitlement")
+        XCTAssertEqual(StreamInbox.pushEnvironment(profile: nil, isSimulator: true), .development, "the simulator's tokens")
+    }
+
+    /// Finding 3b: "wakes this iPhone when you speak" only once Apple has taken a push for this device; a registered
+    /// token alone is "wake-ups not confirmed yet"; a refused one says why.
+    func testTheStatusLineSaysWakeUpsOnlyOnceAppleTookOne() async throws {
+        relay.pushConfigured = true
+        let inbox = try await connected()
+        StreamInbox.pushTokenArrived(Data(repeating: 0xAB, count: 32), defaults: defaults)
+        await inbox.check(.checkNow)
+        XCTAssertEqual(inbox.wakeWords(for: "iPhone"), StreamRingWords.wakeUnconfirmed, "registered, never woken")
+        relay.setWake(device: inbox.deviceID, okAt: Date().addingTimeInterval(-120))
+        await inbox.check(.checkNow)
+        XCTAssertEqual(inbox.wakeWords(for: "iPhone"), StreamRingWords.wakeOn("iPhone"), "Apple took one two minutes ago")
+        let refused = "Apple refused its push token at both of its push services (BadDeviceToken); it isn't woken until HITList on it gives a new one."
+        relay.setWake(device: inbox.deviceID, error: refused, refused: true)
+        await inbox.check(.checkNow)
+        XCTAssertEqual(inbox.wakeWords(for: "iPhone"), StreamRingWords.wakeTrouble("iPhone", refused))
     }
 }

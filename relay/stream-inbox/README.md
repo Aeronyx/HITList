@@ -42,8 +42,12 @@ one for every device: a capture it leaves out is remembered as seen and never ha
 
 With an Apple push key (`setup.sh` asks for it; optional), each device that gave its push token with a claim is woken
 by a background push the moment a capture is kept, so the iPhone takes it with the phone asleep in a pocket. A device
-is woken at most once every 30 seconds until it has come for its captures. Apple's retired or refused tokens are
-dropped.
+is woken at most once every 30 seconds until it has come for its captures. A token Apple calls BadDeviceToken is tried
+once at Apple's other push service, and the one that took it is remembered for that token (an Xcode build in Release is
+signed for development). A token Apple retires or refuses at both is kept as refused, with the reason, and not pushed
+again until that device gives a new one. Status says each device's last success and trouble, and a push key that can't
+be used, with the devices it was waking; HITList says "wakes this iPhone when you speak" only once Apple has taken a
+push for it.
 
 ## Endpoints
 
@@ -67,7 +71,8 @@ Every answer is JSON. The inbox endpoints need `Authorization: Bearer <inbox key
 - After an ack, its id only, 30 days, to catch a redelivery (and for an hour a one-way hash of its words, so the same
   capture from the other route moments later is matched, until the routes have shown they share ids).
 - Stream's sign-in tokens and the time you approved, while connected.
-- Each device's push token, its environment and when it last claimed and was woken.
+- Each device's push token, the Apple push service it belongs to, when it last claimed and was woken, when Apple last
+  took a push for it, and its last trouble.
 - The top-level field names of the last capture (how we learn what Stream sends), never their values.
 - Secrets live in your Cloudflare account (`wrangler secret`): `INBOX_KEY`, `STREAM_SECRET` for the webhook, and
   `APNS_KEY`, `APNS_KEY_ID`, `APNS_TEAM_ID` for the wake-ups.

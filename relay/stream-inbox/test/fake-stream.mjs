@@ -9,8 +9,11 @@
 // JSON-RPC. `POST /__fake/mode` makes it misbehave the ways a real server might (sessions, prose, event streams, slow
 // or refused refreshes, a client secret, no refresh token).
 //
-// Apple: `POST /3/device/<token>` checks the headers, the payload and that the provider token verifies with the key's
-// public half, and answers as `mode.apns` says. Test controls live under /__fake/.
+// Apple: `POST /production/3/device/<token>` and `/sandbox/3/device/<token>` (the relay's APNS_HOST and
+// APNS_SANDBOX_HOST point at those two) check the headers, the payload and that the provider token verifies with the
+// key's public half, and answer as `mode.apns` says; `mode.apnsTokens` makes a token good at one service only
+// ("sandbox", "production") or at neither ("nowhere"), as Apple answers BadDeviceToken. Test controls live under
+// /__fake/.
 import http from "node:http";
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -219,9 +222,11 @@ const server = http.createServer(async (req, res) => {
     return send(res, 200, { jsonrpc: "2.0", id: message.id, error: { code: -32601, message: "Method not found" } });
   }
 
-  // Apple's push service.
-  const device = /^\/3\/device\/([0-9a-f]+)$/.exec(path);
+  // Apple's push services: production and sandbox.
+  const device = /^\/(production|sandbox)\/3\/device\/([0-9a-f]+)$/.exec(path);
   if (req.method === "POST" && device) {
+    const service = device[1];
+    const tokenHex = device[2];
     const problems = verifyProviderToken(req.headers.authorization);
     if (req.headers["apns-push-type"] !== "background") problems.push(`apns-push-type ${req.headers["apns-push-type"]}`);
     if (req.headers["apns-priority"] !== "5") problems.push(`apns-priority ${req.headers["apns-priority"]}`);
@@ -232,12 +237,14 @@ const server = http.createServer(async (req, res) => {
       problems.push(`payload ${body}`);
     }
     if (mode.apnsDelayMs) await wait(mode.apnsDelayMs);
-    const answer = (mode.apns || {})[device[1]];
+    const answer = (mode.apns || {})[tokenHex];
+    const goodAt = (mode.apnsTokens || {})[tokenHex];
     const expire = mode.apnsExpireOnce && !log.pushes.some((p) => p.expired);
-    log.pushes.push({ token: device[1], problems, at: Date.now(), expired: Boolean(expire) });
+    log.pushes.push({ token: tokenHex, host: service, problems, at: Date.now(), expired: Boolean(expire) });
     if (expire) return send(res, 403, { reason: "ExpiredProviderToken" });
     if (answer) return send(res, answer[0], { reason: answer[1] });
     if (problems.length) return send(res, 400, { reason: "BadRequest", problems });
+    if (goodAt && goodAt !== service) return send(res, 400, { reason: "BadDeviceToken" });
     return send(res, 200, "", { "apns-id": crypto.randomUUID() });
   }
 

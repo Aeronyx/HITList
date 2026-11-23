@@ -99,7 +99,7 @@ async function route(request, env) {
       return callbackPage(url, env);
   }
   const keyed = KEYED[name];
-  if (!keyed || (name === "POST /__test/clock" && env.RELAY_TEST_MODE !== "1")) return json({ error: "Not found." }, 404);
+  if (!keyed || (url.pathname.startsWith("/__test/") && env.RELAY_TEST_MODE !== "1")) return json({ error: "Not found." }, 404);
   if (!(await hasInboxKey(request, env))) return json({ error: "Unauthorized." }, 401);
   return keyed(request, env, url);
 }
@@ -151,6 +151,13 @@ const KEYED = {
     const body = await readJSON(request);
     const offset = body && Number.isFinite(body.offsetMs) ? body.offsetMs : 0;
     return json(await inbox(env).setTestClock(offset));
+  },
+
+  /// test.sh only: signs with this key instead of APNS_KEY (`{"key": null}` goes back to it), so a key that can't be
+  /// used is proved to be said.
+  async "POST /__test/push-key"(request, env) {
+    const body = await readJSON(request);
+    return json(await inbox(env).setTestPushKey(body && typeof body.key === "string" ? body.key : null));
   },
 };
 
@@ -299,10 +306,18 @@ export class StreamInbox extends DurableObject {
       registered_at INTEGER NOT NULL,
       last_claim_at INTEGER,
       last_push_at INTEGER)`);
+    // Round 3: each device's own wake-ups (the push service that took its token, its last success and trouble, a token
+    // Apple refused), added in place on a relay that ran before.
+    const deviceColumns = this.sql.exec("PRAGMA table_info(devices)").toArray().map((c) => c.name);
+    for (const [column, type] of [["proven_environment", "TEXT"], ["last_ok_at", "INTEGER"], ["last_error", "TEXT"],
+      ["last_error_at", "INTEGER"], ["refused_at", "INTEGER"]]) {
+      if (!deviceColumns.includes(column)) this.sql.exec(`ALTER TABLE devices ADD COLUMN ${column} ${type}`);
+    }
     this.lastSweep = 0;
     this.polling = null;
     this.rpcID = 1;
     this.testOffset = 0;
+    this.testPushKey = null;
   }
 
   /// The inbox's clock: the real one, moved only by test.sh (`POST /__test/clock`, RELAY_TEST_MODE).
@@ -313,6 +328,13 @@ export class StreamInbox extends DurableObject {
   setTestClock(offsetMs) {
     if (this.env.RELAY_TEST_MODE === "1") this.testOffset = offsetMs;
     return { offsetMs: this.testOffset };
+  }
+
+  setTestPushKey(key) {
+    if (this.env.RELAY_TEST_MODE !== "1") return { ok: false };
+    this.testPushKey = key;
+    this.deleteMeta("apnsJWT");
+    return { ok: true };
   }
 
   // MARK: What waits
@@ -387,7 +409,7 @@ export class StreamInbox extends DurableObject {
   claim(device, push) {
     const now = this.now();
     this.sweep(now);
-    const registered = this.registerDevice(device, push, now);
+    const wakeState = this.registerDevice(device, push, now);
     const rows = this.sql.exec(
       `SELECT id, text, received_at, captured_at FROM captures
        WHERE done_at IS NULL AND text IS NOT NULL
@@ -404,7 +426,7 @@ export class StreamInbox extends DurableObject {
       })),
       lastReceivedAt: last ? iso(last.at) : null,
       settings: this.settings(),
-      push: { configured: this.pushConfigured(), registered },
+      push: { configured: this.pushConfigured(), ...wakeState },
     };
   }
 
@@ -436,7 +458,6 @@ export class StreamInbox extends DurableObject {
       "SELECT COUNT(*) AS n FROM captures WHERE done_at IS NULL AND text IS NOT NULL").one().n;
     const last = this.getMeta("last", null);
     const webhook = this.getMeta("webhook", null);
-    const push = this.getMeta("push", {});
     return {
       pending,
       lastReceivedAt: last ? iso(last.at) : null,
@@ -450,12 +471,34 @@ export class StreamInbox extends DurableObject {
         lastFields: webhook ? webhook.fields || [] : [],
       },
       stream: this.streamStatus(),
-      push: {
-        configured: this.pushConfigured(),
-        devices: this.sql.exec("SELECT COUNT(*) AS n FROM devices").one().n,
-        lastSentAt: iso(push.lastSentAt),
-        lastError: push.lastError || null,
-      },
+      push: this.pushStatus(),
+    };
+  }
+
+  /// Wake-ups: whether the relay has a push key, how many devices it can wake, its last trouble with the device it was
+  /// waking (a key that can't be used first, then the newest device's), and each device's own state.
+  pushStatus() {
+    const push = this.getMeta("push", {});
+    const rows = this.sql.exec(
+      `SELECT device, platform, environment, proven_environment, last_claim_at, last_push_at, last_ok_at, last_error,
+         last_error_at, refused_at FROM devices ORDER BY registered_at`).toArray();
+    const newest = rows.filter((row) => row.last_error).sort((a, b) => (b.last_error_at || 0) - (a.last_error_at || 0))[0];
+    const keyError = push.keyError ? `${push.keyError.message} (waking ${push.keyError.devices.join(", ")})` : null;
+    return {
+      configured: this.pushConfigured(),
+      devices: rows.filter((row) => row.refused_at === null).length,
+      lastSentAt: iso(push.lastSentAt),
+      lastError: keyError || (newest ? `${newest.device}: ${newest.last_error}` : null),
+      byDevice: rows.map((row) => ({
+        device: row.device,
+        platform: row.platform,
+        service: (row.proven_environment || row.environment) === "production" ? "production" : "sandbox",
+        lastClaimAt: iso(row.last_claim_at),
+        lastPushAt: iso(row.last_push_at),
+        lastOkAt: iso(row.last_ok_at),
+        lastError: row.last_error || null,
+        refused: row.refused_at !== null,
+      })),
     };
   }
 
@@ -507,8 +550,10 @@ export class StreamInbox extends DurableObject {
     return Boolean(this.env.APNS_KEY && this.env.APNS_KEY_ID && this.env.APNS_TEAM_ID);
   }
 
-  /// A claim's `push: {token, environment, platform}`: one token per device, the newest. A claim without one still
-  /// says the device came for its captures.
+  /// A claim's `push: {token, environment, platform}`: one token per device, the newest (a new one starts over). A
+  /// claim without one still says the device came for its captures. The answer is this device's own wake-ups:
+  /// `registered` (it can be woken: a token Apple hasn't refused), `lastOkAt` (Apple last took a push for it) and
+  /// `lastError` (why the last one didn't go, or why it can't be woken).
   registerDevice(device, push, now) {
     const token = push && typeof push.token === "string" ? push.token.trim().toLowerCase() : "";
     if (/^[0-9a-f]{64,200}$/.test(token)) {
@@ -523,7 +568,12 @@ export class StreamInbox extends DurableObject {
     } else {
       this.sql.exec("UPDATE devices SET last_claim_at = ? WHERE device = ?", now, device);
     }
-    return this.sql.exec("SELECT 1 FROM devices WHERE device = ? LIMIT 1", device).toArray().length > 0;
+    const row = this.sql.exec("SELECT last_ok_at, last_error, refused_at FROM devices WHERE device = ? LIMIT 1", device).toArray()[0];
+    return {
+      registered: Boolean(row && row.refused_at === null),
+      lastOkAt: row ? iso(row.last_ok_at) : null,
+      lastError: (row && row.last_error) || null,
+    };
   }
 
   /// A capture was kept: each device that hasn't been woken in the last 30 s, or has claimed since it was, is pushed
@@ -532,8 +582,9 @@ export class StreamInbox extends DurableObject {
     if (!this.pushConfigured()) return;
     const now = this.now();
     const due = this.sql.exec(
-      `SELECT token, environment FROM devices
-       WHERE last_push_at IS NULL OR (last_claim_at IS NOT NULL AND last_claim_at > last_push_at) OR ? - last_push_at >= ?`,
+      `SELECT token, device, environment, proven_environment, platform FROM devices
+       WHERE refused_at IS NULL
+         AND (last_push_at IS NULL OR (last_claim_at IS NOT NULL AND last_claim_at > last_push_at) OR ? - last_push_at >= ?)`,
       now, PUSH_GAP_MS).toArray();
     if (!due.length) return;
     for (const device of due) this.sql.exec("UPDATE devices SET last_push_at = ? WHERE token = ?", now, device.token);
@@ -541,22 +592,46 @@ export class StreamInbox extends DurableObject {
     if (this.ctx.waitUntil) this.ctx.waitUntil(sending);
   }
 
+  /// Each device's push, at the service its token was last taken by (else the one its build named). BadDeviceToken
+  /// is tried once at the other service, whose answer is remembered for that token: a Release build signed for
+  /// development names the wrong one (round 3, finding 3). A key that can't sign is said, with the devices it was for.
   async sendPushes(devices) {
-    let providerToken = await this.providerToken(false);
+    let providerToken;
+    try {
+      providerToken = await this.providerToken(false);
+    } catch (error) {
+      this.noteKeyTrouble(`The relay's Apple push key couldn't be used (${words(error)}). Run setup.sh again with the .p8 file Apple gave you.`, devices);
+      return;
+    }
     for (const device of devices) {
-      let answer = await this.pushOne(device, providerToken);
+      const first = device.proven_environment || device.environment;
+      let answer = await this.pushOne(device.token, first, providerToken);
       if (answer.status === 403 && answer.reason === "ExpiredProviderToken") {
-        providerToken = await this.providerToken(true);
-        answer = await this.pushOne(device, providerToken);
+        try {
+          providerToken = await this.providerToken(true);
+        } catch (error) {
+          this.noteKeyTrouble(`The relay's Apple push key couldn't be used (${words(error)}). Run setup.sh again with the .p8 file Apple gave you.`, [device]);
+          continue;
+        }
+        answer = await this.pushOne(device.token, first, providerToken);
       }
-      this.notePush(device, answer);
+      let used = first;
+      if (answer.status === 400 && answer.reason === "BadDeviceToken") {
+        const other = first === "production" ? "development" : "production";
+        const again = await this.pushOne(device.token, other, providerToken);
+        if (again.status === 200) used = other;
+        answer = again.status === 400 && again.reason === "BadDeviceToken" ? { ...again, bothServices: true } : again;
+      }
+      this.notePush(device, answer, used);
     }
   }
 
-  async pushOne(device, providerToken) {
-    const host = this.env.APNS_HOST
-      || (device.environment === "production" ? "https://api.push.apple.com" : "https://api.sandbox.push.apple.com");
-    const url = `${host}/3/device/${device.token}`;
+  async pushOne(token, environment, providerToken) {
+    // APNS_HOST and APNS_SANDBOX_HOST are test.sh's pretend Apple; nothing else sets them.
+    const host = environment === "production"
+      ? this.env.APNS_HOST || "https://api.push.apple.com"
+      : this.env.APNS_SANDBOX_HOST || "https://api.sandbox.push.apple.com";
+    const url = `${host}/3/device/${token}`;
     if (!safeURL(url)) return { status: 0, reason: "an address that isn't https" };
     try {
       const response = await fetch(url, {
@@ -578,19 +653,41 @@ export class StreamInbox extends DurableObject {
     }
   }
 
-  /// Apple's answer: a retired token (410) or a refused one (BadDeviceToken, DeviceTokenNotForTopic) is dropped.
-  notePush(device, { status, reason }) {
+  /// Apple's answer, kept on the device's own row: a push Apple took (`last_ok_at`, and the service that took it);
+  /// a token Apple retired (410) or refused (BadDeviceToken at both services, DeviceTokenNotForTopic), kept as refused
+  /// with the reason, so it isn't pushed again and its device hears why until it gives a new one; anything else, said
+  /// as that device's trouble. A key Apple refuses is the relay's trouble, said with the device.
+  notePush(device, { status, reason, bothServices }, used) {
+    const now = this.now();
     const push = this.getMeta("push", {});
     if (status === 200) {
-      push.lastSentAt = this.now();
-      push.lastError = null;
-    } else if (status === 410 || (status === 400 && ["BadDeviceToken", "DeviceTokenNotForTopic"].includes(reason))) {
-      this.sql.exec("DELETE FROM devices WHERE token = ?", device.token);
-      push.lastDropped = { at: this.now(), reason: reason || String(status) };
+      push.lastSentAt = now;
+      push.keyError = null;
+      this.sql.exec(
+        "UPDATE devices SET last_ok_at = ?, last_error = NULL, last_error_at = NULL, proven_environment = ? WHERE token = ?",
+        now, used, device.token);
+    } else if (status === 410 || (status === 400 && (bothServices || reason === "DeviceTokenNotForTopic"))) {
+      const why = status === 410 ? "Apple says its push token is no longer in use (Unregistered)"
+        : reason === "DeviceTokenNotForTopic" ? "Apple says its push token isn't HITList's (DeviceTokenNotForTopic)"
+          : "Apple refused its push token at both of its push services (BadDeviceToken)";
+      this.sql.exec("UPDATE devices SET refused_at = ?, last_error = ?, last_error_at = ? WHERE token = ?",
+        now, `${why}; it isn't woken until HITList on it gives a new one.`, now, device.token);
+    } else if (status === 403 && ["InvalidProviderToken", "MissingProviderToken"].includes(reason)) {
+      this.noteKeyTrouble(`Apple refused the relay's push key (${reason}): check its Key ID and Team ID, then run setup.sh again.`, [device], push);
     } else {
-      push.lastError = status === 0
-        ? `Apple's push service couldn't be reached (${reason}).`
+      const why = status === 0 ? `Apple's push service couldn't be reached (${reason}).`
         : `Apple refused a wake-up push (${status}${reason ? ` ${reason}` : ""}).`;
+      this.sql.exec("UPDATE devices SET last_error = ?, last_error_at = ? WHERE token = ?", why, now, device.token);
+    }
+    this.setMeta("push", push);
+  }
+
+  /// The push key couldn't sign, or Apple refused it: said in status with the devices it was waking, and on each.
+  noteKeyTrouble(message, devices, push = this.getMeta("push", {})) {
+    const now = this.now();
+    push.keyError = { message, at: now, devices: [...new Set(devices.map((device) => device.device))] };
+    for (const device of devices) {
+      this.sql.exec("UPDATE devices SET last_error = ?, last_error_at = ? WHERE token = ?", message, now, device.token);
     }
     this.setMeta("push", push);
   }
@@ -604,7 +701,7 @@ export class StreamInbox extends DurableObject {
         && cached.teamId === this.env.APNS_TEAM_ID) {
       return cached.token;
     }
-    const token = await signProviderToken(this.env.APNS_KEY, this.env.APNS_KEY_ID, this.env.APNS_TEAM_ID,
+    const token = await signProviderToken(this.testPushKey || this.env.APNS_KEY, this.env.APNS_KEY_ID, this.env.APNS_TEAM_ID,
       Math.floor(now / 1000));
     this.setMeta("apnsJWT", { token, issuedAt: now, keyId: this.env.APNS_KEY_ID, teamId: this.env.APNS_TEAM_ID });
     return token;

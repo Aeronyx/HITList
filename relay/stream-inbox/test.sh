@@ -66,7 +66,8 @@ APNS_KEY_ONE_LINE="$(awk 'BEGIN { ORS = "\\n" } { print }' "$WORK/apns.p8")"
   echo "APNS_KEY=\"$APNS_KEY_ONE_LINE\""
   echo "APNS_KEY_ID=$APNS_KEY_ID"
   echo "APNS_TEAM_ID=$APNS_TEAM_ID"
-  echo "APNS_HOST=$FAKE"
+  echo "APNS_HOST=$FAKE/production"
+  echo "APNS_SANDBOX_HOST=$FAKE/sandbox"
   echo "RELAY_TEST_MODE=1"
 } > "$DIR/.dev.vars"
 
@@ -168,6 +169,12 @@ wait_pushes() { # wait_pushes N: up to 5 s for the pretend Apple to have N pushe
   for _ in $(seq 1 25); do [ "$(pushes)" -ge "$1" ] && return 0; /bin/sleep 0.2; done
   return 1
 }
+token_pushes() { fakelog | jq "[.pushes[] | select(.token == \"$1\")] | length"; }
+wait_token() { # wait_token TOKEN N: up to 5 s for N pushes to that token
+  for _ in $(seq 1 25); do [ "$(token_pushes "$1")" -ge "$2" ] && return 0; /bin/sleep 0.2; done
+  return 1
+}
+ack_claimed() { keyed POST /inbox/ack -d "{\"ids\":$(printf '%s' "$BODY" | jq -c '[.items[].id]')}"; }
 
 # MARK: the relay
 
@@ -477,7 +484,7 @@ WRONG="cc$(openssl rand -hex 31)"
 status
 check "status: pushes configured" "$BODY" '.push.configured' 'true'
 claim iphone-test "{\"token\":\"$IPHONE\",\"environment\":\"development\",\"platform\":\"iOS\"}"
-expect "a claim registers the device's push token" 200 '.push' '{"configured":true,"registered":true}'
+expect "a claim registers the device's push token" 200 '.push | {configured, registered}' '{"configured":true,"registered":true}'
 say push-1 "Water the plants"
 if wait_pushes 1; then pass "a capture wakes the device"; else fail "a capture wakes the device" "$(fakelog | jq -c .pushes)"; fi
 check "headers, payload and the provider token verify" "$(fakelog)" '.pushes[0] | {token, problems}' "{\"token\":\"$IPHONE\",\"problems\":[]}"
@@ -520,6 +527,63 @@ if wait_pushes $((before + 1)); then pass "31 s on, a device that hasn't claimed
 claim iphone-test "{\"token\":\"$IPHONE\",\"environment\":\"development\",\"platform\":\"iOS\"}"
 keyed POST /inbox/ack -d "{\"ids\":$(printf '%s' "$BODY" | jq -c '[.items[].id]')}"
 clock 0
+
+echo "▸ round 3, 3: a wake-up counts once Apple has taken it, and its trouble is said"
+SANDBOXED="dd$(openssl rand -hex 31)"
+NOWHERE="ee$(openssl rand -hex 31)"
+mode "{\"apnsTokens\":{\"$SANDBOXED\":\"sandbox\",\"$NOWHERE\":\"nowhere\"}}"
+# mac_claim DEVICE TOKEN: a Mac that says "production" (a Release build signed for development says so too).
+mac_claim() { claim "$1" "{\"token\":\"$2\",\"environment\":\"production\",\"platform\":\"macOS\"}"; }
+mac_claim mac-dev "$SANDBOXED"
+check "a new token is registered, not yet proved" "$BODY" '.push | {registered, lastOkAt, lastError}' '{"registered":true,"lastOkAt":null,"lastError":null}'
+say r3w-1 "Water the ferns"
+wait_token "$SANDBOXED" 2
+check "refused as BadDeviceToken at one push service, it is tried at the other" "$(fakelog)" "[.pushes[] | select(.token == \"$SANDBOXED\") | .host]" '["production","sandbox"]'
+mac_claim mac-dev "$SANDBOXED"
+check "the device's claim says it was woken" "$BODY" '.push | (.lastOkAt != null) and .registered and (.lastError == null)' 'true'
+ack_claimed
+say r3w-2 "Water the palms"
+wait_token "$SANDBOXED" 3
+/bin/sleep 0.5
+check "the service that took it is remembered" "$(fakelog)" "[.pushes[] | select(.token == \"$SANDBOXED\") | .host] | .[2:]" '["sandbox"]'
+status
+check "status: each device's own state" "$BODY" '[.push.byDevice[] | select(.device == "mac-dev") | (.lastOkAt != null) and (.lastError == null) and (.refused | not)]' '[true]'
+mac_claim mac-dead "$NOWHERE"
+say r3w-3 "Feed the cat"
+wait_token "$NOWHERE" 2
+/bin/sleep 0.5
+status
+check "a token refused at both services is said, with its device" "$BODY" '.push.lastError | test("mac-dead") and test("BadDeviceToken")' 'true'
+check "and in that device's own state" "$BODY" '[.push.byDevice[] | select(.device == "mac-dead") | .refused]' '[true]'
+mac_claim mac-dead "$NOWHERE"
+check "its claim says it can't be woken, and why" "$BODY" '.push | {registered, why: (.lastError != null)}' '{"registered":false,"why":true}'
+dead_before=$(token_pushes "$NOWHERE")
+say r3w-4 "Feed the dog"
+/bin/sleep 1
+check "a refused token isn't pushed again" "$(token_pushes "$NOWHERE")" '.' "$dead_before"
+keyed POST /__test/push-key -d '{"key":"not a key"}'
+expect "test mode: a push key that can't be used" 200
+mac_claim mac-dev "$SANDBOXED"
+say r3w-5 "Call the vet"
+/bin/sleep 1
+status
+check "a push key that can't be used is said" "$BODY" '.push.lastError | test("push key")' 'true'
+check "with the device it was waking" "$BODY" '.push.lastError | test("mac-dev")' 'true'
+check "and in that device's own state" "$BODY" '[.push.byDevice[] | select(.device == "mac-dev") | .lastError | test("push key")]' '[true]'
+mac_claim mac-dev "$SANDBOXED"
+check "and in its claim" "$BODY" '.push.lastError | test("push key")' 'true'
+keyed POST /__test/push-key -d '{"key":null}'
+sent=$(token_pushes "$SANDBOXED")
+say r3w-6 "Book the vet"
+wait_token "$SANDBOXED" $((sent + 1))
+/bin/sleep 0.5
+status
+check "a usable key again: its trouble goes" "$BODY" '(.push.lastError // "") | test("push key") | not' 'true'
+mac_claim mac-dev "$SANDBOXED"
+check "and the device is woken again" "$BODY" '.push.lastError' 'null'
+ack_claimed
+claim iphone-test
+ack_claimed
 
 echo "▸ review 2: a session the server forgets doesn't spin the relay"
 mode '{"sessionIds":true,"session404":true}'

@@ -101,6 +101,7 @@ final class StreamInbox {
     @ObservationIgnored private let clock: () -> Date
     @ObservationIgnored private let storeIsReal: () -> Bool
     @ObservationIgnored private let isActive: @MainActor () -> Bool
+    @ObservationIgnored private let pushEnvironment: @MainActor () -> InboxPushRegistration.Environment
     @ObservationIgnored private let addTask: @MainActor (String, Date, ModelContext) throws -> UUID
     @ObservationIgnored private let log: @MainActor (String, SyncLogEntry.Level) -> Void
     /// The app's own inbox: timers, observers, background time. Off for the hosted tests' inboxes.
@@ -123,6 +124,7 @@ final class StreamInbox {
          clock: @escaping () -> Date = Date.init,
          storeIsReal: @escaping () -> Bool = { !ModelContainerFactory.isRunningInMemory },
          isActive: @escaping @MainActor () -> Bool = StreamInbox.appIsActive,
+         pushEnvironment: @escaping @MainActor () -> InboxPushRegistration.Environment = StreamInbox.signedPushEnvironment,
          addTask: @escaping @MainActor (String, Date, ModelContext) throws -> UUID = StreamInbox.addThroughQuickAdd,
          log: @escaping @MainActor (String, SyncLogEntry.Level) -> Void = { line, level in
              CloudSyncMonitor.shared.write(.note, line, level: level)
@@ -136,6 +138,7 @@ final class StreamInbox {
         self.clock = clock
         self.storeIsReal = storeIsReal
         self.isActive = isActive
+        self.pushEnvironment = pushEnvironment
         self.addTask = addTask
         self.log = log
         deviceID = settings.deviceID(platform: Self.platform)
@@ -553,16 +556,48 @@ final class StreamInbox {
         StreamInboxSettings(defaults: defaults).pushToken = token.map { String(format: "%02x", $0) }.joined()
     }
 
-    /// What each claim says of this device's push token: a Debug build's token is a development one, TestFlight's and
-    /// the App Store's production.
+    /// What each claim says of this device's push token, and which of Apple's push services it belongs to.
     private var pushRegistration: InboxPushRegistration? {
         guard let token = settings.pushToken, !token.isEmpty else { return nil }
-        #if DEBUG
-        let environment = InboxPushRegistration.Environment.development
+        return InboxPushRegistration(token: token, environment: pushEnvironment(), platform: Self.platformName)
+    }
+
+    /// The push service this build's tokens belong to, read once from what it was signed with (round 3, finding 3), not
+    /// from whether it is a Debug build: an Xcode Run in Release is signed for development, and its token is a
+    /// development one.
+    static func signedPushEnvironment() -> InboxPushRegistration.Environment { signed }
+
+    private static let signed: InboxPushRegistration.Environment = {
+        #if targetEnvironment(simulator)
+        let isSimulator = true
         #else
-        let environment = InboxPushRegistration.Environment.production
+        let isSimulator = false
         #endif
-        return InboxPushRegistration(token: token, environment: environment, platform: Self.platformName)
+        return pushEnvironment(profile: embeddedProfile(), isSimulator: isSimulator)
+    }()
+
+    /// The provisioning profile Xcode embeds in what it builds; none in an app from TestFlight or the App Store on the
+    /// iPhone.
+    nonisolated static func embeddedProfile(bundle: Bundle = .main) -> Data? {
+        #if os(macOS)
+        try? Data(contentsOf: bundle.bundleURL.appendingPathComponent("Contents/embedded.provisionprofile"))
+        #else
+        try? Data(contentsOf: bundle.bundleURL.appendingPathComponent("embedded.mobileprovision"))
+        #endif
+    }
+
+    /// The profile's `aps-environment` (the Mac's `com.apple.developer.aps-environment`), read from the plist inside its
+    /// signature: "development" is the sandbox service; anything else, or no profile (TestFlight and the App Store), is
+    /// production. The simulator's tokens are the sandbox's.
+    nonisolated static func pushEnvironment(profile: Data?, isSimulator: Bool) -> InboxPushRegistration.Environment {
+        if isSimulator { return .development }
+        guard let profile, let start = profile.range(of: Data("<?xml".utf8)),
+              let end = profile.range(of: Data("</plist>".utf8), in: start.lowerBound..<profile.endIndex),
+              let plist = try? PropertyListSerialization.propertyList(from: profile[start.lowerBound..<end.upperBound],
+                                                                       format: nil) as? [String: Any],
+              let entitlements = plist["Entitlements"] as? [String: Any] else { return .production }
+        let value = (entitlements["aps-environment"] ?? entitlements["com.apple.developer.aps-environment"]) as? String
+        return value == "development" ? .development : .production
     }
 
     /// The relay's wake-up push: `{"aps":{"content-available":1},"hitlist":{"inbox":1}}`. Any other push (CloudKit's,
@@ -604,15 +639,16 @@ final class StreamInbox {
     /// stops them. Nil while the relay has no Apple push key (they are off, not wrong).
     var wakeWords: String? {
         #if os(iOS)
-        let configured = wakeState?.configured ?? relayStatus?.push?.configured ?? false
-        guard configured else { return nil }
-        let device = UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone"
-        guard settings.pushToken?.isEmpty == false else { return StreamRingWords.wakeNoToken(device) }
-        if let trouble = relayStatus?.push?.lastError { return StreamRingWords.wakeTrouble(device, trouble) }
-        return wakeState?.registered == true ? StreamRingWords.wakeOn(device) : nil
+        wakeWords(for: UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone")
         #else
-        return nil
+        nil
         #endif
+    }
+
+    /// The words for a device of this kind ("iPhone"), whichever platform asks (the tests ask on the Mac too).
+    func wakeWords(for device: String) -> String? {
+        StreamRingWords.wake(device: device, configured: wakeState?.configured ?? relayStatus?.push?.configured ?? false,
+                             hasToken: settings.pushToken?.isEmpty == false, state: wakeState, now: clock())
     }
 
     // MARK: - The background

@@ -106,6 +106,9 @@ final class StreamInboxFakeRelay: @unchecked Sendable {
     private var rule = InboxSettings(onlyStartingWithTask: false)
     private var pushKey = false
     private var tokens: [String: String] = [:]
+    /// Each device's wake-ups as the relay keeps them (round 3): when Apple last took a push for it, its trouble.
+    private var wakes: [String: (okAt: Date?, error: String?, refused: Bool)] = [:]
+    private var confirmsWakeUps = false
 
     static let demoHost = "demo-relay.example"
     static let demoKey = "demo0000demo1111demo2222demo3333demo4444demo5555demo6666demo7777"
@@ -128,7 +131,14 @@ final class StreamInboxFakeRelay: @unchecked Sendable {
         let approved = now.addingTimeInterval(-Double(90 - daysLeft) * 86_400)
         relay.setStream(connected: daysLeft > 0, approvedAt: approved, lastPollAt: now.addingTimeInterval(-40))
         relay.pushConfigured = true
+        // The demo's device has been woken: Apple took a push for it a minute before it registered.
+        relay.locked { relay.confirmsWakeUps = true }
         return relay
+    }
+
+    /// A device's wake-ups as the relay would say them in its claim (round 3, finding 3).
+    func setWake(device: String, okAt: Date? = nil, error: String? = nil, refused: Bool = false) {
+        locked { wakes[device] = (okAt, error, refused) }
     }
 
     var link: String { "https://\(host)/#\(key)" }
@@ -210,7 +220,11 @@ final class StreamInboxFakeRelay: @unchecked Sendable {
             switch (method, path) {
             case ("POST", InboxAPI.Endpoint.claim.rawValue):
                 guard let device = json["device"] as? String, !device.isEmpty else { return reply(400, ["error": "device"]) }
-                if let token = (json["push"] as? [String: Any])?["token"] as? String { tokens[device] = token }
+                if let token = (json["push"] as? [String: Any])?["token"] as? String {
+                    tokens[device] = token
+                    if confirmsWakeUps, wakes[device] == nil { wakes[device] = (now.addingTimeInterval(-60), nil, false) }
+                }
+                let wake = wakes[device]
                 var items: [[String: Any]] = []
                 for index in waiting.indices.sorted(by: { waiting[$0].receivedAt < waiting[$1].receivedAt }) {
                     let capture = waiting[index]
@@ -223,7 +237,9 @@ final class StreamInboxFakeRelay: @unchecked Sendable {
                 }
                 return reply(200, ["items": items, "lastReceivedAt": Self.json(lastReceivedAt.map(Self.iso)),
                                    "settings": ["onlyStartingWithTask": rule.onlyStartingWithTask],
-                                   "push": ["configured": pushKey, "registered": tokens[device] != nil]])
+                                   "push": ["configured": pushKey, "registered": tokens[device] != nil && wake?.refused != true,
+                                            "lastOkAt": Self.json(wake?.okAt.map(Self.iso)),
+                                            "lastError": Self.json(wake?.error)]])
             case ("POST", InboxAPI.Endpoint.settings.rawValue):
                 guard let on = json["onlyStartingWithTask"] as? Bool else { return reply(400, ["error": "onlyStartingWithTask"]) }
                 rule = InboxSettings(onlyStartingWithTask: on)

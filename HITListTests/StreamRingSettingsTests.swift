@@ -78,6 +78,32 @@ final class StreamRingSettingsTests: XCTestCase {
         XCTAssertEqual(StreamRingWords.keepingPartsWhole(StreamInboxProblem.unreachable.words), StreamInboxProblem.unreachable.words)
     }
 
+    /// Round 3, finding 3: "wakes this iPhone when you speak" only after Apple took a push for this device in the last 30
+    /// days and nothing failed since; "wake-ups not confirmed yet" before; the device's own trouble in words.
+    func testWakeUpsAreSaidOnlyOnceAppleTookOne() {
+        let now = Date()
+        func words(_ state: InboxPushState?, configured: Bool = true, hasToken: Bool = true) -> String? {
+            StreamRingWords.wake(device: "iPhone", configured: configured, hasToken: hasToken, state: state, now: now)
+        }
+        let registered = InboxPushState(configured: true, registered: true)
+        XCTAssertEqual(words(registered), StreamRingWords.wakeUnconfirmed, "a token the relay holds isn't a wake-up")
+        XCTAssertEqual(words(nil), StreamRingWords.wakeUnconfirmed, "no claim answered yet")
+        var woken = registered
+        woken.lastOkAt = now.addingTimeInterval(-3600)
+        XCTAssertEqual(words(woken), StreamRingWords.wakeOn("iPhone"))
+        var longAgo = registered
+        longAgo.lastOkAt = now.addingTimeInterval(-31 * 86_400)
+        XCTAssertEqual(words(longAgo), StreamRingWords.wakeUnconfirmed, "proof older than 30 days doesn't count")
+        var failing = woken
+        failing.lastError = "Apple's push service couldn't be reached (no connection)."
+        XCTAssertEqual(words(failing), StreamRingWords.wakeTrouble("iPhone", "Apple's push service couldn't be reached (no connection)."),
+                       "a failure since the last success")
+        let refused = InboxPushState(configured: true, registered: false, lastError: "Apple says its push token is no longer in use (Unregistered); it isn't woken until HITList on it gives a new one.")
+        XCTAssertEqual(words(refused), StreamRingWords.wakeTrouble("iPhone", refused.lastError!))
+        XCTAssertEqual(words(registered, hasToken: false), StreamRingWords.wakeNoToken("iPhone"))
+        XCTAssertNil(words(registered, configured: false), "no push key on the relay: wake-ups are off, not wrong")
+    }
+
     func testHowLongAgo() {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "America/New_York")!
@@ -121,6 +147,9 @@ final class StreamRingSettingsTests: XCTestCase {
             SettingsPage.streamRing.summary, MacSettingsSection.streamRing.caption,
             StreamRingWords.notRenewable, StreamRingWords.webhookUnreadable, StreamRingWords.wakeOn("iPhone"),
             StreamRingWords.wakeNoToken("iPhone"), StreamRingWords.wakeTrouble("iPhone", "Apple refused a wake-up push (403)."),
+            StreamRingWords.wakeUnconfirmed,
+            StreamRingWords.wakeTrouble("iPhone", "Apple refused its push token at both of its push services (BadDeviceToken); it isn't woken until HITList on it gives a new one."),
+            StreamRingWords.wakeTrouble("iPhone", "The relay's Apple push key couldn't be used (The string did not match the expected pattern.). Run setup.sh again with the .p8 file Apple gave you."),
         ]
         words += problems.map(\.words)
         for source in [InboxStatus.Source.everyMinute, .pushed, .both, .none] {
