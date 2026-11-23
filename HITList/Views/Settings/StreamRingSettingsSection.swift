@@ -337,3 +337,27 @@ enum StreamRingWords {
         return rows
     }
 }
+
+/// Where Settings lists Stream Ring (round 36): on a device connected to a relay, or where the troubleshooting rows are
+/// shown (George's devices after seven taps on Settings → About → Version, and a Debug side store), and nowhere else.
+/// A friend has no ring and no relay of their own, and the row pushed About further below an iPhone 17's fold.
+enum StreamRingListing {
+    nonisolated static func isListed(connected: Bool, troubleshootingShown: Bool, demo: Bool = false) -> Bool {
+        connected || troubleshootingShown || demo
+    }
+
+    @MainActor
+    static func isListed(revealed: Bool) -> Bool {
+        isListed(connected: StreamInbox.shared?.isConnected == true,
+                 troubleshootingShown: Troubleshooting.isShown(revealed: revealed), demo: isDemo)
+    }
+
+    /// `-streamInboxDemo YES` on a Debug side store: the UI tests open the page as a friend would after connecting.
+    private static var isDemo: Bool {
+        #if DEBUG
+        StreamInboxDebug.isSideStore && UserDefaults.standard.bool(forKey: StreamInboxDebug.demoKey)
+        #else
+        false
+        #endif
+    }
+}

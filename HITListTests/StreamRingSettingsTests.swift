@@ -36,6 +36,25 @@ final class StreamRingSettingsTests: XCTestCase {
         XCTAssertNil(SettingsRouter.launchSection(arguments: ["HITList", "-openSettingsSection", "nowhere"]))
     }
 
+    /// Round 36: a friend's first screen has no Stream Ring row (no ring, no relay, and About stays where it was); a
+    /// connected device, George's revealed ones and a Debug side store list it after Claude.
+    func testStreamRingIsListedOnlyWhereItIsInUse() {
+        XCTAssertFalse(StreamRingListing.isListed(connected: false, troubleshootingShown: false))
+        XCTAssertTrue(StreamRingListing.isListed(connected: true, troubleshootingShown: false))
+        XCTAssertTrue(StreamRingListing.isListed(connected: false, troubleshootingShown: true))
+        XCTAssertTrue(StreamRingListing.isListed(connected: false, troubleshootingShown: false, demo: true))
+
+        XCTAssertEqual(SettingsPage.shown(streamRingListed: false),
+                       [.general, .calendar, .reminders, .extras, .iCloud, .claude, .about], "a friend's first screen, as in 0.9.17")
+        XCTAssertEqual(SettingsPage.shown(streamRingListed: true), SettingsPage.list)
+        XCTAssertFalse(MacSettingsSection.shown(streamRingListed: false).contains(.streamRing))
+        XCTAssertEqual(MacSettingsSection.shown(streamRingListed: true), MacSettingsSection.allCases)
+        // ↑ and ↓ in the Mac's sidebar step over a section that isn't listed.
+        let friend = MacSettingsSection.shown(streamRingListed: false)
+        XCTAssertEqual(MacSettingsSectionList.moved(.claude, by: 1, in: friend), .about)
+        XCTAssertEqual(MacSettingsSectionList.moved(.claude, by: 1), .streamRing)
+    }
+
     func testTheStatusLine() {
         let now = Date(timeIntervalSinceReferenceDate: 815_000_000)
         XCTAssertEqual(StreamRingWords.status(problem: nil, source: .everyMinute, lastCapture: now.addingTimeInterval(-300),

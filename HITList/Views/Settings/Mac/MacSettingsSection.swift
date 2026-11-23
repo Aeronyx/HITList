@@ -7,6 +7,11 @@ import SwiftUI
 enum MacSettingsSection: String, CaseIterable, Identifiable {
     case account, appearance, general, calendar, reminders, completing, iCloud, data, claude, streamRing, about
 
+    /// The sidebar's sections on this Mac: every one, without Stream Ring where it isn't listed (`StreamRingListing`).
+    static func shown(streamRingListed: Bool) -> [MacSettingsSection] {
+        streamRingListed ? allCases : allCases.filter { $0 != .streamRing }
+    }
+
     var id: String { rawValue }
 
     var title: String {

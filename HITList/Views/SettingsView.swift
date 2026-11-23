@@ -54,6 +54,12 @@ enum SettingsPage: String, CaseIterable, Identifiable, Hashable {
     /// The rows under Appearance on the first screen, in order. Account is the profile row above Appearance.
     static let list: [SettingsPage] = [.general, .calendar, .reminders, .extras, .iCloud, .claude, .streamRing, .about]
 
+    /// The rows this device's first screen shows: `list`, without Stream Ring where it isn't listed
+    /// (`StreamRingListing`: a friend's device has no ring and no relay).
+    static func shown(streamRingListed: Bool) -> [SettingsPage] {
+        streamRingListed ? list : list.filter { $0 != .streamRing }
+    }
+
     var title: String {
         switch self {
         case .account: "Account"
@@ -159,6 +165,7 @@ struct SettingsPageContent: View {
 /// (`SettingsTests.testFirstScreenFitsAnIPhone17ButForItsLastRow`).
 struct SettingsHome: View {
     @Environment(\.hitPages) private var pages
+    @AppStorage(SyncEngineSwitch.revealedKey, store: AppGroup.defaults) private var revealed = false
 
     /// Between the first screen's three groups: a step closer than a page's groups (`HITSpacing.xl`), which pays for
     /// the companions' names under the themes (round 21) so the screen still fits an iPhone without scrolling.
@@ -171,7 +178,7 @@ struct SettingsHome: View {
             }
             AppearanceSettingsSection()
             HITGroup {
-                ForEach(SettingsPage.list) { page in
+                ForEach(SettingsPage.shown(streamRingListed: StreamRingListing.isListed(revealed: revealed))) { page in
                     SettingsPageRow(page: page) { pages(page) }
                 }
             }

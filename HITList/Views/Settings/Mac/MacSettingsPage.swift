@@ -119,6 +119,7 @@ struct MacSettingsIcon: View {
 struct MacSettingsSectionList: View {
     let selection: MacSettingsSection
     let onSelect: (MacSettingsSection) -> Void
+    @AppStorage(SyncEngineSwitch.revealedKey, store: AppGroup.defaults) private var revealed = false
 
     var body: some View {
         ScrollView {
@@ -128,7 +129,8 @@ struct MacSettingsSectionList: View {
         .focusable()
         .focusEffectDisabled()
         .onKeyPress(keys: [.upArrow, .downArrow]) { press in
-            guard let next = Self.moved(selection, by: press.key == .downArrow ? 1 : -1) else { return .ignored }
+            let shown = MacSettingsSection.shown(streamRingListed: StreamRingListing.isListed(revealed: revealed))
+            guard let next = Self.moved(selection, by: press.key == .downArrow ? 1 : -1, in: shown) else { return .ignored }
             onSelect(next)
             return .handled
         }
@@ -137,8 +139,8 @@ struct MacSettingsSectionList: View {
     }
 
     /// The section `offset` rows away, or nil past either end.
-    static func moved(_ section: MacSettingsSection, by offset: Int) -> MacSettingsSection? {
-        let all = MacSettingsSection.allCases
+    static func moved(_ section: MacSettingsSection, by offset: Int,
+                      in all: [MacSettingsSection] = MacSettingsSection.allCases) -> MacSettingsSection? {
         guard let index = all.firstIndex(of: section), all.indices.contains(index + offset) else { return nil }
         return all[index + offset]
     }
@@ -151,13 +153,14 @@ struct MacSettingsSectionList: View {
 struct MacSettingsSectionRows: View {
     let selection: MacSettingsSection
     let onSelect: (MacSettingsSection) -> Void
+    @AppStorage(SyncEngineSwitch.revealedKey, store: AppGroup.defaults) private var revealed = false
 
     /// The coloured square, in the rows' 22 pt icon column.
     static let iconSize: CGFloat = 20
 
     var body: some View {
         VStack(spacing: 0) {
-            ForEach(MacSettingsSection.allCases) { section in
+            ForEach(MacSettingsSection.shown(streamRingListed: StreamRingListing.isListed(revealed: revealed))) { section in
                 MacSidebarRow(title: section.title, isSelected: section == selection) {
                     MacSettingsIcon(section: section, size: Self.iconSize)
                 } trailing: {
