@@ -450,15 +450,16 @@ export class StreamInbox extends DurableObject {
          AND (claimed_at IS NULL OR claimed_at < ? OR claimed_by = ?)
        ORDER BY received_at, id LIMIT ?`,
       now - CLAIM_HOLD_MS, device, CLAIM_LIMIT).toArray();
+    const rewakes = this.pushConfigured();
     for (const row of rows) {
       this.sql.exec("UPDATE captures SET claimed_by = ?, claimed_at = ? WHERE id = ?", device, now, row.id);
       this.sql.exec("DELETE FROM timers WHERE kind = 'holder' AND capture_id = ?", row.id);
-      for (const after of REWAKE_AFTER_MS) {
+      for (const after of rewakes ? REWAKE_AFTER_MS : []) {
         this.sql.exec("INSERT INTO timers (due_at, kind, capture_id, device, claimed_at) VALUES (?, 'holder', ?, ?, ?)",
           now + after, row.id, device, now);
       }
     }
-    if (rows.length) await this.armAlarm();
+    if (rows.length && rewakes) await this.armAlarm();
     const last = this.getMeta("last", null);
     return {
       items: rows.map((row) => ({
