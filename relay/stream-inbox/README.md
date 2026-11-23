@@ -40,9 +40,12 @@ one for every device: a capture it leaves out is remembered as seen and never ha
 
 ## Wake-ups
 
-With an Apple push key (`setup.sh` asks for it; optional), each device that gave its push token with a claim is woken
-by a background push the moment a capture is kept, so the iPhone takes it with the phone asleep in a pocket. A device
-is woken at most once every 30 seconds until it has come for its captures. A token Apple calls BadDeviceToken is tried
+With an Apple push key (`setup.sh` asks for it; optional), a device that gave its push token with a claim is woken by a
+background push when a capture is kept, so the iPhone takes it with the phone asleep in a pocket. A Mac is woken at
+once; an iPhone or iPad only if no device has taken the capture 30 seconds on (75 seconds when a Mac came for its
+captures in the last two minutes: it is awake and takes it), by the inbox's own alarm, so the background pushes iOS
+allows HITList are kept for what needs them (iCloud's among them). A device is woken at most once every 30 seconds
+until it has come for its captures. A token Apple calls BadDeviceToken is tried
 once at Apple's other push service, and the one that took it is remembered for that token (an Xcode build in Release is
 signed for development). A token Apple retires or refuses at both is kept as refused, with the reason, and not pushed
 again until that device gives a new one. Status says each device's last success and trouble, and a push key that can't

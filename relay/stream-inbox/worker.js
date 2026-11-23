@@ -41,6 +41,12 @@ const HASH_KEPT_MS = 60 * MINUTE_MS;
 const REFRESH_EARLY_MS = 5 * MINUTE_MS;
 const OUTBOUND_TIMEOUT_MS = 15_000;
 const PUSH_GAP_MS = 30_000;
+// Who is woken (round 3, finding 7): a Mac at once; an iPhone or iPad only for a capture no device has claimed 30 s
+// on, or 75 s on when a Mac claimed in the last two minutes (it is awake, and takes it). iOS spends one budget of
+// background pushes on these and on iCloud's own, and George's sync must not go short.
+const PHONE_WAIT_MS = 30_000;
+const PHONE_WAIT_MAC_AWAKE_MS = 75_000;
+const MAC_AWAKE_MS = 2 * MINUTE_MS;
 const PROVIDER_TOKEN_MS = 50 * MINUTE_MS;
 const TOKEN_TEXT = /^[A-Za-z0-9_-]{43}$/;
 // A capture's own time is believed only from 2020 on and up to five minutes after the relay got it (round 3, 6).
@@ -153,6 +159,11 @@ const KEYED = {
     return json(await inbox(env).setTestClock(offset));
   },
 
+  /// test.sh only: the inbox's alarm, run now on its clock (the real alarm fires on the real one).
+  async "POST /__test/alarm"(request, env) {
+    return json(await inbox(env).runTimers());
+  },
+
   /// test.sh only: signs with this key instead of APNS_KEY (`{"key": null}` goes back to it), so a key that can't be
   /// used is proved to be said.
   async "POST /__test/push-key"(request, env) {
@@ -237,6 +248,11 @@ function interactionID(value) {
   return typeof id === "string" && id.trim() && id.length <= MAX_ID ? id : null;
 }
 
+/// A device's platform as its claim named it: a Mac is woken at once, an iPhone or iPad waits (round 3, finding 7).
+function isMac(platform) {
+  return platform === "macOS";
+}
+
 /// Whether a capture's first word is "Task" (any case, with or without the mark after it): HITList's `SpokenTask`.
 function startsWithTask(text) {
   const trimmed = String(text || "").trimStart();
@@ -313,10 +329,20 @@ export class StreamInbox extends DurableObject {
       ["last_error_at", "INTEGER"], ["refused_at", "INTEGER"]]) {
       if (!deviceColumns.includes(column)) this.sql.exec(`ALTER TABLE devices ADD COLUMN ${column} ${type}`);
     }
+    // Round 3: wake-ups that wait (the inbox's alarm runs them): an iPhone's, for a capture still unclaimed ("phones").
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS timers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      due_at INTEGER NOT NULL,
+      kind TEXT NOT NULL,
+      capture_id TEXT NOT NULL,
+      device TEXT,
+      claimed_at INTEGER)`);
+    this.sql.exec("CREATE INDEX IF NOT EXISTS timers_due ON timers (due_at)");
     this.lastSweep = 0;
     this.polling = null;
     this.rpcID = 1;
-    this.testOffset = 0;
+    // test.sh's clock is kept, so an inbox made again (an alarm after it went idle) runs on the same one.
+    this.testOffset = env.RELAY_TEST_MODE === "1" ? this.getMeta("testOffset", 0) : 0;
     this.testPushKey = null;
   }
 
@@ -325,8 +351,12 @@ export class StreamInbox extends DurableObject {
     return Date.now() + this.testOffset;
   }
 
-  setTestClock(offsetMs) {
-    if (this.env.RELAY_TEST_MODE === "1") this.testOffset = offsetMs;
+  async setTestClock(offsetMs) {
+    if (this.env.RELAY_TEST_MODE === "1") {
+      this.testOffset = offsetMs;
+      this.setMeta("testOffset", offsetMs);
+    }
+    await this.armAlarm();
     return { offsetMs: this.testOffset };
   }
 
@@ -373,23 +403,23 @@ export class StreamInbox extends DurableObject {
   }
 
   /// The relay's own test capture: kept whatever the rule says, and it wakes the devices like any other.
-  keepTest(id, text, hash) {
+  async keepTest(id, text, hash) {
     const now = this.now();
     this.sql.exec(
       "INSERT INTO captures (id, source, text, body, text_hash, received_at, captured_at) VALUES (?, 'test', ?, ?, ?, ?, ?)",
       id, text, JSON.stringify({ test: true }), hash, now, now);
-    this.wake();
+    await this.capturesKept([id]);
     return { status: "accepted" };
   }
 
   /// The webhook's body, signed and read: what it carried is noted for the status whatever came of it.
-  receiveWebhook({ id, text, body, fields, problem, hash, said }) {
+  async receiveWebhook({ id, text, body, fields, problem, hash, said }) {
     const now = this.now();
     const outcome = problem ? "invalid"
       : !text.trim() ? "empty"
       : this.keep({ id, text, body, hash, source: "webhook", fields, said });
     this.setMeta("webhook", { at: now, result: outcome, fields });
-    if (outcome === "accepted") this.wake();
+    if (outcome === "accepted") await this.capturesKept([id]);
     return outcome;
   }
 
@@ -410,6 +440,7 @@ export class StreamInbox extends DurableObject {
     const now = this.now();
     this.sweep(now);
     const wakeState = this.registerDevice(device, push, now);
+    this.noteMacClaim(device, push, now);
     const rows = this.sql.exec(
       `SELECT id, text, received_at, captured_at FROM captures
        WHERE done_at IS NULL AND text IS NOT NULL
@@ -438,6 +469,7 @@ export class StreamInbox extends DurableObject {
       acked += this.sql.exec(
         "UPDATE captures SET text = NULL, body = NULL, done_at = ? WHERE id = ? AND done_at IS NULL RETURNING id",
         now, id).toArray().length;
+      this.sql.exec("DELETE FROM timers WHERE capture_id = ?", id);
     }
     return { acked };
   }
@@ -576,20 +608,80 @@ export class StreamInbox extends DurableObject {
     };
   }
 
-  /// A capture was kept: each device that hasn't been woken in the last 30 s, or has claimed since it was, is pushed
-  /// now, in the background (`waitUntil`): the webhook answers Stream at once.
-  wake() {
-    if (!this.pushConfigured()) return;
+  /// A Mac came for its captures: it is awake, so an iPhone's wake-up waits longer (finding 7).
+  noteMacClaim(device, push, now) {
+    const named = push && typeof push.platform === "string" ? push.platform : null;
+    const platform = named || (this.sql.exec("SELECT platform FROM devices WHERE device = ? LIMIT 1", device).toArray()[0] || {}).platform;
+    if (isMac(platform) || /^mac-/i.test(device)) this.setMeta("lastMacClaimAt", now);
+  }
+
+  /// Captures were kept (round 3, finding 7): each Mac is woken now, in the background (`waitUntil`), so Stream's
+  /// webhook is answered at once; an iPhone or iPad only by the inbox's alarm, if the capture is still unclaimed 30 s on
+  /// (75 s when a Mac claimed in the last two minutes). A device at most every 30 s until it has claimed since.
+  async capturesKept(ids) {
+    if (!ids.length || !this.pushConfigured()) return;
     const now = this.now();
-    const due = this.sql.exec(
+    const lastMac = this.getMeta("lastMacClaimAt", null);
+    const macAwake = lastMac !== null && now - lastMac <= MAC_AWAKE_MS;
+    const sending = this.wakeNow(this.dueDevices(now, (device) => isMac(device.platform)), now);
+    if (sending && this.ctx.waitUntil) this.ctx.waitUntil(sending);
+    const dueAt = now + (macAwake ? PHONE_WAIT_MAC_AWAKE_MS : PHONE_WAIT_MS);
+    for (const id of ids) this.sql.exec("INSERT INTO timers (due_at, kind, capture_id) VALUES (?, 'phones', ?)", dueAt, id);
+    await this.armAlarm();
+  }
+
+  /// Devices that may be pushed now: a token Apple hasn't refused, not pushed in the last 30 s unless it has claimed
+  /// since.
+  dueDevices(now, accept) {
+    return this.sql.exec(
       `SELECT token, device, environment, proven_environment, platform FROM devices
        WHERE refused_at IS NULL
          AND (last_push_at IS NULL OR (last_claim_at IS NOT NULL AND last_claim_at > last_push_at) OR ? - last_push_at >= ?)`,
-      now, PUSH_GAP_MS).toArray();
-    if (!due.length) return;
-    for (const device of due) this.sql.exec("UPDATE devices SET last_push_at = ? WHERE token = ?", now, device.token);
-    const sending = this.sendPushes(due).catch((error) => console.error("push:", error && error.message));
-    if (this.ctx.waitUntil) this.ctx.waitUntil(sending);
+      now, PUSH_GAP_MS).toArray().filter(accept);
+  }
+
+  /// Pushes these devices, marked as pushed now; the sending, or null when there is none.
+  wakeNow(devices, now) {
+    if (!devices.length) return null;
+    for (const device of devices) this.sql.exec("UPDATE devices SET last_push_at = ? WHERE token = ?", now, device.token);
+    return this.sendPushes(devices).catch((error) => console.error("push:", error && error.message));
+  }
+
+  /// The inbox's alarm: the wake-ups that waited, run when due.
+  async alarm() {
+    await this.runTimers();
+  }
+
+  /// Every waiting wake-up that is due: an iPhone's for a capture no device has claimed since it was kept.
+  async runTimers() {
+    const now = this.now();
+    const due = this.sql.exec(
+      "SELECT kind, capture_id, device, claimed_at FROM timers WHERE due_at <= ? ORDER BY due_at, id", now).toArray();
+    this.sql.exec("DELETE FROM timers WHERE due_at <= ?", now);
+    let phones = false;
+    for (const timer of due) {
+      const capture = this.sql.exec("SELECT claimed_at, done_at, text FROM captures WHERE id = ? LIMIT 1", timer.capture_id).toArray()[0];
+      if (!capture || capture.done_at !== null || capture.text === null) continue;
+      if (timer.kind === "phones" && capture.claimed_at === null) phones = true;
+    }
+    let woken = [];
+    if (phones && this.pushConfigured()) {
+      woken = this.dueDevices(now, (device) => !isMac(device.platform));
+      const sending = this.wakeNow(woken, now);
+      if (sending) await sending;
+    }
+    await this.armAlarm();
+    return { ran: due.length, woken: woken.map((device) => device.device) };
+  }
+
+  /// The alarm at the next waiting wake-up, on the real clock (test.sh moves only the inbox's), or none.
+  async armAlarm() {
+    const next = this.sql.exec("SELECT MIN(due_at) AS at FROM timers").one().at;
+    if (next === null || next === undefined) {
+      await this.ctx.storage.deleteAlarm();
+      return;
+    }
+    await this.ctx.storage.setAlarm(Math.max(Date.now(), next - this.testOffset));
   }
 
   /// Each device's push, at the service its token was last taken by (else the one its build named). BadDeviceToken
@@ -828,12 +920,12 @@ export class StreamInbox extends DurableObject {
     const session = { protocolVersion: conn.protocolVersion, sessionId: conn.sessionId, toolSchema: conn.toolSchema,
       toolArguments: conn.toolArguments };
     let update;
-    let added = 0;
+    let keptIDs = [];
     try {
       const result = await this.callTool(server, client, session, grant);
       const taken = await this.take(result, conn, started);
-      added = taken.added;
-      delete taken.added;
+      keptIDs = taken.kept || [];
+      delete taken.kept;
       update = { ...session, ...taken, lastPollAt: started };
     } catch (failure) {
       if (failure instanceof Superseded) return { polled: false };
@@ -852,8 +944,8 @@ export class StreamInbox extends DurableObject {
       update.refreshable = false;
     }
     this.setMeta("stream", { ...latest, ...update });
-    if (added > 0) this.wake();
-    return { polled: true, added };
+    await this.capturesKept(keptIDs);
+    return { polled: true, added: keptIDs.length };
   }
 
   /// `get_recent_interactions`, after the handshake when there is none yet. A 401 refreshes the token once; a session
@@ -972,7 +1064,7 @@ export class StreamInbox extends DurableObject {
     }
     const items = read.items;
     for (const item of items) item.hash = await textHash(item.text);
-    let added = 0;
+    const kept = [];
     const firstPoll = !conn.baselineDone;
     for (const item of items) {
       if (this.has(item.id)) {
@@ -988,10 +1080,10 @@ export class StreamInbox extends DurableObject {
         continue;
       }
       if (this.keep({ id: item.id, text: item.text, body: JSON.stringify(item.raw), hash: item.hash, source: "stream",
-        fields: item.fields, said: item.at }) === "accepted") added += 1;
+        fields: item.fields, said: item.at }) === "accepted") kept.push(item.id);
     }
     return {
-      baselineDone: true, lastError: null, added, answerShape: null,
+      baselineDone: true, lastError: null, kept, answerShape: null,
       interactionFields: items.length ? items[0].fields : conn.interactionFields || null,
     };
   }
