@@ -20,8 +20,9 @@ wrangler login        # once: signs in to your Cloudflare account
 ./setup.sh            # deploys, makes the inbox key, connects Stream, copies HITList's inbox link
 ```
 
-Then in HITList: Settings → Stream Ring → Paste → Connect, on each device. `./setup.sh` again redeploys and keeps the
-keys unless you ask for new ones.
+Then in HITList: Settings → Stream Ring → Paste → Connect, on each device. Until a device is connected, Stream Ring is
+listed only where the troubleshooting rows show (Settings → About, tap Version seven times). `./setup.sh` again
+redeploys and keeps the keys unless you ask for new ones.
 
 `./test.sh` proves the relay on this Mac with no account: `wrangler dev --local`, a pretend Stream
 (`test/fake-stream.mjs`), and `curl`.

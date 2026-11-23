@@ -208,3 +208,5 @@ say "Your HITList inbox link (on your clipboard now; it holds the key, keep it t
 say "  $inbox_link"
 say "On the Mac: HITList → Settings → Stream Ring → Paste → Connect."
 say "On the iPhone: the same; Universal Clipboard pastes the link this Mac copied."
+say "Stream Ring isn't in Settings on a device that isn't connected yet? Settings → About, then tap Version seven times"
+say "quickly: Stream Ring appears after Claude, and stays listed once that device is connected."
