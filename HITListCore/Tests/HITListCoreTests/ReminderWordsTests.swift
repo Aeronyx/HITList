@@ -392,8 +392,10 @@ final class ReminderWordsTests: XCTestCase {
             parser.parse(text, mode: .live).tokens.filter { !$0.isSuperseded && ($0.kind == .reminder || $0.isSaidInWords) }
                 .map(\.text)
         }
+        // ("Remind me in an hour to call mom": once lit, it stays lit through "to " and the title's first letter.)
         for full in ["Call 5pm !at time of task ", "Call mom remind me at 4 pm ", "Bins !at 4 pm ", "Bins !tomorrow 9:00 AM ",
-                     "Call 5pm !At the time of the task ", "Tea !in half an hour ", "Pack 6pm remind me an hour before "] {
+                     "Call 5pm !At the time of the task ", "Tea !in half an hour ", "Pack 6pm remind me an hour before ",
+                     "Remind me in an hour to call mom ", "Remind me at 5pm to call mom ", "Remind me to call mom "] {
             var seen = false
             for end in full.indices.dropFirst() + [full.endIndex] {
                 let typed = String(full[..<end])
@@ -403,7 +405,8 @@ final class ReminderWordsTests: XCTestCase {
             }
             XCTAssertTrue(seen, full)
             XCTAssertEqual(lit(full).count, 1, full)
-            XCTAssertTrue(full.hasSuffix(lit(full)[0] + " "), "the whole phrase at the end: \(lit(full))")
+            XCTAssertTrue(full.contains(" " + lit(full)[0] + " ") || full.hasPrefix(lit(full)[0] + " "),
+                          "the whole phrase: \(lit(full))")
         }
         // What is lit on the way is what the words so far say.
         XCTAssertEqual(lit("Call 5pm !at time"), ["!at"])
@@ -450,11 +453,12 @@ final class ReminderWordsTests: XCTestCase {
         XCTAssertNil(first.dueDate)
         XCTAssertEqual(first.tokens.map(\.text), ["Remind me in 30 minutes to"])
         XCTAssertEqual(ReminderPhrase(token: "Remind me in 30 minutes to"), .fromNow(ReminderSpan(minutes: 30)))
-        // Live: "Remind me to" lights once a word of the title follows it (alone, it would leave no title: finding 13
-        // of the review).
+        // Live: "Remind me to" lights once its space is typed: the title comes next (alone and read whole, it is the
+        // title: finding 13 of the review).
         XCTAssertTrue(parser.parse("Remind me to", mode: .live).tokens.isEmpty)
-        XCTAssertTrue(parser.parse("Remind me to ", mode: .live).tokens.isEmpty)
+        XCTAssertEqual(parser.parse("Remind me to ", mode: .live).tokens.map(\.text), ["Remind me to"])
         XCTAssertEqual(parser.parse("Remind me to c", mode: .live).tokens.map(\.text), ["Remind me to"])
+        XCTAssertEqual(parser.parse("Remind me to ").title, "Remind me to")
     }
 
     /// "Remind me at 5pm to call mom": a clock time said with "remind me", with no day or time of the task's own, is when

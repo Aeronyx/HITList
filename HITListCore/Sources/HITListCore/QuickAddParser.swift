@@ -126,13 +126,22 @@ public struct QuickAddParser: Sendable {
     /// switched-off phrase is masked).
     public func parse(_ input: String, mode: Mode = .final) -> QuickAddResult {
         let result = scan(input, mode: mode)
-        guard Self.leavesNoTitle(result) else { return result }
+        guard Self.leavesNoTitle(result, in: input, mode: mode) else { return result }
         return parse(input, mode: mode) { _, _ in false }
     }
 
-    /// The title is empty and words said in plain language took it: they give it back.
-    static func leavesNoTitle(_ result: QuickAddResult) -> Bool {
-        result.title.isEmpty && result.tokens.contains { $0.isSaidInWords && !$0.isSuperseded }
+    /// The title is empty and words said in plain language took it: they give it back. Not in the card's live reading
+    /// while such a phrase ends in "to" with a space after it ("Remind me to |", "Remind me in an hour to |"): the title
+    /// is what comes next, and the phrase stays lit rather than go dark for that one keystroke.
+    static func leavesNoTitle(_ result: QuickAddResult, in input: String, mode: Mode) -> Bool {
+        guard result.title.isEmpty else { return false }
+        let spoken = result.tokens.filter { $0.isSaidInWords && !$0.isSuperseded }
+        guard !spoken.isEmpty else { return false }
+        if mode == .live, input.last?.isWhitespace == true,
+           spoken.contains(where: { DateExpressionParser.normalize(String($0.text.split(separator: " ").last ?? "")) == "to" }) {
+            return false
+        }
+        return true
     }
 
     /// One reading of the text, word by word (`parse` adds what reads the whole result).

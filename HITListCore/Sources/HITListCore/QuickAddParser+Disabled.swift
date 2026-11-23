@@ -124,7 +124,7 @@ extension QuickAddParser {
                 let words = String(input[masked.originalIndex(span.lowerBound)..<masked.originalIndex(span.upperBound)])
                 return isOff(QuickAddTokenKey(kind: token.kind, text: words), span) ? span : nil
             }
-            if spans.isEmpty, Self.leavesNoTitle(result) {
+            if spans.isEmpty, Self.leavesNoTitle(result, in: masked.text, mode: mode) {
                 spans = result.tokens.filter { $0.isSaidInWords && !$0.isSuperseded }.map { masked.originalOffsets(of: $0.range) }
             }
             guard !spans.isEmpty else { break }
