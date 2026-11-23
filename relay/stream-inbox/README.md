@@ -77,6 +77,8 @@ Every answer is JSON. The inbox endpoints need `Authorization: Bearer <inbox key
 - Stream's sign-in tokens and the time you approved, while connected.
 - Each device's push token, the Apple push service it belongs to, when it last claimed and was woken, when Apple last
   took a push for it, and its last trouble.
+- Wake-ups that wait (the inbox's alarm runs them): an iPhone's for a capture no device has taken yet, and a holding
+  device's at 10 and 40 minutes, until they run or the capture is acked.
 - The top-level field names of the last capture (how we learn what Stream sends), never their values.
 - Secrets live in your Cloudflare account (`wrangler secret`): `INBOX_KEY`, `STREAM_SECRET` for the webhook, and
   `APNS_KEY`, `APNS_KEY_ID`, `APNS_TEAM_ID` for the wake-ups.
