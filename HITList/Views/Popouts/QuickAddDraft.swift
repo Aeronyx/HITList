@@ -161,8 +161,17 @@ struct QuickAddDraft: Equatable, Codable {
     /// the card shows while it is typed in: a "!" phrase at the very end lights up and counts only once a space
     /// follows it (brief 48). `result(_:)` and the chips' edits read it `.final`, the end of the text counting
     /// as complete, so "Call mom !15m" + Confirm still sets the reminder.
+    ///
+    /// An Upcoming day's row other than today's gives the task its day, as a day typed would: "at 3" there is 3 PM
+    /// (`QuickAddParser.dueDayIsSet`; the review of brief 175).
     func parsed(_ parser: QuickAddParser, _ mode: QuickAddParser.Mode = .live) -> QuickAddResult {
-        parser.parse(text, switchedOff: disabledPhrases, mode: mode)
+        var parser = parser
+        let dates = parser.dateParser
+        if !dateCleared, let day = context.defaultDate(now: dates.now, calendar: dates.calendar),
+           !dates.calendar.isDate(day, inSameDayAs: dates.today) {
+            parser.dueDayIsSet = true
+        }
+        return parser.parse(text, switchedOff: disabledPhrases, mode: mode)
     }
 
     /// Ready for the next task: empty text, the list's defaults back.

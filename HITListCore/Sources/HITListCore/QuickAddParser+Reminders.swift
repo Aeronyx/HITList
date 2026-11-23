@@ -19,10 +19,29 @@ import Foundation
 // "before", no "in") is not a phrase. The one-word codes (`!15m`, `!15mb`, `!at`, `!0`) still work
 // (`ReminderPhrase(code:)`).
 extension ReminderPhrase {
+    /// One reading of a reminder phrase: what it means, how many words it takes, and whether its clock time is "at 1"
+    /// to "at 6" with no am or pm (`shortHour`), which `phrase` holds as typed (24-hour). The parser settles that hour
+    /// from the whole text (`QuickAddParser.shortHour`: "every morning, remind me at 5" is 5 am); read alone
+    /// (`match`), it is the afternoon.
+    struct Reading {
+        var phrase: ReminderPhrase
+        var length: Int
+        var shortHour = false
+    }
+
     /// The reminder phrase starting at `words[i]` (the parser's lowercased words, punctuation as typed): what it means
     /// and how many words it takes, the longest reading. `atStart`: the words open the text, where a "to" right after a
-    /// phrase said in words belongs to it ("Remind me in 30 minutes to call mom" leaves "Call mom").
+    /// phrase said in words belongs to it ("Remind me in 30 minutes to call mom" leaves "Call mom"). A short hour with
+    /// nothing around it to say otherwise is the afternoon ("!at 4" is 4 pm).
     static func match(_ words: [String], at i: Int, atStart: Bool = false) -> (ReminderPhrase, Int)? {
+        guard let reading = reading(words, at: i, atStart: atStart) else { return nil }
+        guard reading.shortHour, case .at(var clock) = reading.phrase else { return (reading.phrase, reading.length) }
+        clock.hour += 12
+        return (.at(clock), reading.length)
+    }
+
+    /// `match`, with a short hour as typed and said to be one.
+    static func reading(_ words: [String], at i: Int, atStart: Bool = false) -> Reading? {
         guard i < words.count else { return nil }
         let first = words[i]
         if first.hasPrefix("!") {
@@ -30,7 +49,7 @@ extension ReminderPhrase {
             var body = Array(words[i...])
             body[0] = String(first.dropFirst())
             if let match = matchBody(body, at: 0) { return match }
-            return ReminderPhrase(code: first).map { ($0, 1) }
+            return ReminderPhrase(code: first).map { Reading(phrase: $0, length: 1) }
         }
         let lead: Int
         // "reminder" on its own reads only the relative forms: never a clock time or a day.
@@ -40,19 +59,22 @@ extension ReminderPhrase {
         case "reminder": lead = 1; clocks = false
         default: return nil
         }
-        guard let (phrase, n) = matchBody(words, at: i + lead, clocks: clocks) else { return nil }
-        var length = lead + n
-        if atStart, i + length < words.count, DateExpressionParser.normalize(words[i + length]) == "to" { length += 1 }
-        return (phrase, length)
+        guard var reading = matchBody(words, at: i + lead, clocks: clocks) else { return nil }
+        reading.length += lead
+        if atStart, i + reading.length < words.count, DateExpressionParser.normalize(words[i + reading.length]) == "to" {
+            reading.length += 1
+        }
+        return reading
     }
 
     /// The words after the "!" (or after "remind me" / "reminder"), longest reading first. `clocks: false` leaves out the
     /// clock times and days ("reminder" alone, `match`).
-    static func matchBody(_ words: [String], at j: Int, clocks: Bool = true) -> (ReminderPhrase, Int)? {
+    static func matchBody(_ words: [String], at j: Int, clocks: Bool = true) -> Reading? {
         guard j < words.count, !words[j].isEmpty else { return nil }
         var readings = [matchAtTheTime(words, at: j), matchBefore(words, at: j), matchFromNow(words, at: j)]
+            .map { $0.map { Reading(phrase: $0.0, length: $0.1) } }
         if clocks { readings.append(matchClock(words, at: j)) }
-        return readings.compactMap { $0 }.max { $0.1 < $1.1 }
+        return readings.compactMap { $0 }.max { $0.length < $1.length }
     }
 
     private static func word(_ words: [String], _ k: Int) -> String? {
@@ -113,9 +135,9 @@ extension ReminderPhrase {
         return (.fromNow(reach), span.consumed + 1)
     }
 
-    /// "4pm", "4:00 pm", "4 p.m.", "16:00", "noon", "at 4pm", "at 4" (the afternoon, as "at 4" is in a due time), and a
+    /// "4pm", "4:00 pm", "4 p.m.", "16:00", "noon", "at 4pm", "at 4" (a short hour, read as a due time's is), and a
     /// day before it: "today 4pm", "tomorrow 9am", "tomorrow at 9". A bare "4" is not one ("!15" is no reminder).
-    private static func matchClock(_ words: [String], at j: Int) -> (ReminderPhrase, Int)? {
+    private static func matchClock(_ words: [String], at j: Int) -> Reading? {
         var k = j
         var day: Int? = nil
         switch word(words, k) {
@@ -123,8 +145,9 @@ extension ReminderPhrase {
         case "tomorrow", "tom", "tmr", "tmrw": day = 1; k += 1
         default: break
         }
-        guard let time = DateExpressionParser().matchTime(in: words, at: k) else { return nil }
-        return (.at(ReminderClock(hour: time.hour, minute: time.minute, day: day)), k - j + time.consumed)
+        guard let time = DateExpressionParser().matchTime(in: words, at: k, afternoonAfterAt: false) else { return nil }
+        return Reading(phrase: .at(ReminderClock(hour: time.hour, minute: time.minute, day: day)),
+                       length: k - j + time.consumed, shortHour: time.shortHour)
     }
 }
 

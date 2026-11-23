@@ -207,6 +207,8 @@ struct TaskEditorDraft: Equatable {
                 waking: Bool = true) -> QuickAddResult {
         var parser = parser
         parser.dueTimeIsSet = task.hasDueTime && task.dueDate != nil
+        // "at 3" typed in the title of a task with a day is 3 PM on it (the review of brief 175).
+        parser.dueDayIsSet = task.dueDate != nil
         let wakes = waking && Self.wakesStoredReminder(on: task)
         let result = parsed(parser, mode, waking: wakes)
         // No time of its own yet, but one typed in this session ("8pm", "in 2 hours"): Confirm gives the task that

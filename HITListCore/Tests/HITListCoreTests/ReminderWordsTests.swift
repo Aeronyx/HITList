@@ -416,9 +416,12 @@ final class ReminderWordsTests: XCTestCase {
         assertDate(parser.parse("Run 9:30 A.M.").dueDate, 2026, 10, 22, 9, 30)
         assertDate(parser.parse("Call 2:15 p.m.").dueDate, 2026, 10, 22, 14, 15)
         XCTAssertEqual(parser.parse("Run 9:30 a.m.").title, "Run")
-        // "at 1" to "at 6" is the afternoon; "at 7" on, a leading zero, am, and a bare hour after a date word are not.
-        assertDate(parser.parse("Lunch at 1").dueDate, 2026, 10, 22, 13, 0)
-        assertDate(parser.parse("Lunch at 1:30").dueDate, 2026, 10, 22, 13, 30)
+        // "at 1" to "at 6" with no day is the next one to come (both of 1 o'clock's gone at 14:30: 1 am tomorrow;
+        // `testAShortHourReadsFromTheWholeText`); "at 7" on, a leading zero, am, and a bare hour after a date word are
+        // as typed.
+        assertDate(parser.parse("Lunch at 1").dueDate, 2026, 10, 22, 1, 0)
+        assertDate(parser.parse("Lunch at 1:30").dueDate, 2026, 10, 22, 1, 30)
+        assertDate(parser.parse("Lunch tomorrow at 1:30").dueDate, 2026, 10, 22, 13, 30)
         assertDate(parser.parse("Pick up at 6").dueDate, 2026, 10, 21, 18, 0)
         assertDate(parser.parse("Run at 7").dueDate, 2026, 10, 22, 7, 0)
         assertDate(parser.parse("Run at 06:00").dueDate, 2026, 10, 22, 6, 0)
@@ -467,6 +470,58 @@ final class ReminderWordsTests: XCTestCase {
         XCTAssertEqual(remind.title, "Call mom")
         XCTAssertEqual(remind.dueDate, at(11, 23, 14, 40))
         XCTAssertEqual(remind.reminderOffsetMinutes, 0, "at the time of the task")
+    }
+
+    /// "at 1" to "at 6" with no am or pm, read from the whole text (the supervisor's decision on the review of brief 175,
+    /// finding 2): "morning" or "night" among the words, as typed (24-hour); beside a day typed or a repeat's, the
+    /// afternoon; with no day, the next one to come. Monday 2026-11-23, Eastern.
+    func testAShortHourReadsFromTheWholeText() throws {
+        var ny = Calendar(identifier: .gregorian)
+        ny.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+        func at(_ m: Int, _ d: Int, _ h: Int, _ min: Int) -> Date {
+            ny.date(from: DateComponents(year: 2026, month: m, day: d, hour: h, minute: min))!
+        }
+        let p = QuickAddParser(now: at(11, 23, 14, 10), calendar: ny)
+
+        // "morning" or "night": as typed.
+        let meditate = p.parse("Meditate every morning at 6")
+        XCTAssertEqual(meditate.title, "Meditate")
+        XCTAssertEqual(meditate.recurrence?.frequency, .daily)
+        XCTAssertEqual(meditate.dueDate, at(11, 24, 6, 0), "6 am, today's gone")
+        let pills = p.parse("Take pills every night at 1")
+        XCTAssertEqual(pills.title, "Take pills")
+        XCTAssertEqual(pills.dueDate, at(11, 24, 1, 0))
+        XCTAssertEqual(p.parse("Gym tomorrow morning at 6").dueDate, at(11, 24, 6, 0))
+        XCTAssertEqual(p.parse("Catch the bus at 6 in the morning").dueDate, at(11, 24, 6, 0))
+        let pray = p.parse("Pray at 5 every morning")
+        XCTAssertEqual(pray.dueDate, at(11, 24, 5, 0))
+        XCTAssertEqual(pray.recurrence?.frequency, .daily)
+
+        // Beside a day typed, or a repeat's: the afternoon.
+        XCTAssertEqual(p.parse("Call mom tomorrow at 5").dueDate, at(11, 24, 17, 0))
+        XCTAssertEqual(p.parse("Call mom friday at 1").dueDate, at(11, 27, 13, 0))
+        XCTAssertEqual(p.parse("Dinner tonight at 6").dueDate, at(11, 23, 18, 0), "tonight at 6 stays 6 pm")
+        XCTAssertEqual(p.parse("Standup every weekday at 3").dueDate, at(11, 23, 15, 0))
+        var editor = p
+        editor.dueDayIsSet = true
+        XCTAssertEqual(editor.parse("Call at 3").dueDate.map { ny.component(.hour, from: $0) }, 15, "the task's own day")
+
+        // No day: the next one to come, morning or afternoon.
+        XCTAssertEqual(p.parse("Pick up the dry cleaning at 6").dueDate, at(11, 23, 18, 0))
+        XCTAssertEqual(p.parse("Lunch at 1").dueDate, at(11, 24, 1, 0), "1 am and 1 pm both gone: 1 am tomorrow")
+        XCTAssertEqual(QuickAddParser(now: at(11, 23, 22, 0), calendar: ny).parse("Wake up at 6").dueDate, at(11, 24, 6, 0))
+        XCTAssertEqual(QuickAddParser(now: at(11, 23, 5, 0), calendar: ny).parse("Run at 6").dueDate, at(11, 23, 6, 0))
+        XCTAssertEqual(QuickAddParser(now: at(11, 23, 5, 0), calendar: ny).parse("Run at 6:30").dueDate, at(11, 23, 6, 30))
+
+        // A reminder's clock time reads the same way.
+        XCTAssertEqual(p.parse("Bins friday remind me at 4").reminderDate, at(11, 27, 16, 0))
+        XCTAssertEqual(p.parse("Gym tomorrow morning at 6 remind me at 5").reminderClock, ReminderClock(hour: 5, minute: 0))
+        XCTAssertEqual(p.parse("Gym tomorrow morning at 6 remind me at 5").reminderDate, at(11, 24, 5, 0))
+        XCTAssertEqual(p.parse("Bins !tomorrow at 4").reminderDate, at(11, 24, 16, 0))
+        XCTAssertEqual(p.parse("Bins every night !at 1").reminderClock, ReminderClock(hour: 1, minute: 0))
+        XCTAssertEqual(QuickAddParser(now: at(11, 23, 22, 0), calendar: ny).parse("Bins !at 6").reminderDate, at(11, 24, 6, 0))
+        // Alone, a phrase reads a short hour as the afternoon.
+        XCTAssertEqual(ReminderPhrase(token: "!at 4"), .at(ReminderClock(hour: 16, minute: 0)))
     }
 
     /// "reminder" with no "me" and no "!" is weak evidence: plenty of titles hold the word. It takes only the relative

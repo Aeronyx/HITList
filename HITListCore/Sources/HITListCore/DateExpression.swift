@@ -370,32 +370,34 @@ public struct DateExpressionParser: Sendable {
     /// month or a unit follows ("fri 5 jan", "tom 3 weeks").
     ///
     /// As people say them (brief 175): "5 p.m.", "5 P.M.", "9:30 a.m.", "5pm.", "5 p. m." are the right half of
-    /// the day, every dot taken in. And after "at", an hour from 1 to 6 with no am or pm is the afternoon
-    /// (`afternoonAfterAt`): nobody means "pick up the dry cleaning at 6" at six in the morning. "at 7" to "at 11",
-    /// "at 06:30" (a 24-hour clock's leading zero) and a bare hour after a date word ("tomorrow 5") stay as typed.
-    /// A time field passes `afternoonAfterAt: false`: it reads a clock, digits as they stand.
+    /// the day, every dot taken in. And after "at", an hour from 1 to 6 with no am or pm (`shortHour`) is read here
+    /// as the afternoon (`afternoonAfterAt`): nobody means "pick up the dry cleaning at 6" at six in the morning.
+    /// Quick add reads it from the whole text instead (`QuickAddParser.shortHour`: "every morning at 6" is 6 am).
+    /// "at 7" to "at 11", "at 06:30" (a 24-hour clock's leading zero) and a bare hour after a date word
+    /// ("tomorrow 5") stay as typed. A time field passes `afternoonAfterAt: false`: it reads a clock, digits as
+    /// they stand.
     public func matchTime(in words: [String], at i: Int, allowBareHour: Bool = false,
-                          afternoonAfterAt: Bool = true) -> (hour: Int, minute: Int, consumed: Int)? {
+                          afternoonAfterAt: Bool = true) -> (hour: Int, minute: Int, consumed: Int, shortHour: Bool)? {
         guard i < words.count else { return nil }
         let w = Self.normalize(words[i])
         let next: String? = i + 1 < words.count ? Self.normalize(words[i + 1]) : nil
 
         switch w {
-        case "noon": return (12, 0, 1)
-        case "midnight": return (0, 0, 1)
+        case "noon": return (12, 0, 1, false)
+        case "midnight": return (0, 0, 1, false)
         case "at":
             guard let n = next else { return nil }
             if let t = Self.parseClock(n, allowBareHour: true) {
                 // "at 5 pm", "at 5 p.m.", "at 5 p. m."
                 if let (meridiem, length) = Self.meridiem(in: words, at: i + 2),
                    let t2 = Self.parseClock(n + meridiem, allowBareHour: true) {
-                    return (t2.hour, t2.minute, 2 + length)
+                    return (t2.hour, t2.minute, 2 + length, false)
                 }
-                if afternoonAfterAt, Self.isAfternoonHour(n, hour: t.hour) { return (t.hour + 12, t.minute, 2) }
-                return (t.hour, t.minute, 2)
+                let short = Self.isAfternoonHour(n, hour: t.hour)
+                return (short && afternoonAfterAt ? t.hour + 12 : t.hour, t.minute, 2, short)
             }
-            if n == "noon" { return (12, 0, 2) }
-            if n == "midnight" { return (0, 0, 2) }
+            if n == "noon" { return (12, 0, 2, false) }
+            if n == "midnight" { return (0, 0, 2, false) }
             return nil
         default:
             break
@@ -404,14 +406,14 @@ public struct DateExpressionParser: Sendable {
         // "5 pm" as two words, "5 p.m.", "5 p. m."
         if let (meridiem, length) = Self.meridiem(in: words, at: i + 1),
            let t = Self.parseClock(w + meridiem, allowBareHour: true) {
-            return (t.hour, t.minute, 1 + length)
+            return (t.hour, t.minute, 1 + length, false)
         }
         if let t = Self.parseClock(w, allowBareHour: false) {
-            return (t.hour, t.minute, 1)
+            return (t.hour, t.minute, 1, false)
         }
         if allowBareHour, let t = Self.parseClock(w, allowBareHour: true) {
             if let n = next, Self.monthNames[n] != nil || Self.unitDays(n) != nil { return nil }
-            return (t.hour, t.minute, 1)
+            return (t.hour, t.minute, 1, false)
         }
         return nil
     }

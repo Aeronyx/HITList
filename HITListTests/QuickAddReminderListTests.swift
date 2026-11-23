@@ -177,6 +177,30 @@ final class QuickAddReminderListTests: XCTestCase {
         XCTAssertEqual(QuickAddDraft(context: .inbox, text: "Call mom !4pm ").result(p).reminderDate, at(16))
     }
 
+    /// "at 1" to "at 6" with no am or pm beside a day is the afternoon (the review of brief 175, finding 2): an Upcoming
+    /// day's row gives the task its day, and so does the editor's task. With no day it is the next one to come, which at
+    /// 2 pm is 1 AM tomorrow.
+    func testAShortHourOnARowsDayOrTheTasksOwnIsTheAfternoon() throws {
+        let p = parser()
+        let thursday = calendar.date(byAdding: .day, value: 5, to: today)!
+        XCTAssertEqual(QuickAddDraft(context: .day(thursday), text: "Dentist at 1").result(p).dueDate, at(13, day: 5))
+        XCTAssertEqual(QuickAddDraft(context: .today, text: "Dentist at 1").result(p).dueDate, at(1, day: 1),
+                       "today's list: the next 1 o'clock to come")
+        XCTAssertEqual(QuickAddDraft(context: .inbox, text: "Dentist at 3").result(p).dueDate, at(15))
+
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        let friday = calendar.date(byAdding: .day, value: 6, to: today)!
+        let task = TaskItem(title: "Call mom", dueDate: calendar.date(bySettingHour: 9, minute: 0, second: 0, of: friday),
+                            hasDueTime: true)
+        context.insert(task)
+        try context.save()
+        var draft = TaskEditorDraft(task: task)
+        draft.title += " at 1"
+        XCTAssertEqual(draft.phrases(p, for: task).due?.date, calendar.date(bySettingHour: 13, minute: 0, second: 0, of: friday))
+        withExtendedLifetime(container) {}
+    }
+
     /// Saved as the task's own moment, and scheduled like any other reminder.
     func testAClockReminderReachesTheSavedTask() throws {
         let container = ModelContainerFactory.preview()
