@@ -61,14 +61,16 @@ struct PriorityChipPopover: View {
 
 // MARK: - Reminder (the due time, and how long before it)
 
-/// What the Reminder chip and pill read: "11:00 AM", "11:00 AM · 15 min before", "15 min before" (an offset
-/// still waiting for a time), or "Reminder"; with a reminder moment of the task's own (brief 48) "In 15 min ·
-/// 3:47 PM" (typed "!15m"), "Remind 4:30 PM" (picked, or saved), after the time when there is one:
+/// What the Reminder chip and pill read: "11:00 AM", "11:00 AM · 15 min before", "11:00 AM · At time" (a reminder at
+/// the time typed or picked from the list, brief 175: "!At time of task", "!0mb"), "15 min before" (an offset still
+/// waiting for a time), or "Reminder"; with a reminder moment of the task's own (brief 48) "In 15 min · 3:47 PM" (typed
+/// "!15m"), "Remind 4:30 PM" (picked, typed "!4:30pm", or saved), after the time when there is one:
 /// "5:00 PM · in 15 min".
 enum ReminderChipText {
     static func title(time: Date?, offsetMinutes: Int?, reminderDate: Date? = nil, fromNow: ReminderSpan? = nil,
                       now: Date = Date(), calendar: Calendar = .current) -> String {
-        let offset = (offsetMinutes ?? 0) > 0 ? ReminderOffset.label(minutes: offsetMinutes!) : nil
+        // Zero says "At time" beside the time; with no time it waits for one and says nothing yet.
+        let offset = offsetMinutes.flatMap { $0 > 0 || time != nil ? ReminderOffset.label(minutes: $0) : nil }
         var parts: [String] = []
         if let time { parts.append(time.formatted(date: .omitted, time: .shortened)) }
         if let offset { parts.append(offset) }

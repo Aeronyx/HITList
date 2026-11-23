@@ -242,6 +242,11 @@ struct QuickAddDraft: Equatable, Codable {
         if result.reminderOffsetMinutes == nil, result.hasDueTime, let pendingReminderMinutes {
             result.reminderOffsetMinutes = pendingReminderMinutes
         }
+        // A clock time typed ("!4pm") goes off on the task's due day, which may be the list's rather than a typed one
+        // (an Upcoming day's row, brief 175).
+        if let clock = result.reminderClock {
+            result.reminderDate = clock.date(dueDay: result.dueDate, now: parser.dateParser.now, calendar: calendar)
+        }
         // The card's "Later today…" moment, unless a "from now" phrase is typed.
         if result.reminderDate == nil, let pickedReminderDate { result.reminderDate = pickedReminderDate }
         result.deadline = deadline
@@ -278,16 +283,16 @@ struct QuickAddDraft: Equatable, Codable {
         text = removing([.time], parser)
     }
 
-    /// Writes the reminder offset as `!15mb` / `!1hb` / `!1db`; nil or 0 (at the time) removes it. Before the
-    /// task has a time nothing is written: the offset waits on the chip (`pendingReminderMinutes`) and counts
-    /// once a time is set (brief 41).
+    /// Writes the reminder offset in words, as the list on "!" does (brief 175): "!15 minutes before", "!1 hour before",
+    /// "!1 day before"; nil or 0 (at the time) removes it. Before the task has a time nothing is written: the offset
+    /// waits on the chip (`pendingReminderMinutes`) and counts once a time is set (brief 41).
     mutating func setReminderOffset(_ minutes: Int?, _ parser: QuickAddParser) {
         // Only the "before" phrases: a "from now" one ("!15m") is a reminder of its own (brief 48).
         text = Self.removing(reminderTokens(beforeDue: true, parser), from: text)
         pendingReminderMinutes = nil
         guard let minutes, minutes > 0 else { return }
         if parsed(parser, .final).hasDueTime {
-            append(ReminderOffset.token(minutes: minutes))
+            append(ReminderOffset.phrase(minutes: minutes))
         } else {
             pendingReminderMinutes = minutes
         }
@@ -301,25 +306,37 @@ struct QuickAddDraft: Equatable, Codable {
         pendingReminderMinutes = offset > 0 ? offset : nil
     }
 
-    /// The Reminder card's "from now" choices (brief 48): a span writes its token ("!15m", "!1h") in place of a
-    /// typed one; a picked moment ("Later today…") writes nothing and waits here; nil removes both. A reminder
-    /// before the due time is left as it is.
+    /// The Reminder card's "from now" choices (brief 48): a span writes its words ("!In 15 minutes", "!In 1 hour",
+    /// brief 175) in place of a typed one; a picked moment ("Later today…") writes nothing and waits here; nil removes
+    /// both. A reminder before the due time is left as it is.
     mutating func setReminderMoment(_ pick: ReminderMomentPick?, _ parser: QuickAddParser) {
         text = Self.removing(reminderTokens(beforeDue: false, parser), from: text)
         pickedReminderDate = nil
         switch pick {
-        case .span(let span)?: append(span.token)
+        case .span(let span)?: append(span.phrase)
         case .at(let date)?: pickedReminderDate = date
         case nil: break
         }
     }
 
-    /// The text's reminder phrases of one kind, superseded ones included: "before the due time" (`!15mb`,
-    /// `!at`) or "from now" (`!15m`).
+    /// The text's reminder phrases of one kind, superseded ones included, codes and words alike: "before the due
+    /// time" (`!15mb`, `!at`, `!10 minutes before`) or the task's own moment (`!15m`, `!In 15 minutes`, `!4pm`).
+    /// "Remind me to" is neither.
     private func reminderTokens(beforeDue: Bool, _ parser: QuickAddParser) -> [QuickAddToken] {
         parsed(parser, .final).tokens.filter {
             $0.kind == .reminder && ReminderPhrase(token: $0.text)?.isBeforeDue == beforeDue
         }
+    }
+
+    /// A row picked from the list on "!" (brief 175): its words take the place of the typed "!…" (`range`, the word's
+    /// UTF-16 stretch) with a space after them, so the phrase is read at once, and switched on if the same words had
+    /// been switched off. Where the caret goes: after that space.
+    @discardableResult
+    mutating func pick(_ suggestion: ReminderSuggestion, replacing range: NSRange) -> Int {
+        let picked = ReminderSuggestions.applying(suggestion.phrase, to: text, replacing: range)
+        text = picked.text
+        enable(suggestion.phrase)
+        return picked.cursor
     }
 
     mutating func setPriority(_ priority: Priority, _ parser: QuickAddParser) {

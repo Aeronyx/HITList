@@ -283,7 +283,7 @@ final class PickerTests: XCTestCase {
         let p = QuickAddParser(now: date(2026, 10, 31), calendar: calendar)
         var draft = QuickAddDraft(context: .inbox, text: "Haircut tomorrow 11am")
         draft.setReminderOffset(45, p)
-        XCTAssertEqual(draft.text, "Haircut tomorrow 11am !45mb ")
+        XCTAssertEqual(draft.text, "Haircut tomorrow 11am !45 minutes before ", "in words (brief 175)")
         XCTAssertEqual(draft.chips(p).reminderOffsetMinutes, 45)
     }
 

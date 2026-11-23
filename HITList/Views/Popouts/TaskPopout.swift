@@ -59,10 +59,17 @@ struct TaskPopout: View {
     /// (`TokenHighlightField.focus`).
     @State private var titleFocused = false
     @FocusState private var notesFocused: Bool
+    /// The title's caret, for the reminder list on "!" (brief 175, as in the quick-add card).
+    @State private var caret: Int?
+    @State private var caretRequest: HighlightCaretRequest?
+    @State private var listHighlight = 0
+    @State private var listClosedAt: Int?
     #if os(iOS)
     /// Where the keyboard was when a card opened, to give it back when the card closes.
     @State private var keyboardBeforeCard: KeyboardPlace?
     enum KeyboardPlace { case title, notes }
+    /// The editor's frame on the screen, for the room its reminder list has above the keyboard.
+    @State private var screenFrame: CGRect = .zero
     #endif
 
     enum Chip: Hashable { case date, priority, project, labels, reminder, repeating, deadline, location }
@@ -151,8 +158,15 @@ struct TaskPopout: View {
         // date card was squeezed between its row and the keyboard, its presets and time cut off (brief 65).
         .onChange(of: openChip) { _, chip in keyboardMoves(forCard: chip != nil) }
         #endif
-        // The chips' picker cards (inside the window on the Mac).
+        // The chips' picker cards (inside the window on the Mac), and the title's reminder list there.
         .pickerOverlay()
+        #if os(iOS)
+        // iPhone and iPad: the title's reminder list hangs under it, over the rows, above the keyboard (brief 175).
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { screenFrame = $0 }
+        .floatingReminderList(.belowTitle, room: listRoom)
+        #endif
+        .onChange(of: bangWord?.query) { _, _ in listHighlight = 0 }
+        .onChange(of: bangWord?.range.location) { _, location in if location != listClosedAt { listClosedAt = nil } }
         .onAppear {
             if taskID == nil { taskID = task.id }
             landStoredReminder()
@@ -329,10 +343,13 @@ struct TaskPopout: View {
                                         onEnable: { token in
                                             withAnimation(HITMotion.quick(reduceMotion: reduceMotion)) { draft.switchBackOn(token) }
                                         },
-                                        look: look, onSubmit: confirm)
+                                        look: look, onCaretChange: { caret = $0 }, caretRequest: caretRequest,
+                                        onSubmit: confirm)
                         // The first line centred on the check circle, as the old field's was.
                         .padding(.top, max(0, (EditorMetrics.titleLine - look.lineHeight) / 2))
                         .accessibilityIdentifier("editorTitle")
+                        // The reminder list on "!", as in the quick-add card (brief 175).
+                        .reminderList(reminderList(shown: shown))
                     if showsNotes {
                         TextField("Description", text: $draft.notes, axis: .vertical)
                             .textFieldStyle(.plain)
@@ -354,6 +371,56 @@ struct TaskPopout: View {
             EditorHairline()
             dateRow(now: now, shown: shown)
         }
+    }
+
+    // MARK: The title's reminder list on "!" (brief 175)
+
+    /// The "!" word the caret is in, while the title has the keyboard.
+    private var bangWord: ReminderSuggestions.BangWord? {
+        guard titleFocused, let caret else { return nil }
+        return ReminderSuggestions.bangWord(in: draft.title, cursor: caret)
+    }
+
+    #if os(iOS)
+    /// The editor's room from its top down to the keyboard (or its own foot), less a margin.
+    private var listRoom: CGFloat {
+        let keyboardTop = UIScreen.main.bounds.height - KeyboardObserver.shared.height
+        return min(screenFrame.height, keyboardTop - screenFrame.minY) - ReminderListMetrics.screenMargin
+    }
+    #endif
+
+    /// The list for the task as Confirm would save it (`shown`): with a time, its own or typed, the "before" rows.
+    private func reminderList(shown: EditorFields) -> ReminderListRequest? {
+        guard let word = bangWord, openChip == nil, !isClosing, !confirmingDiscard, listClosedAt != word.range.location
+        else { return nil }
+        let all = ReminderSuggestions.rows(hasTime: shown.hasDueTime && shown.dueDate != nil, dueDate: shown.dueDate,
+                                           now: Date())
+        let rows = ReminderSuggestions.narrowed(all, by: word.query)
+        guard !rows.isEmpty else { return nil }
+        let highlighted = min(max(listHighlight, 0), rows.count - 1)
+        return ReminderListRequest(
+            rows: rows, highlighted: highlighted,
+            onPick: { pickReminder($0, word: word) },
+            onHighlight: { listHighlight = $0 },
+            onKey: { key in
+                switch key {
+                case .up: listHighlight = max(0, highlighted - 1)
+                case .down: listHighlight = min(rows.count - 1, highlighted + 1)
+                // Return picks: it does not confirm while the list is open.
+                case .pick: pickReminder(rows[highlighted], word: word)
+                case .dismiss: listClosedAt = word.range.location
+                }
+                return true
+            },
+            onDismiss: { listClosedAt = word.range.location })
+    }
+
+    private func pickReminder(_ row: ReminderSuggestion, word: ReminderSuggestions.BangWord) {
+        let cursor = draft.pick(row, replacing: word.range)
+        caretRequest = HighlightCaretRequest(offset: cursor, serial: (caretRequest?.serial ?? 0) + 1)
+        caret = cursor
+        listHighlight = 0
+        AccessibilityNotification.Announcement("Reminder: \(row.label)").post()
     }
 
     /// The Group row while a Group is typed in the title (brief 65): its name and colour (a new Group's in the

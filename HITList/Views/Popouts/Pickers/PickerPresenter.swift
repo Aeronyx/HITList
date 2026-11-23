@@ -310,6 +310,16 @@ struct PickerRequest {
     let anchor: Anchor<CGRect>
     let dismiss: () -> Void
     let card: AnyView
+    /// The quick-add title's reminder list rather than a chip's card (brief 175).
+    var list: PickerListMode? = nil
+}
+
+/// How the reminder list on "!" uses the layer (brief 175): a width of its own and chrome of its own; the title keeps
+/// the keyboard and its caret, so a click anywhere else passes through and Tab is the title's; ↑, ↓, Return and Esc,
+/// while the title has the keyboard, are the list's (`onKey`), seen before the card's own shortcuts (Esc on its ×).
+struct PickerListMode {
+    var width: CGFloat
+    var onKey: (ReminderListKey) -> Bool
 }
 
 struct PickerRequestKey: PreferenceKey {
@@ -372,7 +382,8 @@ private struct PickerOverlayModifier: ViewModifier {
             .overlayPreferenceValue(PickerRequestKey.self) { request in
                 GeometryReader { proxy in
                     PickerPortal(request: request.map {
-                        PickerPortal.Resolved(kind: $0.kind, anchor: proxy[$0.anchor], dismiss: $0.dismiss, card: $0.card)
+                        PickerPortal.Resolved(kind: $0.kind, anchor: proxy[$0.anchor], dismiss: $0.dismiss, card: $0.card,
+                                              list: $0.list)
                     })
                 }
                 .allowsHitTesting(false)
@@ -392,6 +403,7 @@ struct PickerPortal: NSViewRepresentable {
         let anchor: CGRect
         let dismiss: () -> Void
         let card: AnyView
+        var list: PickerListMode? = nil
     }
 
     let request: Resolved?
@@ -469,7 +481,7 @@ final class PickerPortalView: NSView {
         }
         layerHost = host
         host.show(owner: self, kind: request.kind, anchor: host.convert(request.anchor, from: self),
-                  card: request.card, dismiss: request.dismiss)
+                  card: request.card, dismiss: request.dismiss, list: request.list)
     }
 
     func releaseLayer() {
@@ -494,6 +506,12 @@ final class PickerLayerModel {
     @ObservationIgnored var cardFrame: CGRect = .zero
     /// The card's own Escape, asked first.
     @ObservationIgnored let escape = PickerEscape()
+    /// The reminder list's width while the layer shows it (brief 175); nil for a chip's card.
+    var listWidth: CGFloat?
+    /// The reminder list's keys.
+    @ObservationIgnored var listKeys: ((ReminderListKey) -> Bool)?
+
+    var isList: Bool { listWidth != nil }
 
     func dismissCard() { dismiss?() }
 
@@ -557,7 +575,10 @@ final class PickerLayerHost: NSHostingView<PickerLayerRoot> {
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
-        model.card == nil ? nil : super.hitTest(point)
+        guard model.card != nil else { return nil }
+        // The reminder list takes only what lands on it: the title beside it keeps its clicks (brief 175).
+        if model.isList, !model.cardFrame.contains(convert(point, from: superview)) { return nil }
+        return super.hitTest(point)
     }
 
     private var laidOutSize: NSSize = .zero
@@ -578,9 +599,10 @@ final class PickerLayerHost: NSHostingView<PickerLayerRoot> {
         if bounds != model.bounds { model.bounds = bounds }
     }
 
-    func show(owner: PickerPortalView, kind: PickerKind, anchor: CGRect, card: AnyView, dismiss: @escaping () -> Void) {
+    func show(owner: PickerPortalView, kind: PickerKind, anchor: CGRect, card: AnyView, dismiss: @escaping () -> Void,
+              list: PickerListMode? = nil) {
         refreshBounds()
-        let isNew = model.card == nil || ownerID != ObjectIdentifier(owner) || model.kind != kind
+        let isNew = model.card == nil || ownerID != ObjectIdentifier(owner) || model.kind != kind || model.isList != (list != nil)
         if isNew, isFreshlyAttached {
             // Just added to the window: let it draw once without the card, so the card animates in (`enter`)
             // instead of appearing in one frame. The owner asks again on the next turn of the run loop.
@@ -597,6 +619,8 @@ final class PickerLayerHost: NSHostingView<PickerLayerRoot> {
         ownerID = ObjectIdentifier(owner)
         model.dismiss = dismiss
         model.kind = kind
+        if model.listWidth != list?.width { model.listWidth = list?.width }
+        model.listKeys = list?.onKey
         if model.anchor != anchor { model.anchor = anchor }
         model.card = card
         installMonitor()
@@ -609,6 +633,8 @@ final class PickerLayerHost: NSHostingView<PickerLayerRoot> {
         model.card = nil
         model.dismiss = nil
         model.escape.action = nil
+        model.listWidth = nil
+        model.listKeys = nil
         model.cardFrame = .zero
         removeMonitor()
         restoreKeyboard()
@@ -651,6 +677,7 @@ final class PickerLayerHost: NSHostingView<PickerLayerRoot> {
     /// Nil swallows the event.
     private func intercept(_ event: NSEvent) -> NSEvent? {
         guard model.card != nil, let window, event.window === window else { return event }
+        if model.isList { return interceptForList(event, in: window) }
         switch event.type {
         case .keyDown:
             let modifiers = event.modifierFlags.intersection([.command, .control, .option])
@@ -670,8 +697,28 @@ final class PickerLayerHost: NSHostingView<PickerLayerRoot> {
         }
     }
 
+    /// The reminder list (brief 175): its keys while the quick-add title has the keyboard; everything else, clicks
+    /// included, goes where it was going (the list closes by itself when the caret leaves its "!" word).
+    private func interceptForList(_ event: NSEvent, in window: NSWindow) -> NSEvent? {
+        guard event.type == .keyDown, window.firstResponder is HighlightNSTextView,
+              event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty else { return event }
+        let key: ReminderListKey
+        switch event.keyCode {
+        case Self.escapeKey: key = .dismiss
+        case Self.upKey: key = .up
+        case Self.downKey: key = .down
+        case Self.returnKey, Self.enterKey: key = .pick
+        default: return event
+        }
+        return model.listKeys?(key) == true ? nil : event
+    }
+
     private static let escapeKey: UInt16 = 53
     private static let tabKey: UInt16 = 48
+    private static let upKey: UInt16 = 126
+    private static let downKey: UInt16 = 125
+    private static let returnKey: UInt16 = 36
+    private static let enterKey: UInt16 = 76
 
     /// What to give the keyboard back to: a text field's shared field editor stands for its field.
     private static func restorable(_ responder: NSResponder?) -> NSResponder? {
@@ -703,7 +750,8 @@ struct PickerLayerRoot: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            if model.card != nil {
+            // The reminder list has no backdrop: the title beside it goes on taking its typing and clicks (brief 175).
+            if model.card != nil, !model.isList {
                 // Holds the hover and scroll of what is underneath while a card is open (clicks outside
                 // are the event monitor's).
                 Color.clear
@@ -713,12 +761,18 @@ struct PickerLayerRoot: View {
             }
             PickerCardLayout(model: model) {
                 if let card = model.card {
-                    card
-                        .pickerCardChrome(width: model.kind.width)
-                        .environment(\.pickerFocusRequest, model.focusRequest)
-                        .environment(\.pickerEscape, model.escape)
-                        .id(model.generation)
-                        .transition(cardTransition)
+                    SwiftUI.Group {
+                        if let width = model.listWidth {
+                            // The list draws its own surface, hairline and shadow.
+                            card.frame(width: width)
+                        } else {
+                            card.pickerCardChrome(width: model.kind.width)
+                        }
+                    }
+                    .environment(\.pickerFocusRequest, model.focusRequest)
+                    .environment(\.pickerEscape, model.escape)
+                    .id(model.generation)
+                    .transition(cardTransition)
                 }
             }
         }

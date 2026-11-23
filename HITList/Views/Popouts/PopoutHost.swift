@@ -31,6 +31,12 @@ struct PopoutHost: ViewModifier {
     /// The keyboard the card sits above; `heldKeyboardHeight` is its height when the card began closing.
     private var keyboard: KeyboardObserver { .shared }
     @State private var heldKeyboardHeight: CGFloat = 0
+    /// iPhone: the oval card's top, down from the screen's safe area: the room its reminder list has above it (brief 175).
+    @State private var ovalCardTop: CGFloat = 0
+    /// The card's reminder list is up: the first-run tip, which hangs in its place, waits.
+    @State private var reminderListShows = false
+    /// iPad: the panel's room down to the keyboard, for its reminder list.
+    @State private var panelListRoom: CGFloat = 0
     #endif
     /// iPhone: the card has a title, so closing it asks first.
     @State private var quickAddHasContent = false
@@ -385,6 +391,14 @@ struct PopoutHost: ViewModifier {
                         .simultaneousGesture(TapGesture().onEnded { if confirmingDiscard { resumeDraft() } })
                 }
             }
+            #if os(iOS)
+            // The iPad: the title's reminder list under it, over the panel, above the keyboard (brief 175). The Mac's is
+            // drawn by the window's picker layer.
+            .background(GeometryReader { geo in
+                Color.clear.onChange(of: geo.size.height - keyboard.height, initial: true) { _, room in panelListRoom = room }
+            })
+            .floatingReminderList(.belowTitle, room: panelListRoom - ReminderListMetrics.screenMargin)
+            #endif
             .transition(PanelBackdrop<EmptyView>.transition(reduceMotion: reduceMotion))
         } else {
             #if os(iOS)
@@ -413,8 +427,16 @@ struct PopoutHost: ViewModifier {
                             // A chip's card opens for where the chip will be once the keyboard has stepped aside and
                             // the card has dropped with it, by `aboveKeyboard` (brief 107).
                             .environment(\.pickerSettleInset, geo.safeAreaInsets.bottom)
-                            // A first-run tip floats above the card over the dimmed list, never inside it.
-                            .floatingQuickAddTip(isHidden: confirmingDiscard)
+                            // A first-run tip floats above the card over the dimmed list, never inside it; it waits
+                            // while the reminder list hangs there.
+                            .floatingQuickAddTip(isHidden: confirmingDiscard || reminderListShows)
+                            // The title's reminder list on "!" stands on the card's top edge, never taller than the
+                            // room up to the screen's safe area (brief 175).
+                            .floatingReminderList(.above, room: ovalCardTop)
+                            .onPreferenceChange(ReminderListPreferenceKey.self) { box in reminderListShows = box != nil }
+                            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(Self.ovalSpace)).minY } action: { top in
+                                ovalCardTop = top
+                            }
                             // A tap on the card itself also means "keep editing".
                             .simultaneousGesture(TapGesture().onEnded { if confirmingDiscard { resumeDraft() } })
                     }
@@ -430,6 +452,8 @@ struct PopoutHost: ViewModifier {
                     .transition(cardTransition)
                 }
                 .frame(width: geo.size.width, height: geo.size.height, alignment: .bottom)
+                // Its top is the screen's safe area: the oval's reminder list measures its room from here.
+                .coordinateSpace(.named(Self.ovalSpace))
                 .animation(.easeIn(duration: Self.retractDuration), value: closing)
             }
             .ignoresSafeArea(.keyboard)
@@ -442,6 +466,8 @@ struct PopoutHost: ViewModifier {
     /// The oval's distance from the screen edges and from the top of the keyboard (`KeyboardObserver`
     /// keeps it above the keyboard, so it floats rather than docks).
     static let ovalInset: CGFloat = 12
+    /// The iPhone's quick-add layer, its top at the screen's safe area.
+    static let ovalSpace = "quickAddOval"
 }
 
 #if os(iOS)

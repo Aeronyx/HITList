@@ -306,7 +306,8 @@ struct TaskEditorDraft: Equatable {
     func phrases(_ parser: QuickAddParser, for task: TaskItem, _ mode: QuickAddParser.Mode = .final,
                  waking: Bool = true) -> TitlePhrases {
         TitlePhrases(text: title, result: parsed(parser, for: task, mode, waking: waking), dueDate: task.dueDate,
-                     hasDueTime: task.hasDueTime, repeats: task.recurrenceRule, calendar: parser.dateParser.calendar)
+                     hasDueTime: task.hasDueTime, repeats: task.recurrenceRule, calendar: parser.dateParser.calendar,
+                     now: parser.dateParser.now)
     }
 
     /// A highlight clicked, tapped or backspaced: its words stay in the title as text. `token` comes from
@@ -320,6 +321,16 @@ struct TaskEditorDraft: Equatable {
     mutating func switchBackOn(_ token: QuickAddToken) {
         guard let phrase = QuickAddDisabledPhrase(token, in: title) else { return }
         switchedOff.remove(phrase)
+    }
+
+    /// A row picked from the reminder list on "!" (brief 175): its words take the typed "!…"'s place (`range`, the
+    /// word's UTF-16 stretch of the title) with a space after them, typed in this session, so read at once. Where the
+    /// caret goes: after that space.
+    @discardableResult
+    mutating func pick(_ suggestion: ReminderSuggestion, replacing range: NSRange) -> Int {
+        let picked = ReminderSuggestions.applying(suggestion.phrase, to: title, replacing: range)
+        title = picked.text
+        return picked.cursor
     }
 
     /// A value picked in the editor replaces the typed phrases of its kinds (`include` narrows them): they leave

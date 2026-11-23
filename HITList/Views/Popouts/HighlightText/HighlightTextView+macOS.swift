@@ -20,6 +20,10 @@ struct HighlightTextField: NSViewRepresentable {
     var style: HighlightTextStyle
     var isFocused: Bool
     var onFocusChange: (Bool) -> Void
+    /// The caret as it moves (`TokenHighlightField.onCaretChange`).
+    var onCaretChange: ((Int?) -> Void)? = nil
+    /// Where the caret goes with the owner's next text (`TokenHighlightField.caretRequest`).
+    var caretRequest: HighlightCaretRequest? = nil
     var onSubmit: () -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -51,8 +55,16 @@ struct HighlightTextField: NSViewRepresentable {
 
     private func apply(to textView: HighlightNSTextView, context: Context) {
         textView.apply(style: style, placeholder: placeholder)
-        // Never while an input method is composing: setting the text would throw the composition away.
-        if !textView.hasMarkedText(), textView.string != text { textView.setTextFromOwner(text) }
+        // Never while an input method is composing: setting the text would throw the composition away. A caret asked
+        // for with the text (a pick from the reminder list) goes where asked, once; otherwise to the end.
+        let caret = caretRequest.flatMap { $0.serial != context.coordinator.appliedCaretSerial ? $0 : nil }
+        if !textView.hasMarkedText(), textView.string != text {
+            textView.setTextFromOwner(text, caret: caret?.offset)
+            if let caret { context.coordinator.appliedCaretSerial = caret.serial }
+        } else if !textView.hasMarkedText(), let caret {
+            textView.placeCaretFromOwner(caret.offset)
+            context.coordinator.appliedCaretSerial = caret.serial
+        }
         textView.highlightLayout.runs = runs
         textView.onSubmit = { [weak coordinator = context.coordinator] in coordinator?.parent.onSubmit() }
 
@@ -93,6 +105,10 @@ struct HighlightTextField: NSViewRepresentable {
         var lastFocus = false
         /// The title's own undo history (not the window's): a text set by the owner can let it go safely.
         let undoManager = UndoManager()
+        /// The last caret ask applied (`HighlightCaretRequest.serial`).
+        var appliedCaretSerial: Int?
+        /// The caret last told to the owner, so only a move is told.
+        private var lastCaret: Int??
 
         init(_ parent: HighlightTextField) { self.parent = parent }
 
@@ -100,6 +116,29 @@ struct HighlightTextField: NSViewRepresentable {
             guard let textView = notification.object as? HighlightNSTextView else { return }
             textView.composingChanged()
             if parent.text != textView.string { parent.text = textView.string }
+            reportCaret(textView)
+        }
+
+        func textViewDidChangeSelection(_ notification: Notification) {
+            guard let textView = notification.object as? HighlightNSTextView else { return }
+            reportCaret(textView)
+        }
+
+        /// Tells the owner where the caret is: nil with a selection, while composing, or without the keyboard. Inside
+        /// the owner's own update (its text set, `isApplyingOwnerText`) it waits a turn: state must not change there.
+        func reportCaret(_ textView: HighlightNSTextView) {
+            guard let tell = parent.onCaretChange else { return }
+            let range = textView.selectedRange()
+            let focused = textView.window?.firstResponder === textView
+            let caret: Int? = focused && !textView.hasMarkedText() && range.length == 0 && range.location != NSNotFound
+                ? range.location : nil
+            guard lastCaret != .some(caret) else { return }
+            lastCaret = .some(caret)
+            if textView.isApplyingOwnerText {
+                DispatchQueue.main.async { tell(caret) }
+            } else {
+                tell(caret)
+            }
         }
 
         func undoManager(for view: NSTextView) -> UndoManager? { undoManager }
@@ -168,15 +207,30 @@ final class HighlightNSTextView: NSTextView {
         }
     }
 
-    /// The owner changed the text (a chip, a restored card, a reset after adding): the caret goes to the end
-    /// and the typing history is let go, since it no longer describes this text.
-    func setTextFromOwner(_ newText: String) {
+    /// The owner's text or caret is being applied (inside SwiftUI's update): the caret's report waits a turn.
+    private(set) var isApplyingOwnerText = false
+
+    /// The owner changed the text (a chip, a restored card, a reset after adding): the caret goes to the end, or to
+    /// `caret` when the owner asks (a pick from the reminder list, brief 175), and the typing history is let go, since
+    /// it no longer describes this text.
+    func setTextFromOwner(_ newText: String, caret: Int? = nil) {
+        isApplyingOwnerText = true
+        defer { isApplyingOwnerText = false }
         string = newText
         typingAttributes = style.attributes
         restyleText()
-        setSelectedRange(NSRange(location: (newText as NSString).length, length: 0))
+        let length = (newText as NSString).length
+        setSelectedRange(NSRange(location: min(max(caret ?? length, 0), length), length: 0))
         coordinator?.undoManager.removeAllActions()
         needsDisplay = true
+    }
+
+    /// The owner puts the caret at `offset`, the text unchanged.
+    func placeCaretFromOwner(_ offset: Int) {
+        isApplyingOwnerText = true
+        defer { isApplyingOwnerText = false }
+        let length = (string as NSString).length
+        setSelectedRange(NSRange(location: min(max(offset, 0), length), length: 0))
     }
 
     /// Every character in the style's attributes (a strikethrough comes and goes with the task's completion).
@@ -222,14 +276,22 @@ final class HighlightNSTextView: NSTextView {
 
     override func becomeFirstResponder() -> Bool {
         let became = super.becomeFirstResponder()
-        if became { wantsFocus = true; coordinator?.focusChanged(true) }
+        if became { wantsFocus = true; coordinator?.focusChanged(true); reportCaretSoon() }
         return became
     }
 
     override func resignFirstResponder() -> Bool {
         let resigned = super.resignFirstResponder()
-        if resigned { wantsFocus = false; coordinator?.focusChanged(false) }
+        if resigned { wantsFocus = false; coordinator?.focusChanged(false); reportCaretSoon() }
         return resigned
+    }
+
+    /// The window names its first responder only once this returns: the caret is told on the next turn.
+    private func reportCaretSoon() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.coordinator?.reportCaret(self)
+        }
     }
 
     // MARK: Keys

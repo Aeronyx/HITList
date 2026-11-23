@@ -621,7 +621,9 @@ final class PopoutTests: XCTestCase {
 
     func testOffsetPresetsWriteTokensThatParseBack() {
         let p = parser()
-        let expected: [Int: String] = [5: "!5mb", 10: "!10mb", 15: "!15mb", 30: "!30mb", 60: "!1hb", 1440: "!1db"]
+        // In words since brief 175, as the list on "!" writes them.
+        let expected: [Int: String] = [5: "!5 minutes before", 10: "!10 minutes before", 15: "!15 minutes before",
+                                       30: "!30 minutes before", 60: "!1 hour before", 1440: "!1 day before"]
         for minutes in ReminderPickerCard.offsetPresets {
             var draft = QuickAddDraft(context: .inbox, text: "Haircut tomorrow 11am")
             draft.setReminderOffset(minutes == 0 ? nil : minutes, p)
@@ -642,7 +644,7 @@ final class PopoutTests: XCTestCase {
         let p = parser()
         var draft = QuickAddDraft(context: .inbox, text: "Haircut tom 11am p1 !15mb")
         draft.setReminderOffset(60, p)
-        XCTAssertEqual(draft.text, "Haircut tom 11am p1 !1hb ")
+        XCTAssertEqual(draft.text, "Haircut tom 11am p1 !1 hour before ", "in words (brief 175)")
         XCTAssertEqual(draft.chips(p).reminderOffsetMinutes, 60)
         draft.setReminderOffset(0, p)
         XCTAssertEqual(draft.text, "Haircut tom 11am p1 ")
@@ -672,7 +674,9 @@ final class PopoutTests: XCTestCase {
         XCTAssertEqual(ReminderChipText.title(time: nil, offsetMinutes: nil), "Reminder")
         XCTAssertEqual(ReminderChipText.title(time: nil, offsetMinutes: 30), "30 min before")
         XCTAssertEqual(ReminderChipText.title(time: eleven, offsetMinutes: nil), clock)
-        XCTAssertEqual(ReminderChipText.title(time: eleven, offsetMinutes: 0), clock)
+        // A reminder at the time typed or picked ("!At time of task", brief 175) says so beside the time.
+        XCTAssertEqual(ReminderChipText.title(time: eleven, offsetMinutes: 0), clock + " · At time")
+        XCTAssertEqual(ReminderChipText.title(time: nil, offsetMinutes: 0), "Reminder", "no time: nothing to be at yet")
         XCTAssertEqual(ReminderChipText.title(time: eleven, offsetMinutes: 60), clock + " · 1 hour before")
         XCTAssertEqual(ReminderChipText.title(time: eleven, offsetMinutes: 1440), clock + " · 1 day before")
     }
@@ -1409,7 +1413,7 @@ final class PopoutTests: XCTestCase {
 
         // With a time the chip writes its token, as before.
         draft.setReminderOffset(60, p)
-        XCTAssertEqual(draft.text, "Call 3pm !1hb ")
+        XCTAssertEqual(draft.text, "Call 3pm !1 hour before ", "in words (brief 175)")
         XCTAssertEqual(draft.result(p).reminderOffsetMinutes, 60)
 
         // Taking the time away from the chip keeps the pick on the chip, not as plain "!1hb" in the title.

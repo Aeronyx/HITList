@@ -60,7 +60,7 @@ final class ReminderDateTests: XCTestCase {
         let p = parser()
         var draft = QuickAddDraft(context: .inbox, text: "Call 3pm !15mb")
         draft.setReminderOffset(60, p)
-        XCTAssertEqual(draft.text, "Call 3pm !1hb ")
+        XCTAssertEqual(draft.text, "Call 3pm !1 hour before ", "in words (brief 175)")
         XCTAssertEqual(draft.chips(p).reminderOffsetMinutes, 60)
         XCTAssertEqual(draft.result(p).title, "Call")
     }
@@ -108,11 +108,11 @@ final class ReminderDateTests: XCTestCase {
         let p = parser()
         var draft = QuickAddDraft(context: .inbox, text: "Call mom")
         draft.setReminderMoment(.span(ReminderSpan(minutes: 15)), p)
-        XCTAssertEqual(draft.text, "Call mom !15m ")
+        XCTAssertEqual(draft.text, "Call mom !In 15 minutes ", "in words (brief 175)")
         XCTAssertEqual(draft.result(p).reminderDate, minutes(15))
         XCTAssertEqual(draft.result(p).title, "Call mom")
         draft.setReminderMoment(.span(ReminderSpan(minutes: 60)), p)
-        XCTAssertEqual(draft.text, "Call mom !1h ", "replaces the typed one")
+        XCTAssertEqual(draft.text, "Call mom !In 1 hour ", "replaces the typed one")
         XCTAssertEqual(draft.chips(p).reminderDate, minutes(60))
         draft.setReminderMoment(nil, p)
         XCTAssertEqual(draft.text, "Call mom ")
@@ -152,7 +152,7 @@ final class ReminderDateTests: XCTestCase {
         let p = parser()
         var draft = QuickAddDraft(context: .inbox, text: "Call 5pm !15m")
         draft.setReminderOffset(60, p)
-        XCTAssertEqual(draft.text, "Call 5pm !15m !1hb ")
+        XCTAssertEqual(draft.text, "Call 5pm !15m !1 hour before ", "in words (brief 175)")
         XCTAssertEqual(draft.result(p).reminderDate, minutes(15))
         XCTAssertEqual(draft.result(p).reminderOffsetMinutes, 60)
         draft.setReminderOffset(nil, p)
@@ -168,7 +168,7 @@ final class ReminderDateTests: XCTestCase {
         let p = parser()
         var draft = QuickAddDraft(context: .inbox, text: "Call 5pm !1hb")
         draft.setReminderMoment(.span(ReminderSpan(minutes: 15)), p)
-        XCTAssertEqual(draft.text, "Call 5pm !1hb !15m ")
+        XCTAssertEqual(draft.text, "Call 5pm !1hb !In 15 minutes ", "in words (brief 175)")
         XCTAssertEqual(draft.result(p).reminderOffsetMinutes, 60)
         XCTAssertEqual(draft.result(p).reminderDate, minutes(15))
     }
@@ -406,16 +406,17 @@ final class ReminderDateTests: XCTestCase {
         XCTAssertEqual(task.reminderDate, minutes(15))
     }
 
-    /// Siri's Add Task reads the dictated text as quick add does (final): "remind me in 15 minutes" is a due
-    /// time 15 minutes away, as before, not a "from now" reminder; a typed "!15m" (Shortcuts) is one.
+    /// Siri's Add Task reads the dictated text as quick add does (final). Since brief 175 "Remind me in 15 minutes to
+    /// call mom" is what it says: a reminder 15 minutes from now on "Call mom", the words and the "to" out of the title
+    /// (it was a due time 15 minutes away on "Remind me to call mom"); a typed "!15m" (Shortcuts) is one too.
     func testSiriPhrasingDoesNothingSurprising() throws {
         let context = store()
         let spoken = try IntentActions.addTask("Remind me in 15 minutes to call mom", group: nil, in: context, now: now)
         let task = try XCTUnwrap(IntentActions.task(id: spoken.id, in: context))
-        XCTAssertEqual(task.title, "Remind me to call mom")
-        XCTAssertEqual(task.dueDate, minutes(15))
-        XCTAssertTrue(task.hasDueTime)
-        XCTAssertNil(task.reminderDate)
+        XCTAssertEqual(task.title, "Call mom")
+        XCTAssertNil(task.dueDate, "a reminder from now gives the task no date")
+        XCTAssertFalse(task.hasDueTime)
+        XCTAssertEqual(task.reminderDate, minutes(15))
         XCTAssertNil(task.reminderOffsetMinutes)
 
         let exclaimed = try IntentActions.addTask("Call mom!", group: nil, in: context, now: now)
