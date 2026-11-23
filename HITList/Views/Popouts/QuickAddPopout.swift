@@ -63,6 +63,14 @@ struct QuickAddPopout: View {
     @FocusState private var locationFocused: Bool
     /// The sub-task line with the cursor (`SubtaskLineField` keeps its own focus; this asks for it).
     @State private var focusedLine: Int?
+    /// The title's caret (UTF-16), as the text view tells it: the reminder list answers the "!" word there (brief 175).
+    @State private var caret: Int?
+    /// Where the caret goes after a pick from the list, once (`HighlightCaretRequest`).
+    @State private var caretRequest: HighlightCaretRequest?
+    /// The list's highlighted row (Mac: ↑ ↓ move it, Return picks it); the first when the list opens or narrows.
+    @State private var listHighlight = 0
+    /// The "!" word Esc closed the list on (its offset): it stays closed until the caret leaves that word.
+    @State private var listClosedAt: Int?
 
     enum Chip: Hashable { case date, priority, reminder, project, labels, deadline, repeating }
 
@@ -101,6 +109,7 @@ struct QuickAddPopout: View {
         let parsed = draft.parsed(parser)
         let result = draft.result(parser, parsed: parsed)
         let chips = draft.chips(parser, parsed: parsed, result: result)
+        let word = bangWord
         VStack(alignment: .leading, spacing: HITSpacing.m) {
             TokenHighlightField(placeholder: "Task Name", text: $draft.text, tokens: parsed.tokens,
                                 priority: parsed.priority, focus: $titleFocused, bordered: false,
@@ -112,8 +121,11 @@ struct QuickAddPopout: View {
                                 onEnable: { token in
                                     withAnimation(HITMotion.quick(reduceMotion: reduceMotion)) { draft.switchBackOn(token) }
                                 },
+                                onCaretChange: { caret = $0 }, caretRequest: caretRequest,
                                 onSubmit: save)
                 .accessibilityIdentifier("quickAddTitle")
+                // The reminder list on "!" (brief 175), drawn outside the card by whoever presents it.
+                .reminderList(reminderList(word, chips: chips, parser: parser))
                 // First-run tips (brief 52): the syntax, then, once something lights up, how to undo a highlight.
                 .quickAddTips(hasHighlight: parsed.tokens.contains { !$0.isSuperseded })
             if draft.shows(.description) {
@@ -171,6 +183,10 @@ struct QuickAddPopout: View {
         }
         .onChange(of: draft.hasContent) { _, has in onDraftChange(has) }
         .onChange(of: draft) { _, _ in storeDraft() }
+        // A list that opens or narrows starts on its first row; a list Esc closed stays closed while the caret is in
+        // that word.
+        .onChange(of: word?.query) { _, _ in listHighlight = 0 }
+        .onChange(of: word?.range.location) { _, location in if location != listClosedAt { listClosedAt = nil } }
         .onChange(of: titleFocused) { _, focused in if focused { focusedLine = nil } }
         .onChange(of: openChip) { _, chip in
             // iPhone: the keyboard steps aside while a chip's popover needs the room, then comes back.
@@ -209,6 +225,53 @@ struct QuickAddPopout: View {
         }
     }
     #endif
+
+    // MARK: The reminder list on "!" (brief 175)
+
+    /// The "!" word the caret is in, while the title has the keyboard.
+    private var bangWord: ReminderSuggestions.BangWord? {
+        guard titleFocused, let caret else { return nil }
+        return ReminderSuggestions.bangWord(in: draft.text, cursor: caret)
+    }
+
+    /// The list for `word`: the rows for a task with a time or without (`chips`, as the card shows them: a time typed or
+    /// picked), narrowed by what follows the "!". Nil while a chip's card is open, the card asks Discard or is going, or
+    /// nothing matches.
+    private func reminderList(_ word: ReminderSuggestions.BangWord?, chips: QuickAddChips,
+                              parser: QuickAddParser) -> ReminderListRequest? {
+        guard let word, openChip == nil, !isPaused, !isClosing, !hasSavedForClose, listClosedAt != word.range.location
+        else { return nil }
+        let all = ReminderSuggestions.rows(hasTime: chips.hasDueTime, dueDate: chips.dueDate, now: parser.dateParser.now,
+                                           calendar: parser.dateParser.calendar)
+        let rows = ReminderSuggestions.narrowed(all, by: word.query)
+        guard !rows.isEmpty else { return nil }
+        let highlighted = min(max(listHighlight, 0), rows.count - 1)
+        return ReminderListRequest(
+            rows: rows, highlighted: highlighted,
+            onPick: { pickReminder($0, word: word) },
+            onHighlight: { listHighlight = $0 },
+            onKey: { key in
+                switch key {
+                case .up: listHighlight = max(0, highlighted - 1)
+                case .down: listHighlight = min(rows.count - 1, highlighted + 1)
+                // Return picks: it never adds the task while the list is open.
+                case .pick: pickReminder(rows[highlighted], word: word)
+                case .dismiss: listClosedAt = word.range.location
+                }
+                return true
+            },
+            onDismiss: { listClosedAt = word.range.location })
+    }
+
+    /// A row picked: its words take the typed "!…"'s place with a space after them, lit at once; the keyboard stays and
+    /// the caret sits after the space.
+    private func pickReminder(_ row: ReminderSuggestion, word: ReminderSuggestions.BangWord) {
+        let cursor = draft.pick(row, replacing: word.range)
+        caretRequest = HighlightCaretRequest(offset: cursor, serial: (caretRequest?.serial ?? 0) + 1)
+        caret = cursor
+        listHighlight = 0
+        AccessibilityNotification.Announcement("Reminder: \(row.label)").post()
+    }
 
     // MARK: The option bar
 

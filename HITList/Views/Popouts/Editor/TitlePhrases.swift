@@ -27,9 +27,9 @@ struct TitlePhrases: Equatable {
     var projectName: String?
     /// Added to the task's labels.
     var labelNames: [String] = []
-    /// "!15mb" (0 for "!at": at the due time).
+    /// "!15mb", "!15 minutes before" (0 for "!at", "!At time of task": at the due time).
     var reminderOffsetMinutes: Int?
-    /// "!15m": that long from the parser's now.
+    /// "!15m", "!In 15 minutes": that long from the parser's now; "!4pm": that time on the task's due day (brief 175).
     var reminderDate: Date?
 
     /// Nothing but words: Confirm sets no field.
@@ -38,9 +38,10 @@ struct TitlePhrases: Equatable {
             && reminderOffsetMinutes == nil && reminderDate == nil
     }
 
-    /// `result` is the parse of `text` (`TaskEditorDraft.parsed`); `dueDate`, `hasDueTime` and `repeats` are the task's.
+    /// `result` is the parse of `text` (`TaskEditorDraft.parsed`); `dueDate`, `hasDueTime` and `repeats` are the task's;
+    /// `now` is the parser's.
     init(text: String, result: QuickAddResult, dueDate: Date?, hasDueTime: Bool, repeats: RecurrenceRule? = nil,
-         calendar: Calendar = .current) {
+         calendar: Calendar = .current, now: Date = Date()) {
         let read = result.tokens.filter { !$0.isSuperseded }
         let kinds = Set(read.map(\.kind))
 
@@ -80,6 +81,10 @@ struct TitlePhrases: Equatable {
         labelNames = result.labelNames
         reminderOffsetMinutes = result.reminderOffsetMinutes
         reminderDate = result.reminderDate
+        // A clock time goes off on the task's due day as it will be saved, typed or its own (brief 175).
+        if let clock = result.reminderClock {
+            reminderDate = clock.date(dueDay: due?.date ?? dueDate, now: now, calendar: calendar)
+        }
     }
 
     /// `day`'s date at `time`'s hour and minute.

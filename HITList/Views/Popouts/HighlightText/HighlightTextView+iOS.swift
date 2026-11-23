@@ -18,6 +18,10 @@ struct HighlightTextField: UIViewRepresentable {
     var style: HighlightTextStyle
     var isFocused: Bool
     var onFocusChange: (Bool) -> Void
+    /// The caret as it moves (`TokenHighlightField.onCaretChange`).
+    var onCaretChange: ((Int?) -> Void)? = nil
+    /// Where the caret goes with the owner's next text (`TokenHighlightField.caretRequest`).
+    var caretRequest: HighlightCaretRequest? = nil
     var onSubmit: () -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -37,8 +41,16 @@ struct HighlightTextField: UIViewRepresentable {
 
     private func apply(to view: HighlightUITextView, context: Context) {
         view.apply(style: style, placeholder: placeholder)
-        // Never while an input method is composing: setting the text would throw the composition away.
-        if view.markedTextRange == nil, view.text != text { view.setTextFromOwner(text) }
+        // Never while an input method is composing: setting the text would throw the composition away. A caret asked
+        // for with the text (a pick from the reminder list) goes where asked, once; otherwise to the end.
+        let caret = caretRequest.flatMap { $0.serial != context.coordinator.appliedCaretSerial ? $0 : nil }
+        if view.markedTextRange == nil, view.text != text {
+            view.setTextFromOwner(text, caret: caret?.offset)
+            if let caret { context.coordinator.appliedCaretSerial = caret.serial }
+        } else if view.markedTextRange == nil, let caret {
+            view.placeCaretFromOwner(caret.offset)
+            context.coordinator.appliedCaretSerial = caret.serial
+        }
         view.highlightLayout.runs = runs
         view.updatePlaceholder()
 
@@ -78,6 +90,30 @@ struct HighlightTextField: UIViewRepresentable {
         /// has carried back yet, and when it was told.
         var reported: Bool?
         var reportedAt = Date.distantPast
+        /// The last caret ask applied (`HighlightCaretRequest.serial`).
+        var appliedCaretSerial: Int?
+        /// The caret last told to the owner, so only a move is told.
+        private var lastCaret: Int??
+
+        /// Tells the owner where the caret is: nil with a selection, while composing, or without the keyboard. Inside
+        /// the owner's own update (its text set, `isApplyingOwnerText`) it waits a turn: state must not change there.
+        func reportCaret(_ textView: UITextView) {
+            guard let tell = parent.onCaretChange else { return }
+            let range = textView.selectedRange
+            let caret: Int? = textView.isFirstResponder && textView.markedTextRange == nil && range.length == 0
+                && range.location != NSNotFound ? range.location : nil
+            guard lastCaret != .some(caret) else { return }
+            lastCaret = .some(caret)
+            // A letter typed moves the caret before the text reaches the owner: were the owner to update then, its older
+            // text could be written back over the letter. Told a turn later, the text is in step (a guard).
+            if (textView as? HighlightUITextView)?.isApplyingOwnerText == true || parent.text != textView.text {
+                DispatchQueue.main.async { tell(caret) }
+            } else {
+                tell(caret)
+            }
+        }
+
+        func textViewDidChangeSelection(_ textView: UITextView) { reportCaret(textView) }
 
         /// An update still showing the focus as it was before the field's own report reached the owner: not the
         /// owner asking. (Brief 75: a tap on the quick-add title while the card offered "Discard" gave the field the
@@ -109,6 +145,7 @@ struct HighlightTextField: UIViewRepresentable {
             view.composingChanged()
             if parent.text != view.text { parent.text = view.text }
             view.invalidateIntrinsicContentSize()
+            reportCaret(textView)
         }
 
         /// The keyboard arrived. Told to the owner only when it came by itself (a tap): when the owner asked,
@@ -118,6 +155,7 @@ struct HighlightTextField: UIViewRepresentable {
             view.wantsFocus = true
             lastFocus = true
             if !view.isMovingKeyboardForOwner { report(true) }
+            reportCaret(textView)
         }
 
         /// The keyboard left. Told to the owner only when it went by itself (another field, the system), after the
@@ -126,6 +164,7 @@ struct HighlightTextField: UIViewRepresentable {
             guard let view = textView as? HighlightUITextView else { return }
             view.wantsFocus = false
             lastFocus = false
+            reportCaret(textView)
             guard !view.isMovingKeyboardForOwner else { return }
             DispatchQueue.main.async { [weak self, weak view] in
                 guard let self, let view, !view.wantsFocus, !view.isFirstResponder else { return }
@@ -242,15 +281,30 @@ final class HighlightUITextView: UITextView {
         }
     }
 
-    /// The owner changed the text (a chip, a restored card, a reset after adding): the caret goes to the end
-    /// and the typing history is let go, since it no longer describes this text.
-    func setTextFromOwner(_ newText: String) {
+    /// The owner's text or caret is being applied (inside SwiftUI's update): the caret's report waits a turn.
+    private(set) var isApplyingOwnerText = false
+
+    /// The owner changed the text (a chip, a restored card, a reset after adding): the caret goes to the end, or to
+    /// `caret` when the owner asks (a pick from the reminder list, brief 175), and the typing history is let go, since
+    /// it no longer describes this text.
+    func setTextFromOwner(_ newText: String, caret: Int? = nil) {
+        isApplyingOwnerText = true
+        defer { isApplyingOwnerText = false }
         text = newText
         typingAttributes = style.attributes
         restyleText()
-        selectedRange = NSRange(location: (newText as NSString).length, length: 0)
+        let length = (newText as NSString).length
+        selectedRange = NSRange(location: min(max(caret ?? length, 0), length), length: 0)
         if let undo = undoManager, undo !== window?.undoManager { undo.removeAllActions() }
         updatePlaceholder()
+    }
+
+    /// The owner puts the caret at `offset`, the text unchanged.
+    func placeCaretFromOwner(_ offset: Int) {
+        isApplyingOwnerText = true
+        defer { isApplyingOwnerText = false }
+        let length = (text as NSString).length
+        selectedRange = NSRange(location: min(max(offset, 0), length), length: 0)
     }
 
     /// Every character in the style's attributes (a strikethrough comes and goes with the task's completion).

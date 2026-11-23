@@ -80,7 +80,8 @@ enum QuickAddGuide {
                         claims: [.title("renew passport"), .day(dates.day(3))]),
                 Example(typed: "team lunch next mon", caption: "Monday next week, \(dates.caption(nextMonday))",
                         claims: [.title("team lunch"), .day(nextMonday)]),
-                Example(typed: "standup tom 9", caption: "Tomorrow 09:00; 24-hour unless am or pm",
+                // Brief 175: "at 1" to "at 6" is the afternoon; a bare hour after a day stays on the 24-hour clock.
+                Example(typed: "standup tom 9", caption: "Tomorrow 09:00; but \"at 6\" is 6 PM",
                         claims: [.title("standup"), .moment(dates.at(dates.day(1), 9))]),
                 // Brief 127: "tonight" is today, with no hour of its own.
                 Example(typed: "dinner tonight 8pm", caption: "Today 8 PM; tonight is a day, not a time",
@@ -100,10 +101,13 @@ enum QuickAddGuide {
                 Example(typed: "book club every last fri", caption: "The last Friday of each month",
                         claims: [.title("book club"), .repeats("monthly;1;;;;w6#-1")]),
             ]),
+            // Brief 175: "!" opens a list (At time of task, 10 minutes before… or In 5 minutes… and Later) and a pick writes
+            // its words; the same words work typed or said; and a line of codes for those who like them. Two rows, as
+            // before: the page stays within two iPhone screens.
             Section(title: "Reminders", examples: [
-                Example(typed: "haircut tom 11am !15mb", caption: "15 min before its time; !1hb, !1db",
-                        claims: [.title("haircut"), .moment(dates.at(dates.day(1), 11)), .reminderBefore(15)]),
-                Example(typed: "tea !10m", caption: "In 10 minutes; lights up after a space",
+                Example(typed: "haircut tom 11am !30 minutes before", caption: "Type ! for a list; a pick writes this",
+                        claims: [.title("haircut"), .moment(dates.at(dates.day(1), 11)), .reminderBefore(30)]),
+                Example(typed: "tea remind me in 10 minutes", caption: "Or say it; codes: !10m, !1hb before",
                         claims: [.title("tea"), .noDate, .reminderIn(10)]),
             ]),
             Section(title: "Priority, labels and Groups", examples: [

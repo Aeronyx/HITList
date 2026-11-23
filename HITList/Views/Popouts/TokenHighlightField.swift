@@ -35,6 +35,11 @@ struct TokenHighlightField: View {
     /// The text's look; nil is the quick-add title's (`HighlightTextStyle.current()`). The task editor passes
     /// its larger title (`HighlightTextStyle.editorTitle`, brief 65).
     var look: HighlightTextStyle? = nil
+    /// Where the caret is as the text view moves it, a UTF-16 offset into `text`; nil with a selection, while an input
+    /// method composes, or without the keyboard. The reminder list on "!" answers the word at the caret (brief 175).
+    var onCaretChange: ((Int?) -> Void)? = nil
+    /// Where the caret goes with the owner's next text (a row picked from the reminder list): applied once.
+    var caretRequest: HighlightCaretRequest? = nil
     var onSubmit: () -> Void
 
     /// The highlight's corners (George, brief 28: "slightly rounded, like a button").
@@ -53,6 +58,7 @@ struct TokenHighlightField: View {
     private var field: some View {
         HighlightTextField(placeholder: placeholder, text: $text, runs: runs, style: look ?? .current(),
                            isFocused: focus.wrappedValue, onFocusChange: { report($0) },
+                           onCaretChange: onCaretChange, caretRequest: caretRequest,
                            onSubmit: onSubmit)
             #if os(macOS)
             // SwiftUI sets the pointer over its own views; told nothing, it showed the arrow over the title's
@@ -155,6 +161,13 @@ struct TokenHighlightField: View {
             return Span(tokens: indices, range: range)
         }
     }
+}
+
+/// The owner's ask to put the caret at `offset` (UTF-16) with its next text; `serial` tells a new ask from one already
+/// applied (brief 175: after a pick from the reminder list the caret sits after the phrase's space).
+struct HighlightCaretRequest: Equatable {
+    var offset: Int
+    var serial: Int
 }
 
 /// Return typed into a one-line title (the quick-add field and the editor's title, both vertical fields that

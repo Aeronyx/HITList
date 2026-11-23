@@ -20,11 +20,15 @@ public struct QuickAddResult: Equatable, Sendable {
     public var projectName: String?
     public var labelNames: [String]
     public var recurrence: RecurrenceRule?
-    /// Minutes before the due time to remind (`!15mb`); 0 for `!0` / `!at`; nil when nothing was typed.
+    /// Minutes before the due time to remind (`!15mb`, `!15 minutes before`); 0 for `!0` / `!at` / `!At time of task`
+    /// (and "Remind me to …" with a time, brief 175); nil when nothing was typed.
     public var reminderOffsetMinutes: Int?
-    /// A reminder that long from now (`!15m`, brief 48), whatever the due date; nil when none was typed.
+    /// A reminder that long from now (`!15m`, `!In 15 minutes`, brief 48), whatever the due date; nil when none was typed.
     public var reminderFromNow: ReminderSpan?
-    /// When `reminderFromNow` goes off: the parser's `now` plus the span. Saved as the task's `reminderDate`.
+    /// A reminder at a clock time (`!4pm`, `!4:00 PM`, "remind me at 4pm", brief 175); nil when none was typed.
+    public var reminderClock: ReminderClock?
+    /// When the task's own reminder goes off: `reminderFromNow` from the parser's `now`, or `reminderClock` on its day
+    /// (`ReminderClock.date`). Saved as the task's `reminderDate`.
     public var reminderDate: Date?
     /// A deadline picked from the card's "+" menu. It has no text token, so the parser never sets it.
     public var deadline: Date?
@@ -35,7 +39,8 @@ public struct QuickAddResult: Equatable, Sendable {
     public init(title: String = "", dueDate: Date? = nil, hasDueTime: Bool = false, priority: Priority = .p4,
                 projectName: String? = nil, labelNames: [String] = [], recurrence: RecurrenceRule? = nil,
                 reminderOffsetMinutes: Int? = nil, deadline: Date? = nil, locationName: String? = nil,
-                tokens: [QuickAddToken] = [], reminderFromNow: ReminderSpan? = nil, reminderDate: Date? = nil) {
+                tokens: [QuickAddToken] = [], reminderFromNow: ReminderSpan? = nil, reminderDate: Date? = nil,
+                reminderClock: ReminderClock? = nil) {
         self.title = title
         self.dueDate = dueDate
         self.hasDueTime = hasDueTime
@@ -49,6 +54,7 @@ public struct QuickAddResult: Equatable, Sendable {
         self.tokens = tokens
         self.reminderFromNow = reminderFromNow
         self.reminderDate = reminderDate
+        self.reminderClock = reminderClock
     }
 }
 
@@ -119,7 +125,13 @@ public struct QuickAddParser: Sendable {
         /// The winning token of each kind that holds one value, by index in `result.tokens`. A reminder has
         /// two places (brief 48): one "from now" and one "before the due time" may stand side by side.
         var winner: [Slot: Int] = [:]
-        var fromNow: ReminderSpan? = nil
+        /// The task's own reminder moment, the latest typed: that long from now, or a clock time (brief 175).
+        var ownReminder: OwnReminder? = nil
+        /// "Remind me to …" opens the text (brief 175): with a time and no other reminder, it reminds at the time.
+        var remindMeTo = false
+        /// Where a reminder said in words opens the text ("Remind me to call mom", "Remind me in 30 minutes to call
+        /// mom"): while it stands, the title starts with a capital.
+        var spokenStart: String.Index? = nil
         /// Words of superseded tokens: matched, so no other rule reads them, but title text.
         var supersededWords = Set<Int>()
 
@@ -148,9 +160,12 @@ public struct QuickAddParser: Sendable {
             let w = lowers[i]
             if mode == .live, w.hasPrefix("!"), words[i].range.upperBound == input.endIndex { i += 1; continue }
 
-            // Priority: p1..p4, !!1..!!4
+            // Priority: p1..p4, !!1..!!4; "priority 1" … "priority four" (brief 175)
             if let p = Self.priority(from: w) {
                 result.priority = p; win(i, 1, .priority); i += 1; continue
+            }
+            if let p = Self.spokenPriority(lowers, at: i) {
+                result.priority = p; win(i, 2, .priority); i += 2; continue
             }
             // Project: #Name, #"Two Words", or #two words matching a known project
             if w.hasPrefix("#"), w.count > 1 {
@@ -165,14 +180,27 @@ public struct QuickAddParser: Sendable {
                 }
                 mark(i, n, .label); i += n; continue
             }
-            // Reminder: !15m / !2h / !1d from now; !15mb / !2hb / !1db before the due time, !0 / !at at it
-            switch ReminderPhrase(token: w) {
-            case .fromNow(let span)?:
-                fromNow = span; win(i, 1, .reminder, slot: .reminderFromNow); i += 1; continue
-            case .beforeDue(let minutes)?:
-                result.reminderOffsetMinutes = minutes; win(i, 1, .reminder, slot: .reminderBeforeDue); i += 1; continue
-            case nil:
-                break
+            // Reminder: !15m / !2h / !1d from now; !15mb / !2hb / !1db before the due time, !0 / !at at it; and in words
+            // (brief 175): "!10 minutes before", "!In 5 minutes", "!At time of task", "!4:00 PM", "remind me 30 minutes
+            // before", "reminder in an hour". One token however many words, and while its last word is still being
+            // typed at the very end, all of it is plain text.
+            if let (phrase, n) = ReminderPhrase.match(lowers, at: i, atStart: i == 0) {
+                if mode == .live, words[i + n - 1].range.upperBound == input.endIndex { i += n; continue }
+                switch phrase {
+                case .fromNow(let span):
+                    ownReminder = .span(span); win(i, n, .reminder, slot: .reminderFromNow)
+                case .at(let clock):
+                    ownReminder = .clock(clock); win(i, n, .reminder, slot: .reminderFromNow)
+                case .beforeDue(let minutes):
+                    result.reminderOffsetMinutes = minutes; win(i, n, .reminder, slot: .reminderBeforeDue)
+                }
+                if i == 0, !w.hasPrefix("!") { spokenStart = words[0].range.lowerBound }
+                i += n; continue
+            }
+            // "Remind me to …" opening the text: the three words are a token of their own (brief 175).
+            if i == 0, Self.opensWithRemindMeTo(lowers) {
+                if mode == .live, words[2].range.upperBound == input.endIndex { i += 3; continue }
+                mark(0, 3, .reminder); remindMeTo = true; spokenStart = words[0].range.lowerBound; i += 3; continue
             }
             // Recurrence
             if let (rule, n) = Self.matchRecurrence(lowers, at: i) {
@@ -215,8 +243,11 @@ public struct QuickAddParser: Sendable {
             }
             result.tokens.removeAll(where: beforeDue)
         }
-        result.reminderFromNow = fromNow
-        result.reminderDate = fromNow.map { $0.date(from: dateParser.now, calendar: dateParser.calendar) }
+        // "Remind me to call mom tomorrow at 5": with a time and no other reminder typed, at the time (brief 175).
+        if remindMeTo, time != nil || moment != nil, result.reminderOffsetMinutes == nil, ownReminder == nil {
+            result.reminderOffsetMinutes = 0
+        }
+        if case .span(let span)? = ownReminder { result.reminderFromNow = span }
 
         // Title = whatever was not consumed or was superseded, with surrounding quotes stripped.
         var titleWords: [String] = []
@@ -226,6 +257,12 @@ public struct QuickAddParser: Sendable {
             titleWords.append(t)
         }
         result.title = titleWords.joined(separator: " ")
+        // "Remind me to call mom" is "Call mom": a reminder said in words that opens the text, and still stands, leaves
+        // the rest of the title starting with a capital (brief 175).
+        if let spokenStart, result.tokens.contains(where: { $0.kind == .reminder && !$0.isSuperseded && $0.range.lowerBound == spokenStart }),
+           let first = result.title.first {
+            result.title = first.uppercased() + result.title.dropFirst()
+        }
 
         // Resolve date/time. A date the user typed is kept as typed, even in the past ("yesterday").
         let dateWasTyped = date != nil
@@ -264,14 +301,31 @@ public struct QuickAddParser: Sendable {
             result.recurrence = rule.anchored(to: due, calendar: dateParser.calendar)
                 .timed(to: due, hasTime: result.hasDueTime, calendar: dateParser.calendar)
         }
+        // The task's own reminder moment, once its due day is known (a clock time goes off on that day, brief 175).
+        switch ownReminder {
+        case .span(let span)?:
+            result.reminderDate = span.date(from: dateParser.now, calendar: dateParser.calendar)
+        case .clock(let clock)?:
+            result.reminderClock = clock
+            result.reminderDate = clock.date(dueDay: result.dueDate, now: dateParser.now, calendar: dateParser.calendar)
+        case nil:
+            break
+        }
         result.tokens.sort { $0.range.lowerBound < $1.range.lowerBound }
         return result
     }
 
-    /// Where a winning token is kept: one per kind, but two for reminders.
+    /// Where a winning token is kept: one per kind, but two for reminders: the task's own moment (from now, or a clock
+    /// time) and one before its due time.
     enum Slot: Hashable {
         case kind(QuickAddToken.Kind)
         case reminderFromNow, reminderBeforeDue
+    }
+
+    /// The task's own reminder moment as typed.
+    enum OwnReminder {
+        case span(ReminderSpan)
+        case clock(ReminderClock)
     }
 
     static func priority(from w: String) -> Priority? {
@@ -279,6 +333,19 @@ public struct QuickAddParser: Sendable {
         if s.hasPrefix("!!") { s = "p" + s.dropFirst(2) }
         guard s.count == 2, s.hasPrefix("p"), let n = Int(String(s.last!)) else { return nil }
         return Priority(rawValue: n)
+    }
+
+    /// "priority 1" to "priority 4", "priority one" to "priority four" (brief 175): as "p1" to "p4" are.
+    static func spokenPriority(_ words: [String], at i: Int) -> Priority? {
+        guard i + 1 < words.count, DateExpressionParser.normalize(words[i]) == "priority" else { return nil }
+        let levels = ["1": 1, "2": 2, "3": 3, "4": 4, "one": 1, "two": 2, "three": 3, "four": 4]
+        return levels[DateExpressionParser.normalize(words[i + 1])].flatMap(Priority.init(rawValue:))
+    }
+
+    /// The text opens with "Remind me to" (any case; brief 175).
+    static func opensWithRemindMeTo(_ words: [String]) -> Bool {
+        guard words.count >= 3 else { return false }
+        return words[0..<3].map(DateExpressionParser.normalize) == ["remind", "me", "to"]
     }
 
     /// Resolves a `#`/`@`-prefixed name. Supports quoted names and multi-word known names.
@@ -358,23 +425,37 @@ public struct QuickAddParser: Sendable {
     }
 }
 
-/// A typed reminder (brief 48): `!15m`, `!2h`, `!1d`, `!90m`, `!1h30m`, `!1d12h` = that long from now;
+/// A typed reminder. The codes (brief 48): `!15m`, `!2h`, `!1d`, `!90m`, `!1h30m`, `!1d12h` = that long from now;
 /// the same with a "b" (`!15mb`, `!1hb`, `!1h30mb`) = that long before the due time; `!0` and `!at` = at the
 /// due time, and so is zero before it (`!0mb`, `!0hb`, `!0db`, `!0b`, brief 127). The parts come in the order
-/// d, h, m, each once, each N ≥ 1, four weeks at most in all. Nothing else is a reminder (`!`, `!0m`, `!m`,
+/// d, h, m, each once, each N ≥ 1, four weeks at most in all. No other single word is a code (`!`, `!0m`, `!m`,
 /// `!15`, `!30m15h`, `!29d`, `!0h30mb`).
+///
+/// And in words (brief 175, `QuickAddParser+Reminders`): `!At time of task`, `!10 minutes before`, `!In 5 minutes`,
+/// a clock time (`!4pm`, `!4:00 PM`), or "remind me" before the same words without the "!"; "reminder" alone takes
+/// only the relative ones (before, in, at the time), never a clock time or a day.
 public enum ReminderPhrase: Equatable, Sendable {
     case fromNow(ReminderSpan)
     /// 0 is at the due time.
     case beforeDue(minutes: Int)
+    /// At a clock time: a moment of the task's own, as a "from now" reminder is (`ReminderClock.date`).
+    case at(ReminderClock)
 
     public var isBeforeDue: Bool {
         if case .beforeDue = self { return true }
         return false
     }
 
-    /// The phrase a `!…` word stands for (case and trailing ",.;" ignored), or nil if it isn't one.
-    public init?(token word: String) {
+    /// The phrase a reminder token's words stand for, one word or several ("!15m", "!10 minutes before", "remind me in
+    /// an hour", "Remind me in 30 minutes to"; case and trailing ",.;" ignored), or nil if they aren't one.
+    public init?(token text: String) {
+        let words = text.split(whereSeparator: \.isWhitespace).map { $0.lowercased() }
+        guard let (phrase, n) = Self.match(words, at: 0, atStart: true), n == words.count else { return nil }
+        self = phrase
+    }
+
+    /// The phrase a one-word `!…` code stands for (case and trailing ",.;" ignored), or nil if it isn't one.
+    init?(code word: String) {
         var w = Substring(DateExpressionParser.normalize(word))
         guard w.hasPrefix("!"), !w.hasPrefix("!!") else { return nil }
         w.removeFirst()

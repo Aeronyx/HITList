@@ -364,11 +364,18 @@ public struct DateExpressionParser: Sendable {
 
     /// Attempts to match a time phrase at `words[i]`. Returns hour, minute, and words consumed.
     ///
-    /// Times are 24-hour unless the user says otherwise (George, 2026-11-02): "at 5" and "5:30" are
-    /// morning, "at 17" is 17:00, "5pm" / "5p" / "5 pm" are 17:00. A bare hour (0–23) is a time only after
-    /// "at", or when `allowBareHour` says the word right before it was a date ("tom 13", "friday 9"); even
-    /// then not when a month or a unit follows ("fri 5 jan", "tom 3 weeks").
-    public func matchTime(in words: [String], at i: Int, allowBareHour: Bool = false) -> (hour: Int, minute: Int, consumed: Int)? {
+    /// Times are 24-hour unless the user says otherwise (George, 2026-11-02): "5:30" is morning, "at 17" is
+    /// 17:00, "5pm" / "5p" / "5 pm" are 17:00. A bare hour (0–23) is a time only after "at", or when
+    /// `allowBareHour` says the word right before it was a date ("tom 13", "friday 9"); even then not when a
+    /// month or a unit follows ("fri 5 jan", "tom 3 weeks").
+    ///
+    /// As people say them (brief 175): "5 p.m.", "5 P.M.", "9:30 a.m.", "5pm.", "5 p. m." are the right half of
+    /// the day, every dot taken in. And after "at", an hour from 1 to 6 with no am or pm is the afternoon
+    /// (`afternoonAfterAt`): nobody means "pick up the dry cleaning at 6" at six in the morning. "at 7" to "at 11",
+    /// "at 06:30" (a 24-hour clock's leading zero) and a bare hour after a date word ("tomorrow 5") stay as typed.
+    /// A time field passes `afternoonAfterAt: false`: it reads a clock, digits as they stand.
+    public func matchTime(in words: [String], at i: Int, allowBareHour: Bool = false,
+                          afternoonAfterAt: Bool = true) -> (hour: Int, minute: Int, consumed: Int)? {
         guard i < words.count else { return nil }
         let w = Self.normalize(words[i])
         let next: String? = i + 1 < words.count ? Self.normalize(words[i + 1]) : nil
@@ -379,10 +386,12 @@ public struct DateExpressionParser: Sendable {
         case "at":
             guard let n = next else { return nil }
             if let t = Self.parseClock(n, allowBareHour: true) {
-                // "at 5 pm"
-                if let n2 = (i + 2 < words.count ? Self.normalize(words[i + 2]) : nil), n2 == "am" || n2 == "pm" {
-                    if let t2 = Self.parseClock(n + n2, allowBareHour: true) { return (t2.hour, t2.minute, 3) }
+                // "at 5 pm", "at 5 p.m.", "at 5 p. m."
+                if let (meridiem, length) = Self.meridiem(in: words, at: i + 2),
+                   let t2 = Self.parseClock(n + meridiem, allowBareHour: true) {
+                    return (t2.hour, t2.minute, 2 + length)
                 }
+                if afternoonAfterAt, Self.isAfternoonHour(n, hour: t.hour) { return (t.hour + 12, t.minute, 2) }
                 return (t.hour, t.minute, 2)
             }
             if n == "noon" { return (12, 0, 2) }
@@ -392,9 +401,10 @@ public struct DateExpressionParser: Sendable {
             break
         }
 
-        // "5 pm" as two words
-        if let n = next, n == "am" || n == "pm", let t = Self.parseClock(w + n, allowBareHour: true) {
-            return (t.hour, t.minute, 2)
+        // "5 pm" as two words, "5 p.m.", "5 p. m."
+        if let (meridiem, length) = Self.meridiem(in: words, at: i + 1),
+           let t = Self.parseClock(w + meridiem, allowBareHour: true) {
+            return (t.hour, t.minute, 1 + length)
         }
         if let t = Self.parseClock(w, allowBareHour: false) {
             return (t.hour, t.minute, 1)
@@ -406,12 +416,36 @@ public struct DateExpressionParser: Sendable {
         return nil
     }
 
-    /// Parses "5pm", "5:30pm", "17:00", "5:30" (05:30), "5p", and (if allowed) a bare "5" (05:00).
+    /// "am" or "pm" standing as words of their own at `words[i]`: "pm", "PM,", "p.m.", "P.M", or "p." then "m."
+    /// (two words, the way dictation sometimes spaces them; only with their dots). The meridiem as `parseClock`
+    /// reads it, and how many words it took.
+    static func meridiem(in words: [String], at i: Int) -> (String, Int)? {
+        guard i < words.count else { return nil }
+        let w = normalize(words[i])
+        switch w {
+        case "am", "a.m": return ("am", 1)
+        case "pm", "p.m": return ("pm", 1)
+        default: break
+        }
+        let raw = words[i].lowercased()
+        guard raw == "a." || raw == "p.", i + 1 < words.count, normalize(words[i + 1]) == "m",
+              words[i + 1].lowercased().hasPrefix("m.") else { return nil }
+        return (raw == "a." ? "am" : "pm", 2)
+    }
+
+    /// "at 5", "at 5:30": an hour from 1 to 6 with no am or pm and no leading zero ("at 06:00" is a 24-hour clock's).
+    static func isAfternoonHour(_ word: String, hour: Int) -> Bool {
+        let s = normalize(word)
+        guard (1...6).contains(hour), let first = s.first, first != "0" else { return false }
+        return s.allSatisfy { $0.isASCII && ($0.isNumber || $0 == ":") }
+    }
+
+    /// Parses "5pm", "5:30pm", "5p.m.", "17:00", "5:30" (05:30), "5p", and (if allowed) a bare "5" (05:00).
     /// Without am/pm the hour is read on a 24-hour clock.
     static func parseClock(_ raw: String, allowBareHour: Bool) -> (hour: Int, minute: Int)? {
         var s = normalize(raw)
         var meridiem: String? = nil
-        for suffix in ["am", "pm", "a", "p"] where s.hasSuffix(suffix) {
+        for suffix in ["a.m", "p.m", "am", "pm", "a", "p"] where s.hasSuffix(suffix) {
             meridiem = String(suffix.prefix(1))
             s = String(s.dropLast(suffix.count))
             break

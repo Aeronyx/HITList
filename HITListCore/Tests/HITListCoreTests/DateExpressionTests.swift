@@ -61,7 +61,8 @@ final class DateExpressionTests: XCTestCase {
         assertDate(r?.date, 2026, 10, 22, 17, 0)
         XCTAssertEqual(r?.hasTime, true)
         assertDate(p.parse("fri at 9")?.date, 2026, 10, 23, 9, 0)
-        assertDate(p.parse("fri at 5")?.date, 2026, 10, 23, 5, 0)
+        // Brief 175: "at 1" to "at 6" with no am or pm is the afternoon.
+        assertDate(p.parse("fri at 5")?.date, 2026, 10, 23, 17, 0)
         assertDate(p.parse("jan 5 at 5:30pm")?.date, 2027, 1, 5, 17, 30)
         assertDate(p.parse("17:45 tomorrow")?.date, 2026, 10, 22, 17, 45)
         assertDate(p.parse("tomorrow noon")?.date, 2026, 10, 22, 12, 0)
@@ -75,8 +76,17 @@ final class DateExpressionTests: XCTestCase {
 
     /// George, 2026-11-02: times are 24-hour unless the user says otherwise.
     func testTimesAreTwentyFourHourUnlessSaidOtherwise() {
-        assertDate(p.parse("tom at 5")?.date, 2026, 10, 22, 5, 0)
-        assertDate(p.parse("tom at 6")?.date, 2026, 10, 22, 6, 0)
+        // Brief 175: but "at 1" to "at 6" is the afternoon (nobody means "pick up the dry cleaning at 6" at dawn);
+        // "at 7" and on, a leading zero and a bare hour after a date word stay on the 24-hour clock.
+        assertDate(p.parse("tom at 5")?.date, 2026, 10, 22, 17, 0)
+        assertDate(p.parse("tom at 6")?.date, 2026, 10, 22, 18, 0)
+        assertDate(p.parse("tom at 1")?.date, 2026, 10, 22, 13, 0)
+        assertDate(p.parse("tom at 5:30")?.date, 2026, 10, 22, 17, 30)
+        assertDate(p.parse("tom at 7")?.date, 2026, 10, 22, 7, 0)
+        assertDate(p.parse("tom at 11")?.date, 2026, 10, 22, 11, 0)
+        assertDate(p.parse("tom at 05:00")?.date, 2026, 10, 22, 5, 0)
+        assertDate(p.parse("tom at 6am")?.date, 2026, 10, 22, 6, 0)
+        assertDate(p.parse("tom 5")?.date, 2026, 10, 22, 5, 0)
         assertDate(p.parse("tom at 17")?.date, 2026, 10, 22, 17, 0)
         assertDate(p.parse("tom at 0")?.date, 2026, 10, 22, 0, 0)
         assertDate(p.parse("tom at 12")?.date, 2026, 10, 22, 12, 0)
@@ -97,8 +107,8 @@ final class DateExpressionTests: XCTestCase {
         assertDate(p.parse("tom noon")?.date, 2026, 10, 22, 12, 0)
         assertDate(p.parse("tom midnight")?.date, 2026, 10, 22, 0, 0)
         assertDate(p.parse("tom at noon")?.date, 2026, 10, 22, 12, 0)
-        // Time only, now 14:30: "at 5" has passed (tomorrow 05:00), "at 17" has not (today 17:00).
-        assertDate(p.parse("at 5")?.date, 2026, 10, 22, 5, 0)
+        // Time only, now 14:30: "at 5" is 5 pm, still ahead (brief 175: it was tomorrow 05:00); "at 17" today 17:00.
+        assertDate(p.parse("at 5")?.date, 2026, 10, 21, 17, 0)
         assertDate(p.parse("at 17")?.date, 2026, 10, 21, 17, 0)
         assertDate(p.parse("5:30")?.date, 2026, 10, 22, 5, 30)
         // Not times.
@@ -110,8 +120,12 @@ final class DateExpressionTests: XCTestCase {
     }
 
     func testMatchTimeReadsHoursAsTwentyFourHour() {
-        XCTAssertEqual(p.matchTime(in: ["at", "5"], at: 0)?.hour, 5)
-        XCTAssertEqual(p.matchTime(in: ["at", "1"], at: 0)?.hour, 1)
+        // Brief 175: after "at", 1 to 6 is the afternoon; a time field reads the digits as they stand.
+        XCTAssertEqual(p.matchTime(in: ["at", "5"], at: 0)?.hour, 17)
+        XCTAssertEqual(p.matchTime(in: ["at", "1"], at: 0)?.hour, 13)
+        XCTAssertEqual(p.matchTime(in: ["at", "5"], at: 0, afternoonAfterAt: false)?.hour, 5)
+        XCTAssertEqual(p.matchTime(in: ["at", "1"], at: 0, afternoonAfterAt: false)?.hour, 1)
+        XCTAssertEqual(p.matchTime(in: ["at", "7"], at: 0)?.hour, 7)
         XCTAssertEqual(p.matchTime(in: ["at", "17"], at: 0)?.hour, 17)
         XCTAssertNil(p.matchTime(in: ["5"], at: 0), "a bare number is a time only after a date or 'at'")
         XCTAssertEqual(p.matchTime(in: ["5"], at: 0, allowBareHour: true)?.hour, 5)

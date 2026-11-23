@@ -17,8 +17,9 @@ struct PickerTime: Equatable, Hashable {
     }
 
     /// What the time row accepts: "9am", "9:00 AM" (as the row itself writes it), "17:30", "noon",
-    /// "midnight", "at 5" and a bare "5" (05:00: 24-hour unless am/pm is typed, as in quick add), "17". The whole text
-    /// must be the time: "9am tomorrow" is not one. `DateExpressionParser.matchTime` does the work.
+    /// "midnight", "at 5" and a bare "5" (05:00: a time field reads a clock, 24-hour unless am/pm is typed; quick
+    /// add's "at 5" is 5 pm since brief 175), "17". The whole text must be the time: "9am tomorrow" is not one.
+    /// `DateExpressionParser.matchTime` does the work.
     static func parse(_ raw: String) -> PickerTime? {
         var text = raw.lowercased()
         // `Date.formatted` puts a narrow no-break space before AM/PM; "a.m." loses its dots.
@@ -27,10 +28,11 @@ struct PickerTime: Equatable, Hashable {
         let words = text.split(whereSeparator: \.isWhitespace).map(String.init)
         guard !words.isEmpty else { return nil }
         let parser = DateExpressionParser()
-        if let match = parser.matchTime(in: words, at: 0), match.consumed == words.count {
+        if let match = parser.matchTime(in: words, at: 0, afternoonAfterAt: false), match.consumed == words.count {
             return PickerTime(hour: match.hour, minute: match.minute)
         }
-        if words[0] != "at", let match = parser.matchTime(in: ["at"] + words, at: 0), match.consumed == words.count + 1 {
+        if words[0] != "at", let match = parser.matchTime(in: ["at"] + words, at: 0, afternoonAfterAt: false),
+           match.consumed == words.count + 1 {
             return PickerTime(hour: match.hour, minute: match.minute)
         }
         return nil
