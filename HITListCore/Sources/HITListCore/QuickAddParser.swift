@@ -211,11 +211,19 @@ public struct QuickAddParser: Sendable {
             }
             // Reminder: !15m / !2h / !1d from now; !15mb / !2hb / !1db before the due time, !0 / !at at it; and in words
             // (brief 175): "!10 minutes before", "!In 5 minutes", "!At time of task", "!4:00 PM", "remind me 30 minutes
-            // before", "reminder in an hour". One token however many words, and while its last word is still being
-            // typed at the very end, all of it is plain text.
-            if let reading = ReminderPhrase.reading(lowers, at: i, atStart: i == 0, afterPhrase: i > 0 && consumed[i - 1]) {
+            // before", "reminder in an hour". One token however many words. While its last word is still being typed at
+            // the very end, the longest reading that ends before that word counts ("!at time" as "of task" is typed;
+            // the review of brief 175: a phrase growing word by word never goes dark on the way); with none, all of
+            // it is plain text.
+            let afterPhrase = i > 0 && consumed[i - 1]
+            if var reading = ReminderPhrase.reading(lowers, at: i, atStart: i == 0, afterPhrase: afterPhrase) {
+                if mode == .live, words[i + reading.length - 1].range.upperBound == input.endIndex {
+                    guard let shorter = ReminderPhrase.reading(Array(lowers.dropLast()), at: i, atStart: i == 0,
+                                                               afterPhrase: afterPhrase)
+                    else { i += reading.length; continue }
+                    reading = shorter
+                }
                 let n = reading.length
-                if mode == .live, words[i + n - 1].range.upperBound == input.endIndex { i += n; continue }
                 switch reading.phrase {
                 case .fromNow(let span):
                     ownReminder = .span(span); win(i, n, .reminder, slot: .reminderFromNow); spokenClock = nil

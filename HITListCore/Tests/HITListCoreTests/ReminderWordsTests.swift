@@ -365,8 +365,9 @@ final class ReminderWordsTests: XCTestCase {
     // MARK: Live
 
     func testAPhraseStillBeingTypedIsPlainText() {
-        for typed in ["Call 5pm !10 minutes before", "Call 5pm !At time of task", "Call remind me in an hour", "Call !4:00 PM",
-                      "Call 5pm remind me 30 minutes before"] {
+        // (Since the review of brief 175, a shorter reading that ends before the word being typed stays lit: "!At time"
+        // in "!At time of task", "!4:00" in "!4:00 PM"; `testAPhraseGrowingWordByWordNeverGoesDark`.)
+        for typed in ["Call 5pm !10 minutes before", "Call remind me in an hour", "Call 5pm remind me 30 minutes before"] {
             let typing = parser.parse(typed, mode: .live)
             XCTAssertEqual(reminderTokens(typing), [], typed)
             XCTAssertNil(typing.reminderDate, typed)
@@ -380,6 +381,37 @@ final class ReminderWordsTests: XCTestCase {
         let half = parser.parse("Call 5pm !At time of", mode: .live)
         XCTAssertEqual(half.reminderOffsetMinutes, 0)
         XCTAssertEqual(half.title, "Call of")
+    }
+
+    /// While a phrase grows word by word, the longest reading that ends before the word still being typed stays lit, so
+    /// the highlight never goes dark on the way and comes back (the review of brief 175, finding 8: "!at time" went dark
+    /// as "time" was typed, "remind me at 4" as "pm" was).
+    func testAPhraseGrowingWordByWordNeverGoesDark() {
+        func lit(_ text: String) -> [String] {
+            // Reminder tokens, and "remind me at 4" that became the due time (a time token said in words).
+            parser.parse(text, mode: .live).tokens.filter { !$0.isSuperseded && ($0.kind == .reminder || $0.isSaidInWords) }
+                .map(\.text)
+        }
+        for full in ["Call 5pm !at time of task ", "Call mom remind me at 4 pm ", "Bins !at 4 pm ", "Bins !tomorrow 9:00 AM ",
+                     "Call 5pm !At the time of the task ", "Tea !in half an hour ", "Pack 6pm remind me an hour before "] {
+            var seen = false
+            for end in full.indices.dropFirst() + [full.endIndex] {
+                let typed = String(full[..<end])
+                let now = lit(typed)
+                if seen { XCTAssertFalse(now.isEmpty, "went dark at \"\(typed)\"") }
+                if !now.isEmpty { seen = true }
+            }
+            XCTAssertTrue(seen, full)
+            XCTAssertEqual(lit(full).count, 1, full)
+            XCTAssertTrue(full.hasSuffix(lit(full)[0] + " "), "the whole phrase at the end: \(lit(full))")
+        }
+        // What is lit on the way is what the words so far say.
+        XCTAssertEqual(lit("Call 5pm !at time"), ["!at"])
+        XCTAssertEqual(lit("Call 5pm !at time of task"), ["!at time"])
+        XCTAssertEqual(lit("Call mom remind me at 4 pm"), ["remind me at 4"])
+        XCTAssertEqual(lit("Bins !at 4 pm"), ["!at 4"])
+        XCTAssertEqual(lit("Bins !tomorrow 9:00 AM"), ["!tomorrow 9:00"])
+        XCTAssertEqual(parser.parse("Bins !tomorrow 9:00 AM", mode: .live).title, "Bins AM")
     }
 
     // MARK: Said in words (§3)
