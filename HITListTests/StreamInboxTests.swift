@@ -266,7 +266,32 @@ final class StreamInboxTests: XCTestCase {
         #endif
         let restored = StreamInbox(container: container, defaults: defaults, keyStore: MemoryInboxKey(), client: relay.client,
                                    log: { _, _ in })
-        XCTAssertFalse(restored.isConnected, "an address whose key isn't on this device is forgotten")
+        XCTAssertNil(restored.link, "an address whose key isn't on this device is forgotten when the key is first wanted")
+        XCTAssertFalse(restored.isConnected)
+        XCTAssertNil(defaults.string(forKey: StreamInboxSettings.originKey))
+    }
+
+    /// `StreamInbox.start` runs in `App.init`: the Keychain waits for the first check, and is read once.
+    func testTheKeychainIsReadWhenTheKeyIsFirstWantedAndOnce() async throws {
+        final class CountingKey: StreamInboxKeyStore {
+            var reads = 0
+            let key: String
+            init(_ key: String) { self.key = key }
+            func read() -> String? { reads += 1; return key }
+            func save(_ key: String) throws {}
+            func remove() {}
+        }
+        let keys = CountingKey(relay.key)
+        defaults.set("https://\(relay.host)", forKey: StreamInboxSettings.originKey)
+        let inbox = StreamInbox(container: container, defaults: defaults, keyStore: keys, client: relay.client,
+                                storeIsReal: { true }, log: { _, _ in })
+        XCTAssertEqual(keys.reads, 0, "nothing read while the app is being made")
+        XCTAssertTrue(inbox.isConnected)
+        relay.add("a", "Buy milk")
+        await inbox.check(.checkNow)
+        await inbox.check(.checkNow)
+        XCTAssertEqual(keys.reads, 1)
+        XCTAssertEqual(try tasks().map(\.title), ["Buy milk"])
     }
 
     func testATestCaptureArrivesAsATask() async throws {

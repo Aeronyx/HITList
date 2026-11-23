@@ -59,6 +59,8 @@ final class SettingsTidyUITests: XCTestCase {
             }
             back()
         }
+        // The tour ends on About, below the fold since brief 176: the first screen comes back scrolled to it.
+        scroll(to: element("settings-profile"))
         XCTAssertTrue(element("settings-profile").isHittable, "back on the first screen")
     }
 

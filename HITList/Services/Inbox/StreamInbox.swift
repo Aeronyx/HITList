@@ -129,15 +129,10 @@ final class StreamInbox {
         lastCheckedAt = settings.lastCheckedAt
         lastCaptureAt = settings.lastCaptureAt
         addedToday = settings.addedToday(now: clock())
-        // A link with its key, or nothing: an address whose key is gone (a restored device) is forgotten.
-        if let origin = settings.origin, let key = keyStore.read(), InboxLink(origin: origin, key: key) != nil {
-            self.origin = origin
-            self.key = key
-            isConnected = true
-        } else {
-            settings.origin = nil
-            isConnected = false
-        }
+        // The address now; the Keychain only when the key is first wanted (`link`), never while the app's first frame
+        // is being made (this runs in `App.init`).
+        origin = settings.origin
+        isConnected = settings.origin != nil
     }
 
     /// Siri's road: the quick-add parser and `TaskActions.create` on the app's main context.
@@ -258,9 +253,20 @@ final class StreamInbox {
         settings.onlyStartingWithTask = on
     }
 
+    /// The relay's address with this device's key. The key is read from the Keychain the first time; an address whose
+    /// key isn't on this device (a restored or new device: the key is never backed up) is forgotten then, and the page
+    /// shows the link's field again.
     var link: InboxLink? {
-        guard isConnected, let origin = settings.origin, let key else { return nil }
-        return InboxLink(origin: origin, key: key)
+        guard isConnected, let origin = settings.origin else { return nil }
+        if key == nil { key = keyStore.read() }
+        guard let key, let link = InboxLink(origin: origin, key: key) else {
+            settings.origin = nil
+            self.origin = nil
+            isConnected = false
+            updateTimer()
+            return nil
+        }
+        return link
     }
 
     // MARK: - Checking
