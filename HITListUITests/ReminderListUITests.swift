@@ -184,7 +184,8 @@ final class ReminderListUITests: XCTestCase {
         // A tap at the title's right end puts the caret after its last letter and brings the keyboard.
         editorTitle.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.5)).tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "the keyboard")
-        editorTitle.typeText(" !1h")
+        // "!1hb", 1 hour before ("!1h" is In 1 hour since the review of brief 175, finding 1: no row of a timed list).
+        editorTitle.typeText(" !1hb")
         let list = element("reminderSuggestions")
         XCTAssertTrue(list.waitForExistence(timeout: 5), "the list in the editor")
         list.waitUntilStill()
