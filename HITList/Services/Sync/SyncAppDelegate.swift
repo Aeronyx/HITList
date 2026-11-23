@@ -122,6 +122,8 @@ final class SyncAppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         guard !SyncAppDelegateSupport.isTesting else { return }
         CloudSyncMonitor.shared.pushRegistered(tokenBytes: deviceToken.count)
+        // Brief 176: the Stream ring's relay wakes this device with the same token, given with each claim.
+        StreamInbox.pushTokenArrived(deviceToken)
     }
 
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
@@ -135,6 +137,12 @@ final class SyncAppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any],
                      fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
         guard !SyncAppDelegateSupport.isTesting else { completionHandler(.noData); return }
+        // Brief 176: the Stream ring's relay says a capture just arrived (`{"hitlist":{"inbox":1}}`, never CloudKit's).
+        // The inbox's check runs, and the handler answers once it has (25 s at most).
+        if StreamInbox.isWakePush(userInfo) {
+            Task { @MainActor in completionHandler(await StreamInbox.handleWakePush(userInfo).fetchResult) }
+            return
+        }
         // Shared Tasks' own container (brief 51): its engines fetch; the task store's monitor never sees it.
         if SharedTasksPush.isForSharedTasks(userInfo) {
             Task { @MainActor in completionHandler(await SharedTasksCenter.shared.handlePush() ? .newData : .noData) }
@@ -180,6 +188,8 @@ final class SyncAppDelegate: NSObject, NSApplicationDelegate {
     func application(_ application: NSApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         guard !SyncAppDelegateSupport.isTesting else { return }
         CloudSyncMonitor.shared.pushRegistered(tokenBytes: deviceToken.count)
+        // Brief 176: the Stream ring's relay may wake this Mac too, with the same token, given with each claim.
+        StreamInbox.pushTokenArrived(deviceToken)
     }
 
     func application(_ application: NSApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
@@ -189,6 +199,11 @@ final class SyncAppDelegate: NSObject, NSApplicationDelegate {
 
     func application(_ application: NSApplication, didReceiveRemoteNotification userInfo: [String: Any]) {
         guard !SyncAppDelegateSupport.isTesting else { return }
+        // Brief 176: the Stream ring's relay says a capture just arrived: the inbox checks now.
+        if StreamInbox.isWakePush(userInfo) {
+            StreamInbox.shared?.checkSoon(.wakePush)
+            return
+        }
         // Shared Tasks' own container (brief 51): its engines fetch; the task store's monitor never sees it.
         if SharedTasksPush.isForSharedTasks(userInfo) {
             Task { @MainActor in _ = await SharedTasksCenter.shared.handlePush() }

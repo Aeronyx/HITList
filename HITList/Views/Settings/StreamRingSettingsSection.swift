@@ -16,12 +16,13 @@ struct StreamRingSettingsSection: View {
     @State private var connectProblem: String?
     @State private var working: Work?
     @State private var actionProblem: String?
+    @State private var ruleProblem: String?
     @State private var askingDisconnect = false
     @AppStorage(SyncEngineSwitch.revealedKey, store: AppGroup.defaults) private var revealed = false
     @Environment(\.openURL) private var openURL
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    enum Work: Equatable { case checking, testing, linking }
+    enum Work: Equatable { case checking, testing, linking, rule }
 
     init(inbox: StreamInbox? = nil) {
         given = inbox
@@ -141,12 +142,20 @@ struct StreamRingSettingsSection: View {
             }
         }
         HITGroup(footer: StreamRingWords.onlyTaskFooter) {
-            Toggle(isOn: Binding(get: { inbox.onlyStartingWithTask }, set: { inbox.setOnlyStartingWithTask($0) })) {
+            // The rule is the relay's, for every device: the switch writes it there and shows what the relay keeps.
+            Toggle(isOn: Binding(get: { inbox.onlyStartingWithTask }, set: { on in
+                run(.rule) { await inbox.setOnlyStartingWithTask(on) }
+            })) {
                 HITMenuRowLabel(StreamRingWords.onlyTask, systemImage: "text.quote")
             }
             .toggleStyle(.hit)
             .hitRowPadding()
+            .disabled(working == .rule)
             .accessibilityIdentifier("stream-ring-only-task")
+            if let ruleProblem {
+                problemRow(ruleProblem)
+                    .accessibilityIdentifier("stream-ring-only-task-problem")
+            }
         }
         HITGroup {
             HITMenuRow(StreamRingWords.disconnect, subtitle: StreamRingWords.disconnectSubtitle, systemImage: "xmark.circle",
@@ -156,12 +165,14 @@ struct StreamRingSettingsSection: View {
     }
 
     private func statusRow(_ inbox: StreamInbox, now: Date) -> some View {
-        let words = StreamRingWords.status(problem: inbox.problem, source: inbox.relayStatus?.source(now: now),
-                                           lastCapture: inbox.lastCaptureAt, addedToday: inbox.addedToday, now: now)
+        let trouble = inbox.problem != nil || inbox.relayTrouble != nil
+        let words = StreamRingWords.status(problem: inbox.problem, relayTrouble: inbox.relayTrouble,
+                                           source: inbox.relayStatus?.source(now: now), lastCapture: inbox.lastCaptureAt,
+                                           addedToday: inbox.addedToday, wake: inbox.wakeWords, now: now)
         return HStack(alignment: .center, spacing: HITSpacing.m) {
-            Image(systemName: inbox.problem == nil ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+            Image(systemName: trouble ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
                 .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(inbox.problem == nil ? HITColor.dueToday : HITColor.dueTomorrow)
+                .foregroundStyle(trouble ? HITColor.dueTomorrow : HITColor.dueToday)
                 .frame(width: HITRowMetrics.iconColumn, height: HITRowMetrics.iconHeight)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
@@ -170,7 +181,7 @@ struct StreamRingSettingsSection: View {
                     .foregroundStyle(HITColor.text)
                 Text(StreamRingWords.keepingPartsWhole(words))
                     .font(HITType.caption)
-                    .foregroundStyle(inbox.problem == nil ? Theme.secondaryText : HITColor.dueTomorrow)
+                    .foregroundStyle(trouble ? HITColor.dueTomorrow : Theme.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: HITSpacing.s)
@@ -187,12 +198,16 @@ struct StreamRingSettingsSection: View {
     private func run(_ work: Work, _ body: @escaping () async -> StreamInboxProblem?) {
         guard working == nil else { return }
         working = work
-        actionProblem = nil
+        if work == .rule { ruleProblem = nil } else { actionProblem = nil }
         Task {
             let problem = await body()
             working = nil
-            // The status line says a check's trouble; a row's own trouble shows under the rows.
-            if work != .checking { actionProblem = problem?.words }
+            // The status line says a check's trouble; a row's own trouble shows under its group.
+            switch work {
+            case .checking: break
+            case .rule: ruleProblem = problem?.words
+            default: actionProblem = problem?.words
+            }
         }
     }
 
@@ -250,17 +265,28 @@ enum StreamRingWords {
     static let disconnectQuestion = "Disconnect this device?"
     static let disconnectMessage = "Captures wait in your relay for your other devices. Connect again any time with the inbox link."
 
-    /// The status line under "Connected": "from Stream every minute · last capture 5 min ago · 3 added today", or the
-    /// trouble.
-    static func status(problem: StreamInboxProblem?, source: InboxStatus.Source?, lastCapture: Date?, addedToday: Int,
-                       now: Date) -> String {
+    /// The status line under "Connected": "from Stream every minute · last capture 5 min ago · 3 added today · wakes this
+    /// iPhone when you speak", or the trouble: this device's own first, then the relay's (review, finding 3).
+    static func status(problem: StreamInboxProblem?, relayTrouble: String? = nil, source: InboxStatus.Source?,
+                       lastCapture: Date?, addedToday: Int, wake: String? = nil, now: Date) -> String {
         if let problem { return problem.words }
+        if let relayTrouble { return relayTrouble }
         var parts: [String] = []
         if let source, let words = sourceWords(source) { parts.append(words) }
         parts.append(lastCapture.map { "last capture \(ago($0, now: now))" } ?? "no captures yet")
         if addedToday > 0 { parts.append("\(addedToday) added today") }
+        if let wake { parts.append(wake) }
         return parts.joined(separator: " · ")
     }
+
+    /// The relay's sign-in to Stream came with no way to renew it (no refresh token).
+    static let notRenewable = "Stream gave your relay no way to renew its sign-in: reconnect Stream when it ends."
+    /// The webhook's last body had no words or no id the relay could read.
+    static let webhookUnreadable = "The last capture Stream pushed couldn't be read. Captures said since may be missing."
+
+    static func wakeOn(_ device: String) -> String { "wakes this \(device) when you speak" }
+    static func wakeNoToken(_ device: String) -> String { "can't wake this \(device) yet: it has no push token" }
+    static func wakeTrouble(_ device: String, _ trouble: String) -> String { "can't wake this \(device): \(trouble)" }
 
     /// The line as drawn: a short part ("3 added today", "last capture 5 min ago") never breaks inside itself, and each
     /// "·" stays at the end of the line before, so a wrap falls between parts ("· 3" at a line's end read as a stray
@@ -333,6 +359,17 @@ enum StreamRingWords {
             rows.append(Row(title: "Last poll", value: time(stream.lastPollAt) + (stream.lastError.map { ": \($0)" } ?? "")))
             rows.append(Row(title: "Stream tool's arguments", value: list(stream.toolArguments)))
             rows.append(Row(title: "Interaction fields", value: list(stream.interactionFields)))
+            if let shape = stream.answerShape {
+                rows.append(Row(title: "Stream's unread answer", value: "content \(list(shape.contentTypes)), JSON \(shape.json.map { $0 ? "yes" : "no" }.joined(separator: ", ")), keys \(list(shape.keys))"))
+            }
+        }
+        if let push = status.push {
+            rows.append(Row(title: "Wake-ups", value: push.configured
+                ? "on, \(push.devices) device\(push.devices == 1 ? "" : "s"), last sent \(time(push.lastSentAt))\(push.lastError.map { ": \($0)" } ?? "")"
+                : "off (no Apple push key on the relay)"))
+        }
+        if let rule = status.settings {
+            rows.append(Row(title: "The relay's rule", value: rule.onlyStartingWithTask ? "only captures that start with Task" : "every capture"))
         }
         return rows
     }

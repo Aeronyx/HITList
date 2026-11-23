@@ -102,4 +102,63 @@ final class InboxProtocolTests: XCTestCase {
         XCTAssertEqual(link.url.absoluteString, "https://relay.example/stream/connect?c=abc")
         XCTAssertEqual(try InboxAPI.decode(InboxAckReply.self, from: Data(#"{"acked":3}"#.utf8)).acked, 3)
     }
+
+    // MARK: Review of 18e36cb8 and wake-ups
+
+    /// Finding 1: each item says when it was said; finding 8: the relay's rule comes with every claim; wake-ups: a
+    /// claim carries this device's push token and says whether the relay can wake it.
+    func testAClaimCarriesThePushTokenAndBringsTheTimeAndTheRule() throws {
+        let push = InboxPushRegistration(token: "ab12", environment: .production, platform: "iOS")
+        let body = try XCTUnwrap(InboxAPI.claim(device: "iPhone-1A2B3C4D", push: push, link: link).httpBody)
+        XCTAssertEqual(String(decoding: body, as: UTF8.self),
+                       #"{"device":"iPhone-1A2B3C4D","push":{"environment":"production","platform":"iOS","token":"ab12"}}"#)
+        let json = #"""
+        {"items":[{"id":"t-1","text":"Call the dentist tomorrow at 9am","receivedAt":"2026-11-24T12:45:00.000Z",
+                   "capturedAt":"2026-11-24T03:30:00.000Z"},{"id":"t-2","text":"Buy milk","receivedAt":"2026-11-24T12:45:00.000Z"}],
+         "settings":{"onlyStartingWithTask":true},"push":{"configured":true,"registered":true}}
+        """#
+        let reply = try InboxAPI.decode(InboxClaimReply.self, from: Data(json.utf8))
+        XCTAssertEqual(reply.items[0].capturedAt, InboxAPI.parseDate("2026-11-24T03:30:00Z"))
+        XCTAssertEqual(reply.items[0].saidAt, InboxAPI.parseDate("2026-11-24T03:30:00Z"), "when it was said: Stream's time")
+        XCTAssertEqual(reply.items[1].saidAt, InboxAPI.parseDate("2026-11-24T12:45:00Z"), "else when the relay got it")
+        XCTAssertEqual(reply.settings, InboxSettings(onlyStartingWithTask: true))
+        XCTAssertEqual(reply.push, InboxPushState(configured: true, registered: true))
+        let old = try InboxAPI.decode(InboxClaimReply.self, from: Data(#"{"items":[]}"#.utf8))
+        XCTAssertNil(old.settings, "a relay from before the review says nothing of the rule")
+        XCTAssertNil(old.push)
+    }
+
+    func testTheRuleIsSetOnTheRelay() throws {
+        let request = InboxAPI.settings(InboxSettings(onlyStartingWithTask: true), link: link)
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.url?.path, "/inbox/settings")
+        XCTAssertEqual(String(decoding: try XCTUnwrap(request.httpBody), as: UTF8.self), #"{"onlyStartingWithTask":true}"#)
+        let reply = try InboxAPI.decode(InboxSettingsReply.self, from: Data(#"{"settings":{"onlyStartingWithTask":false}}"#.utf8))
+        XCTAssertEqual(reply.settings.onlyStartingWithTask, false)
+    }
+
+    /// Finding 3: the poller's trouble and the shape of an answer it couldn't read; finding 11: a sign-in that can't be
+    /// renewed; wake-ups: whether the relay can push, to how many devices, and its last trouble.
+    func testTheStatusSaysTroubleRenewalAndWakeUps() throws {
+        let json = #"""
+        {"pending":0,"lastFields":[],"idsMatch":true,"settings":{"onlyStartingWithTask":true},
+         "webhook":{"lastReceivedAt":"2026-11-24T12:00:00Z","lastResult":"invalid","lastFields":["note"]},
+         "stream":{"connected":true,"approvedAt":"2026-11-24T10:00:00Z","expiresAt":"2027-02-22T10:00:00Z",
+                   "lastError":"Stream's answer couldn't be read: the relay found no list of interactions in it.",
+                   "refreshable":false,"answerShape":{"contentTypes":["text"],"json":[false],"structured":false,"keys":[]}},
+         "push":{"configured":true,"devices":2,"lastSentAt":"2026-11-24T12:01:00Z","lastError":null}}
+        """#
+        let status = try InboxAPI.decode(InboxStatus.self, from: Data(json.utf8))
+        XCTAssertEqual(status.settings?.onlyStartingWithTask, true)
+        XCTAssertTrue(status.idsMatch)
+        XCTAssertEqual(status.stream?.refreshable, false)
+        XCTAssertEqual(status.stream?.answerShape?.contentTypes, ["text"])
+        XCTAssertEqual(status.stream?.answerShape?.json, [false])
+        XCTAssertEqual(status.push?.devices, 2)
+        XCTAssertEqual(status.push?.configured, true)
+        XCTAssertEqual(status.webhook?.lastResult, "invalid")
+        let quiet = try InboxAPI.decode(InboxStatus.self, from: Data(#"{"pending":0}"#.utf8))
+        XCTAssertNil(quiet.push)
+        XCTAssertFalse(quiet.idsMatch)
+    }
 }

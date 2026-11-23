@@ -10,7 +10,9 @@
 //     minute for what was said lately.
 //
 // HITList claims what waits (POST /inbox/claim), makes tasks, and acks what it handled (POST /inbox/ack): an acked
-// capture's words are deleted and only its id is kept, 30 days, to catch a redelivery. Nothing is kept longer.
+// capture's words are deleted and only its id is kept, 30 days, to catch a redelivery. Nothing is kept longer. When a
+// capture is kept, each device that gave its push token with a claim is woken by an Apple background push (when the
+// APNS_* secrets are set), so it takes the capture at once.
 //
 // Plain JavaScript, no packages, no build step. Nothing here names an account, a subdomain or a secret: those live in
 // George's Cloudflare account (`wrangler secret put`).
@@ -23,19 +25,24 @@ const SIGNATURE_WINDOW_S = 300;
 const MINUTE_MS = 60_000;
 const DAY_MS = 86_400_000;
 const KEEP_MS = 30 * DAY_MS;
-const CLAIM_HOLD_MS = 10 * MINUTE_MS;
+// A device's claim holds what it took this long: a device that saved a capture and lost its ack has half an hour to
+// come back and ack it before another device may take the capture too (review, finding 4).
+const CLAIM_HOLD_MS = 30 * MINUTE_MS;
 const CLAIM_LIMIT = 50;
 const ACK_LIMIT = 500;
 const MAX_ID = 256;
 const MAX_DEVICE = 128;
 const ONCE_MS = 10 * MINUTE_MS;
 const CONNECTION_MS = 90 * DAY_MS;
-// The same words from the other source within this time are the same capture (the two sources' ids should match;
-// this holds if they don't). A one-way hash of the words is kept this long, then only the id.
-const TWIN_MS = 10 * MINUTE_MS;
+// The same words from the other route within this time are the same capture, until the two routes have shown they
+// share ids (then never: matching ids say it). A one-way hash of the words is kept an hour, then only the id.
+const TWIN_MS = 3 * MINUTE_MS;
 const HASH_KEPT_MS = 60 * MINUTE_MS;
 const REFRESH_EARLY_MS = 5 * MINUTE_MS;
 const OUTBOUND_TIMEOUT_MS = 15_000;
+const PUSH_GAP_MS = 30_000;
+const PROVIDER_TOKEN_MS = 50 * MINUTE_MS;
+const TOKEN_TEXT = /^[A-Za-z0-9_-]{43}$/;
 
 const TEST_TEXT = "Test capture from your Stream ring";
 const CLIENT_NAME = "HITList inbox";
@@ -43,6 +50,8 @@ const SCOPE = "stream";
 const TOOL = "get_recent_interactions";
 const MCP_PROTOCOL = "2025-06-18";
 const DEFAULT_MCP_URL = "https://api.sandbar.com/mcp";
+const APNS_TOPIC = "com.trammells.hitlist";
+const APNS_BODY = JSON.stringify({ aps: { "content-available": 1 }, hitlist: { inbox: 1 } });
 
 const ENDED = "Stream's sign-in for the relay has ended. Reconnect Stream in HITList: Settings → Stream Ring.";
 
@@ -87,7 +96,7 @@ async function route(request, env) {
       return callbackPage(url, env);
   }
   const keyed = KEYED[name];
-  if (!keyed) return json({ error: "Not found." }, 404);
+  if (!keyed || (name === "POST /__test/clock" && env.RELAY_TEST_MODE !== "1")) return json({ error: "Not found." }, 404);
   if (!(await hasInboxKey(request, env))) return json({ error: "Unauthorized." }, 401);
   return keyed(request, env, url);
 }
@@ -98,7 +107,7 @@ const KEYED = {
     const body = await readJSON(request);
     const device = body && typeof body.device === "string" ? body.device.trim() : "";
     if (!device || device.length > MAX_DEVICE) return json({ error: "Say which device is asking (device)." }, 400);
-    return json(await inbox(env).claim(device));
+    return json(await inbox(env).claim(device, isPlainObject(body.push) ? body.push : null));
   },
 
   async "POST /inbox/ack"(request, env) {
@@ -114,15 +123,31 @@ const KEYED = {
     return json(await inbox(env).status());
   },
 
+  /// The relay's own settings, the same for every device: the "starts with Task" rule.
+  async "POST /inbox/settings"(request, env) {
+    const body = await readJSON(request);
+    if (!body || typeof body.onlyStartingWithTask !== "boolean") {
+      return json({ error: "Send onlyStartingWithTask, true or false." }, 400);
+    }
+    return json(await inbox(env).setSettings({ onlyStartingWithTask: body.onlyStartingWithTask }));
+  },
+
   async "POST /inbox/test"(request, env) {
     const id = `test-${randomHex(8)}`;
-    const hash = await textHash(TEST_TEXT);
-    await inbox(env).keep({ id, text: TEST_TEXT, body: JSON.stringify({ test: true }), hash, source: "test", fields: [] });
+    await inbox(env).keepTest(id, TEST_TEXT, await textHash(TEST_TEXT));
     return json({ status: "accepted", id }, 202);
   },
 
   async "POST /stream/connect-link"(request, env, url) {
     return json(await inbox(env).createConnectLink(url.origin));
+  },
+
+  /// test.sh only (RELAY_TEST_MODE=1 in its .dev.vars): moves the inbox's clock, so the half-hour claim and the
+  /// three-minute match are proved without waiting.
+  async "POST /__test/clock"(request, env) {
+    const body = await readJSON(request);
+    const offset = body && Number.isFinite(body.offsetMs) ? body.offsetMs : 0;
+    return json(await inbox(env).setTestClock(offset));
   },
 };
 
@@ -157,13 +182,16 @@ async function webhook(request, env) {
   const problem = typeof body.text !== "string" ? "text isn't a string"
     : !id ? `interaction_id is missing or over ${MAX_ID} characters` : null;
   const words = problem ? "" : body.text;
+  // The interaction's own time, when Stream sends one with its zone (the webhook is sent as the capture is saved).
+  const said = parseTime(first(body, TIME_FIELDS, (v) => parseTime(v) !== null));
   const outcome = await inbox(env).receiveWebhook({
-    id, text: words, body: text, fields, problem, hash: problem ? null : await textHash(words),
+    id, text: words, body: text, fields, problem, hash: problem ? null : await textHash(words), said,
   });
   switch (outcome) {
     case "invalid": return json({ error: `The body's ${problem}.` }, 400);
     case "empty": return new Response(null, { status: 204 });
     case "duplicate": return json({ status: "duplicate" }, 200);
+    case "skipped": return json({ status: "skipped" }, 200);
     default: return json({ status: "accepted" }, 202);
   }
 }
@@ -199,10 +227,23 @@ function interactionID(value) {
   return typeof id === "string" && id.trim() && id.length <= MAX_ID ? id : null;
 }
 
+/// Whether a capture's first word is "Task" (any case, with or without the mark after it): HITList's `SpokenTask`.
+function startsWithTask(text) {
+  const trimmed = String(text || "").trimStart();
+  if (trimmed.slice(0, 4).toLowerCase() !== "task") return false;
+  const next = trimmed.charAt(4);
+  return !next || !/[\p{L}\p{N}'’]/u.test(next);
+}
+
 // MARK: - Connecting Stream's MCP
 
 async function connectPage(url, env) {
-  const reply = await inbox(env).beginConnect(url.searchParams.get("c") || "", url.origin, mcpURL(env));
+  const code = url.searchParams.get("c") || "";
+  // Checked here, before the inbox is asked anything.
+  if (!TOKEN_TEXT.test(code)) {
+    return page("Stream wasn't connected", "That isn't a link HITList made. Ask for a new one: HITList → Settings → Stream Ring → Reconnect Stream…, or run setup.sh again.", 400);
+  }
+  const reply = await inbox(env).beginConnect(code, url.origin, mcpURL(env));
   if (reply.error) return page("Stream wasn't connected", reply.error, 400);
   return new Response(null, {
     status: 302,
@@ -212,8 +253,12 @@ async function connectPage(url, env) {
 
 async function callbackPage(url, env) {
   const p = url.searchParams;
+  const state = p.get("state") || "";
+  if (!TOKEN_TEXT.test(state)) {
+    return page("Stream wasn't connected", "That isn't a sign-in HITList started. Start again from HITList (Settings → Stream Ring) or setup.sh.", 400);
+  }
   const reply = await inbox(env).finishConnect({
-    state: p.get("state") || "", code: p.get("code") || "",
+    state, code: p.get("code") || "",
     error: p.get("error") || "", errorDescription: p.get("error_description") || "", mcpUrl: mcpURL(env),
   });
   if (reply.error) return page("Stream wasn't connected", reply.error, 400);
@@ -225,6 +270,7 @@ async function callbackPage(url, env) {
 export class StreamInbox extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
+    this.env = env;
     this.sql = ctx.storage.sql;
     this.sql.exec(`CREATE TABLE IF NOT EXISTS captures (
       id TEXT PRIMARY KEY,
@@ -236,22 +282,56 @@ export class StreamInbox extends DurableObject {
       claimed_by TEXT,
       claimed_at INTEGER,
       done_at INTEGER)`);
+    // Added after the first deployments: a relay that has run before gains the column in place.
+    const columns = this.sql.exec("PRAGMA table_info(captures)").toArray().map((c) => c.name);
+    if (!columns.includes("captured_at")) this.sql.exec("ALTER TABLE captures ADD COLUMN captured_at INTEGER");
     this.sql.exec("CREATE INDEX IF NOT EXISTS captures_waiting ON captures (done_at, received_at)");
     this.sql.exec("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
     this.sql.exec("CREATE TABLE IF NOT EXISTS once (token TEXT PRIMARY KEY, kind TEXT NOT NULL, data TEXT NOT NULL, expires_at INTEGER NOT NULL)");
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS devices (
+      token TEXT PRIMARY KEY,
+      device TEXT NOT NULL,
+      environment TEXT NOT NULL,
+      platform TEXT,
+      registered_at INTEGER NOT NULL,
+      last_claim_at INTEGER,
+      last_push_at INTEGER)`);
     this.lastSweep = 0;
     this.polling = null;
     this.rpcID = 1;
+    this.testOffset = 0;
+  }
+
+  /// The inbox's clock: the real one, moved only by test.sh (`POST /__test/clock`, RELAY_TEST_MODE).
+  now() {
+    return Date.now() + this.testOffset;
+  }
+
+  setTestClock(offsetMs) {
+    if (this.env.RELAY_TEST_MODE === "1") this.testOffset = offsetMs;
+    return { offsetMs: this.testOffset };
   }
 
   // MARK: What waits
 
-  /// A capture from either source, or the relay's test. `duplicate` when its id was seen in the last 30 days, or the
-  /// same words came from the other source moments ago.
-  keep({ id, text, body, hash, source, fields }) {
-    const now = Date.now();
-    if (this.has(id)) return "duplicate";
-    if (hash && source !== "test") {
+  /// A capture from either route. `duplicate` when its id was seen in the last 30 days, or the same words came by the
+  /// other route moments ago while the routes haven't shown they share ids; `skipped` when the "starts with Task" rule
+  /// leaves it out (it is then kept as seen, never handed over).
+  keep({ id, text, body, hash, source, fields, said }) {
+    const now = this.now();
+    const existing = this.sql.exec("SELECT source FROM captures WHERE id = ? LIMIT 1", id).toArray()[0];
+    if (existing) {
+      // One id by both routes: they share ids, and matching words with other ids are two captures from now on.
+      if (existing.source !== source && existing.source !== "test" && !this.getMeta("idsMatch", false)) {
+        this.setMeta("idsMatch", true);
+      }
+      return "duplicate";
+    }
+    if (this.settings().onlyStartingWithTask && !startsWithTask(text)) {
+      this.markSeen(id, source, now);
+      return "skipped";
+    }
+    if (hash && !this.getMeta("idsMatch", false)) {
       const twin = this.sql.exec(
         "SELECT 1 FROM captures WHERE text_hash = ? AND source != ? AND source != 'test' AND received_at > ? LIMIT 1",
         hash, source, now - TWIN_MS).toArray();
@@ -261,19 +341,30 @@ export class StreamInbox extends DurableObject {
       }
     }
     this.sql.exec(
-      "INSERT INTO captures (id, source, text, body, text_hash, received_at) VALUES (?, ?, ?, ?, ?, ?)",
-      id, source, text, body, hash, now);
-    if (source !== "test") this.setMeta("last", { at: now, source, fields });
+      "INSERT INTO captures (id, source, text, body, text_hash, received_at, captured_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      id, source, text, body, hash, now, Number.isFinite(said) ? said : now);
+    this.setMeta("last", { at: now, source, fields });
     return "accepted";
   }
 
+  /// The relay's own test capture: kept whatever the rule says, and it wakes the devices like any other.
+  keepTest(id, text, hash) {
+    const now = this.now();
+    this.sql.exec(
+      "INSERT INTO captures (id, source, text, body, text_hash, received_at, captured_at) VALUES (?, 'test', ?, ?, ?, ?, ?)",
+      id, text, JSON.stringify({ test: true }), hash, now, now);
+    this.wake();
+    return { status: "accepted" };
+  }
+
   /// The webhook's body, signed and read: what it carried is noted for the status whatever came of it.
-  receiveWebhook({ id, text, body, fields, problem, hash }) {
-    const now = Date.now();
+  receiveWebhook({ id, text, body, fields, problem, hash, said }) {
+    const now = this.now();
     const outcome = problem ? "invalid"
       : !text.trim() ? "empty"
-      : this.keep({ id, text, body, hash, source: "webhook", fields });
+      : this.keep({ id, text, body, hash, source: "webhook", fields, said });
     this.setMeta("webhook", { at: now, result: outcome, fields });
+    if (outcome === "accepted") this.wake();
     return outcome;
   }
 
@@ -288,12 +379,14 @@ export class StreamInbox extends DurableObject {
       id, source, now, now);
   }
 
-  /// What waits and isn't held by another device (held ten minutes from a claim), oldest first; held for `device` now.
-  claim(device) {
-    const now = Date.now();
+  /// What waits and isn't held by another device (held half an hour from its claim; a device re-takes its own at any
+  /// time), oldest first; held for `device` now. A claim also brings the device's push token.
+  claim(device, push) {
+    const now = this.now();
     this.sweep(now);
+    const registered = this.registerDevice(device, push, now);
     const rows = this.sql.exec(
-      `SELECT id, text, received_at FROM captures
+      `SELECT id, text, received_at, captured_at FROM captures
        WHERE done_at IS NULL AND text IS NOT NULL
          AND (claimed_at IS NULL OR claimed_at < ? OR claimed_by = ?)
        ORDER BY received_at, id LIMIT ?`,
@@ -303,14 +396,18 @@ export class StreamInbox extends DurableObject {
     }
     const last = this.getMeta("last", null);
     return {
-      items: rows.map((row) => ({ id: row.id, text: row.text, receivedAt: iso(row.received_at) })),
+      items: rows.map((row) => ({
+        id: row.id, text: row.text, receivedAt: iso(row.received_at), capturedAt: iso(row.captured_at ?? row.received_at),
+      })),
       lastReceivedAt: last ? iso(last.at) : null,
+      settings: this.settings(),
+      push: { configured: this.pushConfigured(), registered },
     };
   }
 
   /// The words of what a device handled go; the ids stay 30 days.
   ack(ids) {
-    const now = Date.now();
+    const now = this.now();
     let acked = 0;
     for (const id of new Set(ids)) {
       acked += this.sql.exec(
@@ -320,36 +417,54 @@ export class StreamInbox extends DurableObject {
     return { acked };
   }
 
+  settings() {
+    return { onlyStartingWithTask: false, ...this.getMeta("settings", {}) };
+  }
+
+  setSettings(settings) {
+    this.setMeta("settings", { ...this.settings(), ...settings });
+    return { settings: this.settings() };
+  }
+
   status() {
-    const now = Date.now();
+    const now = this.now();
     this.sweep(now);
     const pending = this.sql.exec(
       "SELECT COUNT(*) AS n FROM captures WHERE done_at IS NULL AND text IS NOT NULL").one().n;
     const last = this.getMeta("last", null);
     const webhook = this.getMeta("webhook", null);
+    const push = this.getMeta("push", {});
     return {
       pending,
       lastReceivedAt: last ? iso(last.at) : null,
       lastSource: last ? last.source : null,
       lastFields: last ? last.fields || [] : [],
+      idsMatch: this.getMeta("idsMatch", false),
+      settings: this.settings(),
       webhook: {
         lastReceivedAt: webhook ? iso(webhook.at) : null,
         lastResult: webhook ? webhook.result : null,
         lastFields: webhook ? webhook.fields || [] : [],
       },
       stream: this.streamStatus(),
+      push: {
+        configured: this.pushConfigured(),
+        devices: this.sql.exec("SELECT COUNT(*) AS n FROM devices").one().n,
+        lastSentAt: iso(push.lastSentAt),
+        lastError: push.lastError || null,
+      },
     };
   }
 
   /// Captures and ids older than 30 days go; hashes after an hour; one-time links and sign-ins when they expire.
   sweep(now) {
-    if (now - this.lastSweep < MINUTE_MS) return;
+    if (Math.abs(now - this.lastSweep) < MINUTE_MS) return;
     this.lastSweep = now;
     this.sql.exec(
       "DELETE FROM captures WHERE (done_at IS NOT NULL AND done_at < ?) OR (done_at IS NULL AND received_at < ?)",
       now - KEEP_MS, now - KEEP_MS);
     this.sql.exec("UPDATE captures SET text_hash = NULL WHERE text_hash IS NOT NULL AND received_at < ?", now - HASH_KEPT_MS);
-    this.sql.exec("DELETE FROM once WHERE expires_at < ?", now);
+    this.sql.exec("DELETE FROM once WHERE expires_at < ?", Date.now());
   }
 
   // MARK: Settings kept here
@@ -383,17 +498,126 @@ export class StreamInbox extends DurableObject {
     return row && row.expires_at >= Date.now() ? JSON.parse(row.data) : null;
   }
 
+  // MARK: Waking the devices (Apple background pushes)
+
+  pushConfigured() {
+    return Boolean(this.env.APNS_KEY && this.env.APNS_KEY_ID && this.env.APNS_TEAM_ID);
+  }
+
+  /// A claim's `push: {token, environment, platform}`: one token per device, the newest. A claim without one still
+  /// says the device came for its captures.
+  registerDevice(device, push, now) {
+    const token = push && typeof push.token === "string" ? push.token.trim().toLowerCase() : "";
+    if (/^[0-9a-f]{64,200}$/.test(token)) {
+      const environment = push.environment === "production" ? "production" : "development";
+      const platform = typeof push.platform === "string" ? push.platform.slice(0, 16) : null;
+      this.sql.exec("DELETE FROM devices WHERE device = ? AND token != ?", device, token);
+      this.sql.exec(
+        `INSERT INTO devices (token, device, environment, platform, registered_at, last_claim_at) VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(token) DO UPDATE SET device = excluded.device, environment = excluded.environment,
+           platform = excluded.platform, last_claim_at = excluded.last_claim_at`,
+        token, device, environment, platform, now, now);
+    } else {
+      this.sql.exec("UPDATE devices SET last_claim_at = ? WHERE device = ?", now, device);
+    }
+    return this.sql.exec("SELECT 1 FROM devices WHERE device = ? LIMIT 1", device).toArray().length > 0;
+  }
+
+  /// A capture was kept: each device that hasn't been woken in the last 30 s, or has claimed since it was, is pushed
+  /// now, in the background (`waitUntil`): the webhook answers Stream at once.
+  wake() {
+    if (!this.pushConfigured()) return;
+    const now = this.now();
+    const due = this.sql.exec(
+      `SELECT token, environment FROM devices
+       WHERE last_push_at IS NULL OR (last_claim_at IS NOT NULL AND last_claim_at > last_push_at) OR ? - last_push_at >= ?`,
+      now, PUSH_GAP_MS).toArray();
+    if (!due.length) return;
+    for (const device of due) this.sql.exec("UPDATE devices SET last_push_at = ? WHERE token = ?", now, device.token);
+    const sending = this.sendPushes(due).catch((error) => console.error("push:", error && error.message));
+    if (this.ctx.waitUntil) this.ctx.waitUntil(sending);
+  }
+
+  async sendPushes(devices) {
+    let providerToken = await this.providerToken(false);
+    for (const device of devices) {
+      let answer = await this.pushOne(device, providerToken);
+      if (answer.status === 403 && answer.reason === "ExpiredProviderToken") {
+        providerToken = await this.providerToken(true);
+        answer = await this.pushOne(device, providerToken);
+      }
+      this.notePush(device, answer);
+    }
+  }
+
+  async pushOne(device, providerToken) {
+    const host = this.env.APNS_HOST
+      || (device.environment === "production" ? "https://api.push.apple.com" : "https://api.sandbox.push.apple.com");
+    const url = `${host}/3/device/${device.token}`;
+    if (!safeURL(url)) return { status: 0, reason: "an address that isn't https" };
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          authorization: `bearer ${providerToken}`, "apns-push-type": "background", "apns-priority": "5",
+          "apns-topic": APNS_TOPIC, "content-type": "application/json",
+        },
+        body: APNS_BODY,
+        redirect: "manual",
+        signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
+      });
+      let reason = null;
+      if (response.status !== 200) reason = ((await response.json().catch(() => null)) || {}).reason || null;
+      else response.body && response.body.cancel().catch(() => {});
+      return { status: response.status, reason };
+    } catch (error) {
+      return { status: 0, reason: error && error.name === "TimeoutError" ? "no answer in time" : "no connection" };
+    }
+  }
+
+  /// Apple's answer: a retired token (410) or a refused one (BadDeviceToken, DeviceTokenNotForTopic) is dropped.
+  notePush(device, { status, reason }) {
+    const push = this.getMeta("push", {});
+    if (status === 200) {
+      push.lastSentAt = this.now();
+      push.lastError = null;
+    } else if (status === 410 || (status === 400 && ["BadDeviceToken", "DeviceTokenNotForTopic"].includes(reason))) {
+      this.sql.exec("DELETE FROM devices WHERE token = ?", device.token);
+      push.lastDropped = { at: this.now(), reason: reason || String(status) };
+    } else {
+      push.lastError = status === 0
+        ? `Apple's push service couldn't be reached (${reason}).`
+        : `Apple refused a wake-up push (${status}${reason ? ` ${reason}` : ""}).`;
+    }
+    this.setMeta("push", push);
+  }
+
+  /// The provider token: an ES256 JWT signed with the .p8 key, reused 50 minutes (Apple refuses one older than an
+  /// hour, and too many new ones), made again on ExpiredProviderToken.
+  async providerToken(force) {
+    const now = Date.now();
+    const cached = this.getMeta("apnsJWT", null);
+    if (!force && cached && now - cached.issuedAt < PROVIDER_TOKEN_MS && cached.keyId === this.env.APNS_KEY_ID
+        && cached.teamId === this.env.APNS_TEAM_ID) {
+      return cached.token;
+    }
+    const token = await signProviderToken(this.env.APNS_KEY, this.env.APNS_KEY_ID, this.env.APNS_TEAM_ID,
+      Math.floor(now / 1000));
+    this.setMeta("apnsJWT", { token, issuedAt: now, keyId: this.env.APNS_KEY_ID, teamId: this.env.APNS_TEAM_ID });
+    return token;
+  }
+
   // MARK: Connecting Stream (OAuth 2.1 with dynamic client registration and PKCE, as the MCP authorization spec asks)
 
   /// The link HITList opens: one-time, ten minutes. It carries no key.
   createConnectLink(origin) {
-    const now = Date.now();
-    this.sweep(now);
+    this.sweep(this.now());
     const code = this.putOnce("connect", { origin });
-    return { url: `${origin}/stream/connect?c=${code}`, expiresAt: iso(now + ONCE_MS) };
+    return { url: `${origin}/stream/connect?c=${code}`, expiresAt: iso(Date.now() + ONCE_MS) };
   }
 
-  /// The link opened: Stream's sign-in found and this relay registered with it (once), then the way there.
+  /// The link opened: Stream's sign-in found and this relay registered with it (again, each time: a client the server
+  /// forgot or refused is never reused), then the way there.
   async beginConnect(code, origin, mcpUrl) {
     if (!this.takeOnce("connect", code)) {
       return { error: "This link has expired or was already used. Ask HITList for a new one (Settings → Stream Ring → Reconnect Stream…) or run setup.sh again." };
@@ -401,14 +625,9 @@ export class StreamInbox extends DurableObject {
     try {
       const redirectUri = `${origin}/stream/callback`;
       const server = await discover(mcpUrl);
-      this.setMeta("server", server);
-      let client = this.getMeta("client", null);
-      if (!client || client.redirectUri !== redirectUri || client.issuer !== server.issuer) {
-        client = await register(server, redirectUri);
-        this.setMeta("client", client);
-      }
+      const client = await register(server, redirectUri);
       const verifier = randomToken(32);
-      const state = this.putOnce("state", { verifier, redirectUri });
+      const state = this.putOnce("state", { verifier, redirectUri, server, client });
       const target = new URL(server.authorizationEndpoint);
       const params = {
         response_type: "code", client_id: client.clientId, redirect_uri: redirectUri, scope: SCOPE, state,
@@ -421,26 +640,27 @@ export class StreamInbox extends DurableObject {
     }
   }
 
-  /// Back from Stream's sign-in: the code exchanged for tokens, kept here, and the first poll at once.
+  /// Back from Stream's sign-in: the code exchanged for tokens, kept here with the server and client this sign-in
+  /// used. The page answers at once; the first poll runs behind it.
   async finishConnect({ state, code, error, errorDescription, mcpUrl }) {
     const pending = this.takeOnce("state", state);
     if (!pending) return { error: "This sign-in has expired or was already used. Start again from HITList (Settings → Stream Ring) or setup.sh." };
     if (error) return { error: `Stream said: ${errorDescription || error}.` };
     if (!code) return { error: "Stream sent no code back. Start again from HITList or setup.sh." };
-    const server = this.getMeta("server", null);
-    const client = this.getMeta("client", null);
-    if (!server || !client) return { error: "This relay lost track of the sign-in. Start again." };
+    const { server, client } = pending;
     let tokens;
     try {
-      tokens = await tokenRequest(server, {
-        grant_type: "authorization_code", code, redirect_uri: pending.redirectUri, client_id: client.clientId,
-        code_verifier: pending.verifier, resource: server.resource,
+      tokens = await tokenRequest(server, client, {
+        grant_type: "authorization_code", code, redirect_uri: pending.redirectUri, code_verifier: pending.verifier,
+        resource: server.resource,
       });
     } catch (failure) {
       return { error: `Stream didn't accept the sign-in: ${words(failure)}` };
     }
-    const now = Date.now();
-    this.saveTokens(tokens, null, now);
+    const now = this.now();
+    this.setMeta("server", server);
+    this.setMeta("client", client);
+    this.saveTokens(tokens, null, now, now);
     // Captures said before this approval are never taken. A reconnection while still connected keeps its line, so
     // nothing said in the minute between the two is lost.
     const previous = this.getMeta("stream", null);
@@ -449,21 +669,21 @@ export class StreamInbox extends DurableObject {
       connected: true, approvedAt: now, since: carries ? previous.since : now, baselineDone: Boolean(carries),
       lastPollAt: carries ? previous.lastPollAt : null, lastError: null, protocolVersion: null, sessionId: null,
       toolSchema: null, toolArguments: null, interactionFields: previous ? previous.interactionFields || null : null,
+      refreshable: Boolean(tokens.refresh_token), answerShape: null,
     });
-    try {
-      await this.tick(mcpUrl);
-    } catch (failure) {
-      console.error("first poll:", failure && failure.message);
-    }
+    const firstPoll = this.tick(mcpUrl).catch((failure) => console.error("first poll:", failure && failure.message));
+    if (this.ctx.waitUntil) this.ctx.waitUntil(firstPoll);
     return { ok: true };
   }
 
-  saveTokens(reply, previous, now) {
+  /// Tokens are kept with the sign-in (`grant`: its approval time) they belong to.
+  saveTokens(reply, previous, now, grant) {
     const seconds = Number(reply.expires_in);
     this.setMeta("tokens", {
       access: reply.access_token,
       refresh: reply.refresh_token || (previous ? previous.refresh : null),
       expiresAt: now + (Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 3600_000),
+      grant,
     });
   }
 
@@ -476,15 +696,17 @@ export class StreamInbox extends DurableObject {
       expiresAt: conn.approvedAt ? iso(conn.approvedAt + CONNECTION_MS) : null,
       lastPollAt: iso(conn.lastPollAt),
       lastError: conn.lastError || null,
+      refreshable: conn.refreshable === undefined ? null : Boolean(conn.refreshable),
       toolArguments: conn.toolArguments || null,
       interactionFields: conn.interactionFields || null,
+      answerShape: conn.answerShape || null,
     };
   }
 
   // MARK: Asking Stream every minute
 
   async tick(mcpUrl) {
-    this.sweep(Date.now());
+    this.sweep(this.now());
     const conn = this.getMeta("stream", null);
     if (!conn || !conn.connected) return { polled: false };
     // One at a time: a slow poll and the next minute's never overlap.
@@ -493,25 +715,31 @@ export class StreamInbox extends DurableObject {
   }
 
   async poll(mcpUrl) {
-    const started = Date.now();
+    const started = this.now();
     const server = this.getMeta("server", null);
     const client = this.getMeta("client", null);
     const conn = this.getMeta("stream", null);
     if (!server || !client || !conn) return { polled: false };
+    const grant = conn.approvedAt;
+    // Tokens kept before they carried their sign-in belong to the one connected now.
+    const kept = this.getMeta("tokens", null);
+    if (kept && kept.grant === undefined) this.setMeta("tokens", { ...kept, grant });
     if (server.mcpUrl !== mcpUrl) server.mcpUrl = mcpUrl;
     const session = { protocolVersion: conn.protocolVersion, sessionId: conn.sessionId, toolSchema: conn.toolSchema,
       toolArguments: conn.toolArguments };
     let update;
     let added = 0;
     try {
-      const result = await this.callTool(server, client, session);
+      const result = await this.callTool(server, client, session, grant);
       const taken = await this.take(result, conn, started);
       added = taken.added;
       delete taken.added;
       update = { ...session, ...taken, lastPollAt: started };
     } catch (failure) {
+      if (failure instanceof Superseded) return { polled: false };
       if (failure instanceof Ended) {
-        this.deleteMeta("tokens");
+        // Only this sign-in's tokens go: a reconnection made while Stream answered keeps its own.
+        if ((this.getMeta("tokens", null) || {}).grant === grant) this.deleteMeta("tokens");
         update = { connected: false, lastError: ENDED, endedAt: started, protocolVersion: null, sessionId: null };
       } else {
         update = { ...session, lastError: words(failure), lastTriedAt: started };
@@ -519,22 +747,24 @@ export class StreamInbox extends DurableObject {
     }
     // Read again: a sign-in may have finished while Stream answered.
     const latest = this.getMeta("stream", conn);
-    if (latest.approvedAt !== conn.approvedAt) return { polled: false };
+    if (latest.approvedAt !== grant) return { polled: false };
+    if (update.refreshable === undefined && this.getMeta("tokens", null) && !this.getMeta("tokens", null).refresh) {
+      update.refreshable = false;
+    }
     this.setMeta("stream", { ...latest, ...update });
+    if (added > 0) this.wake();
     return { polled: true, added };
   }
 
-  /// `get_recent_interactions`, after the handshake when there is none yet; a 401 refreshes the token once.
-  async callTool(server, client, session) {
-    let tokens = await this.freshTokens(server, client, false);
+  /// `get_recent_interactions`, after the handshake when there is none yet. A 401 refreshes the token once; a session
+  /// the server forgets is started again once, never more (a server that keeps forgetting is trouble, said in status).
+  async callTool(server, client, session, grant) {
+    let tokens = await this.freshTokens(server, client, false, grant);
     let refreshed = false;
-    let handshaken = false;
+    let resets = 0;
     for (;;) {
       try {
-        if (!session.protocolVersion) {
-          await this.handshake(server, tokens, session);
-          handshaken = true;
-        }
+        if (!session.protocolVersion) await this.handshake(server, tokens, session);
         const reply = await this.rpc(server, tokens, session, "tools/call", {
           name: TOOL, arguments: argumentsFor(session.toolSchema),
         });
@@ -542,37 +772,46 @@ export class StreamInbox extends DurableObject {
       } catch (failure) {
         if (failure instanceof Unauthorized && !refreshed) {
           refreshed = true;
-          tokens = await this.freshTokens(server, client, true);
+          tokens = await this.freshTokens(server, client, true, grant);
           continue;
         }
         if (failure instanceof Unauthorized) throw new Ended();
-        if (failure instanceof SessionGone && !handshaken) {
+        if (failure instanceof SessionGone && resets < 1) {
+          resets += 1;
           session.protocolVersion = null;
           session.sessionId = null;
           continue;
+        }
+        if (failure instanceof SessionGone) {
+          session.protocolVersion = null;
+          session.sessionId = null;
+          throw new Trouble("Stream's server keeps losing the relay's session; it is tried again next minute.");
         }
         throw failure;
       }
     }
   }
 
-  /// The access token, refreshed when it ends within five minutes or when asked. A refused refresh means the
-  /// connection has ended.
-  async freshTokens(server, client, force) {
+  /// The access token of this poll's sign-in, refreshed when it ends within five minutes or when asked. A refused
+  /// refresh means the connection has ended; a reconnection made meanwhile wins (`Superseded`).
+  async freshTokens(server, client, force, grant) {
     const tokens = this.getMeta("tokens", null);
     if (!tokens || !tokens.access) throw new Ended();
-    if (!force && tokens.expiresAt - Date.now() > REFRESH_EARLY_MS) return tokens;
+    if (tokens.grant !== grant) throw new Superseded();
+    if (!force && tokens.expiresAt - this.now() > REFRESH_EARLY_MS) return tokens;
     if (!tokens.refresh) throw new Ended();
     let reply;
     try {
-      reply = await tokenRequest(server, {
-        grant_type: "refresh_token", refresh_token: tokens.refresh, client_id: client.clientId, resource: server.resource,
+      reply = await tokenRequest(server, client, {
+        grant_type: "refresh_token", refresh_token: tokens.refresh, resource: server.resource,
       });
     } catch (failure) {
+      if ((this.getMeta("stream", {}) || {}).approvedAt !== grant) throw new Superseded();
       if (failure instanceof Refused) throw new Ended();
       throw failure;
     }
-    this.saveTokens(reply, tokens, Date.now());
+    if ((this.getMeta("stream", {}) || {}).approvedAt !== grant) throw new Superseded();
+    this.saveTokens(reply, tokens, this.now(), grant);
     return this.getMeta("tokens", null);
   }
 
@@ -622,32 +861,43 @@ export class StreamInbox extends DurableObject {
     return { result: reply.result, sessionId: response.headers.get("Mcp-Session-Id") };
   }
 
-  /// What the tool returned, taken into the inbox. The first poll after an approval takes nothing older than it:
-  /// by the interactions' times when they have them, else every id it sees is kept as seen and none is taken.
+  /// What the tool returned, taken into the inbox. The first poll after an approval takes nothing older than it (by
+  /// the interactions' times when they have them, else every id it sees is kept as seen); after that every new id is
+  /// taken, whatever its time says. An answer that can't be read is said, with its shape and never its words.
   async take(result, conn, now) {
     const read = interactionsFrom(result);
     if (read.error) return { lastError: `Stream's tool said: ${read.error}` };
+    if (!read.items) {
+      return { lastError: "Stream's answer couldn't be read: the relay found no list of interactions in it.", answerShape: read.shape };
+    }
     const items = read.items;
     for (const item of items) item.hash = await textHash(item.text);
     let added = 0;
+    const firstPoll = !conn.baselineDone;
     for (const item of items) {
-      if (this.has(item.id)) continue;
-      const old = item.at !== null ? item.at < conn.since : !conn.baselineDone;
+      if (this.has(item.id)) {
+        if (this.getMeta("idsMatch", false) === false) {
+          const existing = this.sql.exec("SELECT source FROM captures WHERE id = ? LIMIT 1", item.id).toArray()[0];
+          if (existing && existing.source === "webhook") this.setMeta("idsMatch", true);
+        }
+        continue;
+      }
+      const old = firstPoll && (item.at === null || item.at < conn.since);
       if (old || !item.text.trim()) {
-        this.markSeen(item.id, "stream", now);
+        this.markSeen(item.id, "stream", this.now());
         continue;
       }
       if (this.keep({ id: item.id, text: item.text, body: JSON.stringify(item.raw), hash: item.hash, source: "stream",
-        fields: item.fields }) === "accepted") added += 1;
+        fields: item.fields, said: item.at }) === "accepted") added += 1;
     }
     return {
-      baselineDone: true, lastError: null, added,
+      baselineDone: true, lastError: null, added, answerShape: null,
       interactionFields: items.length ? items[0].fields : conn.interactionFields || null,
     };
   }
 }
 
-// MARK: - Reading Stream's MCP answers
+// MARK: - Reading Stream's answers
 
 /// The tool's arguments from its input schema: a count-like argument asks for 100 (Stream's most); a required one
 /// takes its default. Others are left to Stream (its default is the last 7 days).
@@ -667,14 +917,20 @@ function argumentsFor(schema) {
 }
 
 /// The interactions in a `tools/call` result, read tolerantly: from `structuredContent`, or each text content as
-/// JSON; an array of objects, bare or under a key. Each needs words; an id (else one from its words and time) and a
-/// time are taken from the first field that has one.
+/// JSON; an array of objects, bare or under a key. `items` is null when nothing in the answer is such a list (then
+/// `shape` says what came: content types, whether each text was JSON, the top-level keys, never words).
 function interactionsFrom(result) {
   const candidates = [];
   if (result && result.structuredContent !== undefined) candidates.push(result.structuredContent);
+  const json = [];
   for (const part of (result && Array.isArray(result.content)) ? result.content : []) {
     if (part && part.type === "text" && typeof part.text === "string") {
-      try { candidates.push(JSON.parse(part.text)); } catch { /* plain words: not an interaction list */ }
+      try {
+        candidates.push(JSON.parse(part.text));
+        json.push(true);
+      } catch {
+        json.push(false);
+      }
     }
   }
   for (const value of candidates) {
@@ -685,7 +941,16 @@ function interactionsFrom(result) {
     if (isPlainObject(value) && value.error) return { error: String(value.error.message || value.error) };
   }
   if (result && result.isError) return { error: "an error with no words" };
-  return { items: [] };
+  const content = (result && Array.isArray(result.content)) ? result.content : [];
+  return {
+    items: null,
+    shape: {
+      contentTypes: content.map((part) => (part && typeof part.type === "string" ? part.type : typeof part)),
+      json,
+      structured: Boolean(result && result.structuredContent !== undefined),
+      keys: [...new Set(candidates.flatMap((value) => (isPlainObject(value) ? Object.keys(value) : [])))].slice(0, 32),
+    },
+  };
 }
 
 function objectList(value, depth = 0) {
@@ -701,14 +966,16 @@ function objectList(value, depth = 0) {
   return null;
 }
 
+const TIME_FIELDS = ["created_at", "createdAt", "timestamp", "time", "date", "saved_at", "savedAt", "occurred_at",
+  "occurredAt", "started_at", "startedAt", "updated_at", "updatedAt"];
+
 function interaction(raw) {
   const text = first(raw, ["text", "transcript", "content", "body", "note", "message", "value"], (v) => typeof v === "string");
   if (typeof text !== "string") return null;
-  const at = parseTime(first(raw, ["created_at", "createdAt", "timestamp", "time", "date", "saved_at", "savedAt",
-    "occurred_at", "occurredAt", "started_at", "startedAt", "updated_at", "updatedAt"], (v) => parseTime(v) !== null));
+  const at = parseTime(first(raw, TIME_FIELDS, (v) => parseTime(v) !== null));
   let id = interactionID(first(raw, ["interaction_id", "interactionId", "id", "uuid"], (v) => interactionID(v) !== null));
   if (!id) id = `words-${simpleHash(`${text}|${at || ""}`)}`;
-  return { id, text, at, raw, fields: Object.keys(raw).slice(0, 64) };
+  return { id, text, at: at === undefined ? null : at, raw, fields: Object.keys(raw).slice(0, 64) };
 }
 
 function first(object, keys, accept) {
@@ -718,29 +985,51 @@ function first(object, keys, accept) {
   return undefined;
 }
 
+/// A moment, only when it can't be misread: epoch seconds or milliseconds, or an ISO 8601 time with its zone. A date
+/// alone, or a time with no zone, would be read as UTC and could be hours off: it counts as no time.
 function parseTime(value) {
-  if (typeof value === "number" && Number.isFinite(value)) return value > 100_000_000_000 ? value : value * 1000;
-  if (typeof value === "string" && value.trim()) {
-    const ms = Date.parse(value);
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) return value > 100_000_000_000 ? value : value * 1000;
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/i.test(value.trim())) {
+    const ms = Date.parse(value.trim());
     return Number.isNaN(ms) ? null : ms;
   }
   return null;
 }
 
-/// A JSON-RPC answer: the body as JSON, or the server-sent event carrying the message with this id.
+/// A JSON-RPC answer: the body as JSON, or, from a stream of server-sent events, the event carrying the message with
+/// this id, read as it arrives (a server may keep the stream open after it).
 async function rpcReply(response, id) {
   const type = response.headers.get("Content-Type") || "";
-  const text = await response.text();
-  if (!type.includes("text/event-stream")) return JSON.parse(text);
-  for (const event of text.split(/\r?\n\r?\n/)) {
-    const data = event.split(/\r?\n/).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trimStart()).join("\n");
-    if (!data) continue;
-    try {
-      const message = JSON.parse(data);
-      if (message && message.id === id) return message;
-    } catch { /* not this one */ }
+  if (!type.includes("text/event-stream")) return JSON.parse(await response.text());
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (value) buffer += decoder.decode(value, { stream: true });
+    for (let end = buffer.search(/\r?\n\r?\n/); end >= 0; end = buffer.search(/\r?\n\r?\n/)) {
+      const message = eventMessage(buffer.slice(0, end));
+      buffer = buffer.slice(end).replace(/^\r?\n\r?\n/, "");
+      if (message && message.id === id) {
+        reader.cancel().catch(() => {});
+        return message;
+      }
+    }
+    if (done) break;
   }
+  const message = eventMessage(buffer);
+  if (message && message.id === id) return message;
   throw new Trouble("Stream's server sent no answer.");
+}
+
+function eventMessage(event) {
+  const data = event.split(/\r?\n/).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trimStart()).join("\n");
+  if (!data) return null;
+  try {
+    return JSON.parse(data);
+  } catch {
+    return null;
+  }
 }
 
 // MARK: - OAuth helpers
@@ -757,6 +1046,7 @@ async function discover(mcpUrl) {
       body: JSON.stringify({ jsonrpc: "2.0", id: 0, method: "initialize", params: { protocolVersion: MCP_PROTOCOL, capabilities: {}, clientInfo: { name: CLIENT_NAME, version: "1" } } }),
     });
     if (probe.status === 401) named = resourceMetadataURL(probe.headers.get("WWW-Authenticate"));
+    probe.body && probe.body.cancel().catch(() => {});
   } catch { /* the well-known places next */ }
   let resource = null;
   for (const candidate of unique([named, wellKnown(mcp, "oauth-protected-resource"), `${mcp.origin}/.well-known/oauth-protected-resource`])) {
@@ -809,7 +1099,8 @@ async function authorizationServerMetadata(issuer) {
   return null;
 }
 
-/// Dynamic client registration (RFC 7591): a public client, no secret.
+/// Dynamic client registration (RFC 7591). A public client is asked for; a server that hands back a secret gets it
+/// back the way its registration says (`token_endpoint_auth_method`).
 async function register(server, redirectUri) {
   const response = await timedFetch(server.registrationEndpoint, {
     method: "POST",
@@ -821,19 +1112,27 @@ async function register(server, redirectUri) {
   });
   const reply = await response.json().catch(() => null);
   if (!response.ok || !reply || !reply.client_id) throw new Trouble(`Stream's sign-in didn't register this relay (${response.status}).`);
-  return { clientId: reply.client_id, redirectUri, issuer: server.issuer, registeredAt: Date.now() };
+  const secret = typeof reply.client_secret === "string" && reply.client_secret ? reply.client_secret : null;
+  const named = typeof reply.token_endpoint_auth_method === "string" ? reply.token_endpoint_auth_method : null;
+  return {
+    clientId: reply.client_id, clientSecret: secret,
+    authMethod: named || (secret ? "client_secret_basic" : "none"),
+    redirectUri, issuer: server.issuer, registeredAt: Date.now(),
+  };
 }
 
-/// The token endpoint. A 400 or 401 (`invalid_grant`, a revoked token) is a refusal; anything else is trouble to try
-/// again next minute.
-async function tokenRequest(server, fields) {
+/// The token endpoint, with the client as its registration said. A 400 or 401 (`invalid_grant`, a revoked token, a
+/// client the server forgot) is a refusal; anything else is trouble to try again next minute.
+async function tokenRequest(server, client, fields) {
   const body = new URLSearchParams();
+  const headers = { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" };
+  body.set("client_id", client.clientId);
+  if (client.clientSecret && client.authMethod === "client_secret_post") body.set("client_secret", client.clientSecret);
+  if (client.clientSecret && client.authMethod === "client_secret_basic") {
+    headers.Authorization = `Basic ${btoa(`${encodeURIComponent(client.clientId)}:${encodeURIComponent(client.clientSecret)}`)}`;
+  }
   for (const [name, value] of Object.entries(fields)) if (value) body.set(name, value);
-  const response = await timedFetch(server.tokenEndpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
-    body: body.toString(),
-  });
+  const response = await timedFetch(server.tokenEndpoint, { method: "POST", headers, body: body.toString() });
   const reply = await response.json().catch(() => null);
   if (response.status === 400 || response.status === 401) {
     throw new Refused(`Stream refused (${(reply && (reply.error_description || reply.error)) || response.status}).`);
@@ -844,6 +1143,23 @@ async function tokenRequest(server, fields) {
 
 async function pkceChallenge(verifier) {
   return base64url(new Uint8Array(await crypto.subtle.digest("SHA-256", utf8(verifier))));
+}
+
+/// Apple's provider token: `{"alg":"ES256","kid":<key id>}.{"iss":<team id>,"iat":<seconds>}`, signed with the .p8
+/// key (PKCS#8, P-256). WebCrypto's ECDSA signature is the raw r||s JWS wants.
+async function signProviderToken(pem, keyId, teamId, issuedAt) {
+  const key = await crypto.subtle.importKey("pkcs8", pemBody(pem), { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
+  const header = base64url(utf8(JSON.stringify({ alg: "ES256", kid: keyId })));
+  const claims = base64url(utf8(JSON.stringify({ iss: teamId, iat: issuedAt })));
+  const signature = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key, utf8(`${header}.${claims}`));
+  return `${header}.${claims}.${base64url(new Uint8Array(signature))}`;
+}
+
+/// The key's bytes from its PEM text (with real new lines, or `\n` written out, as a secret may hold it).
+function pemBody(pem) {
+  const text = String(pem || "").replace(/\\n/g, "\n");
+  const body = text.replace(/-----BEGIN [^-]+-----/, "").replace(/-----END [^-]+-----/, "").replace(/[^A-Za-z0-9+/=]/g, "");
+  return Uint8Array.from(atob(body), (c) => c.charCodeAt(0));
 }
 
 /// Metadata: a GET that may follow a redirect (nothing secret rides on it).
@@ -867,7 +1183,7 @@ async function timedFetch(url, init, redirect = "manual") {
   }
 }
 
-/// `https`, or plain `http` on this machine (the tests' pretend Stream).
+/// `https`, or plain `http` on this machine (the tests' pretend Stream and Apple).
 function safeURL(value) {
   try {
     const url = new URL(value);
@@ -877,7 +1193,8 @@ function safeURL(value) {
   }
 }
 
-/// Trouble is said in status and tried again next minute; a refusal or a second 401 ends the connection.
+/// Trouble is said in status and tried again next minute; a refusal or a second 401 ends the connection; a poll whose
+/// sign-in was replaced while Stream answered stops quietly.
 class Trouble extends Error {}
 class Refused extends Trouble {}
 class Unauthorized extends Error {
@@ -888,6 +1205,9 @@ class SessionGone extends Error {
 }
 class Ended extends Error {
   constructor() { super(ENDED); }
+}
+class Superseded extends Error {
+  constructor() { super("A newer sign-in replaced this one."); }
 }
 
 function words(error) {
@@ -918,7 +1238,7 @@ async function digest(text) {
   return new Uint8Array(await crypto.subtle.digest("SHA-256", utf8(text)));
 }
 
-/// The words, lowered and with their spaces folded, hashed: how the two sources' copies of one capture are matched.
+/// The words, lowered and with their spaces folded, hashed: how the two routes' copies of one capture are matched.
 async function textHash(text) {
   const folded = String(text || "").trim().toLowerCase().replace(/\s+/g, " ");
   return folded ? hex(await digest(folded)) : null;

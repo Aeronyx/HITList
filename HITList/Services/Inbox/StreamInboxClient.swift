@@ -16,8 +16,17 @@ struct StreamInboxClient {
         return StreamInboxClient(session: URLSession(configuration: configuration))
     }
 
-    func claim(device: String, link: InboxLink) async throws -> InboxClaimReply {
-        try await send(InboxAPI.claim(device: device, link: link), as: InboxClaimReply.self)
+    func claim(device: String, push: InboxPushRegistration?, link: InboxLink) async throws -> InboxClaimReply {
+        try await send(InboxAPI.claim(device: device, push: push, link: link), as: InboxClaimReply.self)
+    }
+
+    /// The relay's rule, for every device. A relay from before the rule moved to it answers 404: `relayTooOld`.
+    func setSettings(_ settings: InboxSettings, link: InboxLink) async throws -> InboxSettings {
+        do {
+            return try await send(InboxAPI.settings(settings, link: link), as: InboxSettingsReply.self).settings
+        } catch StreamInboxProblem.notARelay {
+            throw StreamInboxProblem.relayTooOld
+        }
     }
 
     func ack(ids: [String], link: InboxLink) async throws -> InboxAckReply {
@@ -60,7 +69,7 @@ struct StreamInboxClient {
 }
 
 /// What went wrong, in words for Settings. None names how HITList syncs (`StreamRingSettingsTests`).
-enum StreamInboxProblem: Error, Equatable {
+enum StreamInboxProblem: Error, Equatable, Sendable {
     case notALink
     case offline
     case unreachable
@@ -70,6 +79,10 @@ enum StreamInboxProblem: Error, Equatable {
     case relayTrouble(Int)
     case unreadable
     case keychain
+    /// The Keychain couldn't be read just now (locked before the first unlock after a restart): not a missing key.
+    case keyUnavailable
+    /// The relay is older than what HITList asked of it: setup.sh again redeploys it.
+    case relayTooOld
     case storeUnavailable
     /// Captures that couldn't be made into tasks this time (a save failed): they stay in the relay.
     case notSaved(Int)
@@ -106,6 +119,8 @@ enum StreamInboxProblem: Error, Equatable {
         case .relayTrouble(let code): "Your relay had a problem (error \(code)). Captures wait there for next time."
         case .unreadable: "Your relay's answer couldn't be read. Run setup.sh again to update it."
         case .keychain: "This device couldn't keep the inbox key in its Keychain."
+        case .keyUnavailable: "This device's Keychain can't be read until it is unlocked. HITList checks again then."
+        case .relayTooOld: "Your relay is older than this switch. Run setup.sh again to update it."
         case .storeUnavailable: "HITList couldn't open your tasks, so captures wait in your relay."
         case .notSaved(let count):
             count == 1

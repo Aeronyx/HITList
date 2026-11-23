@@ -72,6 +72,8 @@ final class StreamInboxFakeRelay: @unchecked Sendable {
         var id: String
         var text: String
         var receivedAt: Date
+        /// When it was said (Stream's own time), if not when it arrived.
+        var said: Date?
         var claimedBy: String?
         var claimedAt: Date?
     }
@@ -83,10 +85,10 @@ final class StreamInboxFakeRelay: @unchecked Sendable {
         var body: Data
         var authorization: String?
 
+        var json: [String: Any] { (try? JSONSerialization.jsonObject(with: body) as? [String: Any]) ?? [:] }
+
         /// An ack's ids.
-        var ids: [String]? {
-            (try? JSONSerialization.jsonObject(with: body) as? [String: Any])?["ids"] as? [String]
-        }
+        var ids: [String]? { json["ids"] as? [String] }
     }
 
     let host: String
@@ -100,6 +102,10 @@ final class StreamInboxFakeRelay: @unchecked Sendable {
     private var acksFailing = false
     private var lastReceivedAt: Date?
     private var stream: [String: Any]?
+    private var webhook: [String: Any] = ["lastReceivedAt": NSNull(), "lastResult": NSNull(), "lastFields": [String]()]
+    private var rule = InboxSettings(onlyStartingWithTask: false)
+    private var pushKey = false
+    private var tokens: [String: String] = [:]
 
     static let demoHost = "demo-relay.example"
     static let demoKey = "demo0000demo1111demo2222demo3333demo4444demo5555demo6666demo7777"
@@ -121,26 +127,43 @@ final class StreamInboxFakeRelay: @unchecked Sendable {
         relay.add("demo-1", "Call the dentist tomorrow at 9am p2.", at: now.addingTimeInterval(-300))
         let approved = now.addingTimeInterval(-Double(90 - daysLeft) * 86_400)
         relay.setStream(connected: daysLeft > 0, approvedAt: approved, lastPollAt: now.addingTimeInterval(-40))
+        relay.pushConfigured = true
         return relay
     }
 
     var link: String { "https://\(host)/#\(key)" }
     var client: StreamInboxClient { StreamInboxClient(session: session) }
 
-    func add(_ id: String, _ text: String, at date: Date = Date()) {
+    /// A capture waiting, as the relay keeps it (an older relay's: the rule isn't applied here, so a device's own guard
+    /// is what is tested).
+    func add(_ id: String, _ text: String, at date: Date = Date(), said: Date? = nil) {
         locked {
-            waiting.append(Capture(id: id, text: text, receivedAt: date))
+            waiting.append(Capture(id: id, text: text, receivedAt: date, said: said))
             lastReceivedAt = date
         }
     }
 
-    func setStream(connected: Bool, approvedAt: Date, lastPollAt: Date?) {
+    func setStream(connected: Bool, approvedAt: Date, lastPollAt: Date?, lastError: String? = nil, refreshable: Bool? = true) {
         locked {
             stream = ["connected": connected, "approvedAt": Self.iso(approvedAt),
                       "expiresAt": Self.iso(approvedAt.addingTimeInterval(90 * 86_400)),
-                      "lastPollAt": Self.json(lastPollAt.map(Self.iso)), "lastError": NSNull(),
+                      "lastPollAt": Self.json(lastPollAt.map(Self.iso)), "lastError": Self.json(lastError),
+                      "refreshable": Self.json(refreshable),
                       "toolArguments": ["limit", "days"], "interactionFields": ["id", "text", "created_at"]]
         }
+    }
+
+    func setWebhook(result: String?, at date: Date = Date()) {
+        locked { webhook = ["lastReceivedAt": Self.iso(date), "lastResult": Self.json(result), "lastFields": ["text", "interaction_id"]] }
+    }
+
+    /// The relay's rule, as a device set it.
+    var settings: InboxSettings { locked { rule } }
+
+    /// Whether this relay has an Apple push key (its wake-ups).
+    var pushConfigured: Bool {
+        get { locked { pushKey } }
+        set { locked { pushKey = newValue } }
     }
 
     var isDown: Bool {
@@ -187,16 +210,24 @@ final class StreamInboxFakeRelay: @unchecked Sendable {
             switch (method, path) {
             case ("POST", InboxAPI.Endpoint.claim.rawValue):
                 guard let device = json["device"] as? String, !device.isEmpty else { return reply(400, ["error": "device"]) }
+                if let token = (json["push"] as? [String: Any])?["token"] as? String { tokens[device] = token }
                 var items: [[String: Any]] = []
                 for index in waiting.indices.sorted(by: { waiting[$0].receivedAt < waiting[$1].receivedAt }) {
                     let capture = waiting[index]
-                    let free = capture.claimedAt.map { now.timeIntervalSince($0) > 600 } ?? true
+                    let free = capture.claimedAt.map { now.timeIntervalSince($0) > 30 * 60 } ?? true
                     guard free || capture.claimedBy == device, items.count < InboxAPI.claimLimit else { continue }
                     waiting[index].claimedBy = device
                     waiting[index].claimedAt = now
-                    items.append(["id": capture.id, "text": capture.text, "receivedAt": Self.iso(capture.receivedAt)])
+                    items.append(["id": capture.id, "text": capture.text, "receivedAt": Self.iso(capture.receivedAt),
+                                  "capturedAt": Self.iso(capture.said ?? capture.receivedAt)])
                 }
-                return reply(200, ["items": items, "lastReceivedAt": Self.json(lastReceivedAt.map(Self.iso))])
+                return reply(200, ["items": items, "lastReceivedAt": Self.json(lastReceivedAt.map(Self.iso)),
+                                   "settings": ["onlyStartingWithTask": rule.onlyStartingWithTask],
+                                   "push": ["configured": pushKey, "registered": tokens[device] != nil]])
+            case ("POST", InboxAPI.Endpoint.settings.rawValue):
+                guard let on = json["onlyStartingWithTask"] as? Bool else { return reply(400, ["error": "onlyStartingWithTask"]) }
+                rule = InboxSettings(onlyStartingWithTask: on)
+                return reply(200, ["settings": ["onlyStartingWithTask": on]])
             case ("POST", InboxAPI.Endpoint.ack.rawValue):
                 if acksFailing { return reply(500, ["error": "The relay had a problem."]) }
                 let ids = Set(json["ids"] as? [String] ?? [])
@@ -207,8 +238,10 @@ final class StreamInboxFakeRelay: @unchecked Sendable {
             case ("GET", InboxAPI.Endpoint.status.rawValue):
                 return reply(200, ["pending": waiting.count, "lastReceivedAt": Self.json(lastReceivedAt.map(Self.iso)),
                                    "lastSource": "stream", "lastFields": ["id", "text", "created_at"],
-                                   "webhook": ["lastReceivedAt": NSNull(), "lastResult": NSNull(), "lastFields": [String]()],
-                                   "stream": Self.json(stream)])
+                                   "webhook": webhook, "stream": Self.json(stream),
+                                   "settings": ["onlyStartingWithTask": rule.onlyStartingWithTask],
+                                   "push": ["configured": pushKey, "devices": tokens.count, "lastSentAt": NSNull(),
+                                            "lastError": NSNull()]])
             case ("POST", InboxAPI.Endpoint.test.rawValue):
                 let id = "test-\(UUID().uuidString.prefix(8).lowercased())"
                 waiting.append(Capture(id: id, text: InboxAPI.testText, receivedAt: now))
