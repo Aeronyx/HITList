@@ -6,9 +6,28 @@ import Security
 /// its own. The relay's address, the "starts with Task" rule, the device's own id and what this device has added live in
 /// `AppGroup.defaults` (`StreamInboxSettings`); a side store keeps all of it apart from the real store's.
 protocol StreamInboxKeyStore: AnyObject {
-    func read() -> String?
+    func read() -> StreamInboxKeyRead
     func save(_ key: String) throws
     func remove()
+}
+
+/// What reading the key gave. Only `notFound` means the key isn't on this device; `unavailable` (the Keychain locked
+/// before the first unlock after a restart, or any other status) means "not now" (review, finding 9).
+enum StreamInboxKeyRead: Equatable {
+    case found(String)
+    case notFound
+    case unavailable(OSStatus)
+
+    init(status: OSStatus, data: Data?) {
+        switch status {
+        case errSecSuccess:
+            if let data, let key = String(data: data, encoding: .utf8) { self = .found(key) } else { self = .notFound }
+        case errSecItemNotFound:
+            self = .notFound
+        default:
+            self = .unavailable(status)
+        }
+    }
 }
 
 /// The inbox key as a generic password named for this launch's store, so a Debug side store never reads or replaces
@@ -38,13 +57,13 @@ final class KeychainInboxKey: StreamInboxKeyStore {
         return query
     }
 
-    func read() -> String? {
+    func read() -> StreamInboxKeyRead {
         var query = query
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         var item: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess, let data = item as? Data else { return nil }
-        return String(data: data, encoding: .utf8)
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        return StreamInboxKeyRead(status: status, data: item as? Data)
     }
 
     func save(_ key: String) throws {
@@ -70,7 +89,7 @@ final class MemoryInboxKey: StreamInboxKeyStore {
         self.key = key
     }
 
-    func read() -> String? { key }
+    func read() -> StreamInboxKeyRead { key.map(StreamInboxKeyRead.found) ?? .notFound }
     func save(_ key: String) throws { self.key = key }
     func remove() { key = nil }
 }
@@ -90,8 +109,35 @@ struct StreamInboxSettings {
     static let lastCaptureKey = "streamInbox.lastCaptureAt"
     static let addedDayKey = "streamInbox.addedDay"
     static let addedCountKey = "streamInbox.addedCount"
+    /// The capture being added right now, written before its save (review, finding 5).
+    static let addingKey = "streamInbox.addingNow"
+    /// This device's push token, in hex, for the relay's wake-ups.
+    static let pushTokenKey = "streamInbox.pushToken"
 
     static let addedLimit = 500
+
+    /// A capture whose task is being saved: if the app is killed between the save and the id being written down, the
+    /// next check finds the task by its title and time instead of adding it again.
+    struct Adding: Codable, Equatable {
+        let id: String
+        let title: String
+        let startedAt: Date
+
+        /// The task this note stands for: its title, made from a moment before the save to a few minutes after.
+        func couldHaveMade(title: String, createdAt: Date) -> Bool {
+            title == self.title && createdAt >= startedAt.addingTimeInterval(-5) && createdAt <= startedAt.addingTimeInterval(300)
+        }
+    }
+
+    var addingNow: Adding? {
+        get { defaults.data(forKey: Self.addingKey).flatMap { try? JSONDecoder().decode(Adding.self, from: $0) } }
+        nonmutating set { defaults.set(newValue.flatMap { try? JSONEncoder().encode($0) }, forKey: Self.addingKey) }
+    }
+
+    var pushToken: String? {
+        get { defaults.string(forKey: Self.pushTokenKey) }
+        nonmutating set { defaults.set(newValue, forKey: Self.pushTokenKey) }
+    }
 
     var origin: String? {
         get { defaults.string(forKey: Self.originKey) }

@@ -31,18 +31,24 @@ final class StreamInboxTests: XCTestCase {
 
     private struct SaveFailed: Error {}
 
-    private func inbox(failing: Set<String> = [], storeIsReal: Bool = true) -> StreamInbox {
+    /// A save that fails as `TaskActions.create`'s does: the task is inserted, then the save throws.
+    private static func failingSave(_ text: String, in context: ModelContext) throws -> UUID {
+        context.insert(TaskItem(title: text))
+        throw SaveFailed()
+    }
+
+    private func inbox(failing: Set<String> = [], storeIsReal: Bool = true, active: Bool = true) -> StreamInbox {
         StreamInbox(container: container, defaults: defaults, keyStore: MemoryInboxKey(), client: relay.client,
-                    storeIsReal: { storeIsReal },
-                    addTask: { text, context in
-                        if failing.contains(text) { throw SaveFailed() }
-                        return try StreamInbox.addThroughQuickAdd(text, context)
+                    storeIsReal: { storeIsReal }, isActive: { active },
+                    addTask: { text, now, context in
+                        if failing.contains(text) { return try Self.failingSave(text, in: context) }
+                        return try StreamInbox.addThroughQuickAdd(text, now, context)
                     },
                     log: { [weak self] line, _ in self?.logged.append(line) })
     }
 
-    private func connected(failing: Set<String> = [], storeIsReal: Bool = true) async throws -> StreamInbox {
-        let inbox = inbox(failing: failing, storeIsReal: storeIsReal)
+    private func connected(failing: Set<String> = [], storeIsReal: Bool = true, active: Bool = true) async throws -> StreamInbox {
+        let inbox = inbox(failing: failing, storeIsReal: storeIsReal, active: active)
         let problem = await inbox.connect(linkText: relay.link, checkAfter: false)
         XCTAssertNil(problem)
         XCTAssertTrue(inbox.isConnected)
@@ -102,7 +108,7 @@ final class StreamInboxTests: XCTestCase {
         relay.add("c", "Task: fail this one")
         relay.add("test-1", InboxAPI.testText)
         let inbox = try await connected(failing: ["Fail this one"])
-        inbox.setOnlyStartingWithTask(true)
+        _ = await inbox.setOnlyStartingWithTask(true)
         let result = await inbox.check(.checkNow)
         XCTAssertEqual(result.added, 2, "a, and the relay's test capture whatever the rule says")
         XCTAssertEqual(result.skipped, 1, "b is left in Stream by the rule")
@@ -119,14 +125,14 @@ final class StreamInboxTests: XCTestCase {
         relay.add("b", "Remember where I parked")
         relay.add("c", "Tasks are piling up")
         let inbox = try await connected()
-        inbox.setOnlyStartingWithTask(true)
+        _ = await inbox.setOnlyStartingWithTask(true)
         XCTAssertTrue(defaults.bool(forKey: StreamInboxSettings.onlyStartingWithTaskKey), "kept")
         let result = await inbox.check(.checkNow)
         XCTAssertEqual(try tasks().map(\.title), ["Book the car service"])
         XCTAssertEqual(result.skipped, 2)
         XCTAssertEqual(relay.acks, [["a", "b", "c"]], "the others are handed over too: they stay only in Stream")
 
-        inbox.setOnlyStartingWithTask(false)
+        _ = await inbox.setOnlyStartingWithTask(false)
         relay.add("d", "Remember where I parked.")
         await inbox.check(.checkNow)
         XCTAssertEqual(try tasks().map(\.title), ["Book the car service", "Remember where I parked"], "rule off: every capture")
@@ -169,26 +175,57 @@ final class StreamInboxTests: XCTestCase {
         XCTAssertNil(defaults.stringArray(forKey: StreamInboxSettings.unackedKey).flatMap { $0.isEmpty ? nil : $0 })
     }
 
-    func testASaveThatFailsIsNotAckedAndComesBack() async throws {
-        relay.add("a", "Pay the water bill")
-        var failing: Set<String> = ["Pay the water bill"]
+    /// Review finding 5: the stub inserts, as `TaskActions.create` does, before its save throws. What that capture
+    /// inserted (the task, and a Group it made) is taken out again; George's own unsaved edits are left alone; the retry
+    /// adds it once.
+    func testASaveThatFailsIsNotAckedAndLeavesNothingBehind() async throws {
+        relay.add("a", "Water the plants #Garden")
+        var failing = true
         let inbox = StreamInbox(container: container, defaults: defaults, keyStore: MemoryInboxKey(), client: relay.client,
                                 storeIsReal: { true },
-                                addTask: { text, context in
-                                    if failing.contains(text) { throw SaveFailed() }
-                                    return try StreamInbox.addThroughQuickAdd(text, context)
+                                addTask: { text, now, context in
+                                    if failing {
+                                        let group = Project(name: "Garden")
+                                        context.insert(group)
+                                        context.insert(TaskItem(title: "Water the plants", project: group))
+                                        throw SaveFailed()
+                                    }
+                                    return try StreamInbox.addThroughQuickAdd(text, now, context)
                                 },
                                 log: { _, _ in })
         _ = await inbox.connect(linkText: relay.link, checkAfter: false)
+        let context = container.mainContext
+        context.insert(TaskItem(title: "George's unsaved draft"))
         var result = await inbox.check(.checkNow)
         XCTAssertEqual(result.failed, 1)
         XCTAssertEqual(relay.acks, [], "nothing handled, nothing acked")
         XCTAssertEqual(relay.waitingIDs, ["a"])
-        failing = []
+        XCTAssertEqual(context.insertedModelsArray.count, 1, "only George's draft waits to be saved")
+        try context.save()
+        XCTAssertEqual(try tasks().map(\.title), ["George's unsaved draft"], "a later save writes nothing of the capture")
+        XCTAssertEqual(try context.fetch(FetchDescriptor<Project>()).filter { $0.name == "Garden" }.count, 0, "nor its Group")
+        failing = false
         result = await inbox.check(.checkNow)
         XCTAssertEqual(result.added, 1, "offered again to this device at once (its own claim), and saved this time")
         XCTAssertEqual(relay.acks, [["a"]])
         XCTAssertNil(inbox.problem)
+        XCTAssertEqual(try tasks().map(\.title), ["George's unsaved draft", "Water the plants"], "once")
+        XCTAssertEqual(try context.fetch(FetchDescriptor<Project>()).filter { $0.name == "Garden" }.count, 1)
+    }
+
+    /// Review finding 5, the kill window: a task saved, then the app killed before the capture's id was written down.
+    /// The note made before the save finds the task by its title and time, so the capture is acked, not added again.
+    func testAKillBetweenTheSaveAndItsNoteAddsNothingTwice() async throws {
+        relay.add("k", "Book the car service")
+        let inbox = try await connected()
+        let started = Date()
+        _ = try StreamInbox.addThroughQuickAdd("Book the car service", started, container.mainContext)
+        StreamInboxSettings(defaults: defaults).addingNow = .init(id: "k", title: "Book the car service", startedAt: started)
+        let result = await inbox.check(.checkNow)
+        XCTAssertEqual(result.added, 0)
+        XCTAssertEqual(try tasks().map(\.title), ["Book the car service"], "one task, not two")
+        XCTAssertEqual(relay.acks, [["k"]])
+        XCTAssertNil(StreamInboxSettings(defaults: defaults).addingNow, "the note is cleared")
     }
 
     func testARelayThatIsDownLeavesEverythingForNextTimeAndSaysSo() async throws {
@@ -277,7 +314,7 @@ final class StreamInboxTests: XCTestCase {
             var reads = 0
             let key: String
             init(_ key: String) { self.key = key }
-            func read() -> String? { reads += 1; return key }
+            func read() -> StreamInboxKeyRead { reads += 1; return .found(key) }
             func save(_ key: String) throws {}
             func remove() {}
         }
@@ -296,7 +333,7 @@ final class StreamInboxTests: XCTestCase {
 
     func testATestCaptureArrivesAsATask() async throws {
         let inbox = try await connected()
-        inbox.setOnlyStartingWithTask(true)
+        _ = await inbox.setOnlyStartingWithTask(true)
         let sent = await inbox.sendTest()
         XCTAssertNil(sent)
         XCTAssertEqual(try tasks().map(\.title), [InboxAPI.testText])
@@ -344,10 +381,10 @@ final class StreamInboxTests: XCTestCase {
         try XCTSkipIf(ProcessInfo.processInfo.environment["HITLIST_UNSIGNED"] != nil, "unsigned builds have no keychain access")
         let store = KeychainInboxKey(account: "xctest-\(UUID().uuidString)")
         defer { store.remove() }
-        XCTAssertNil(store.read())
+        XCTAssertEqual(store.read(), .notFound)
         try store.save("first-key-0123456789")
         try store.save("second-key-0123456789")
-        XCTAssertEqual(store.read(), "second-key-0123456789", "a new key replaces the old")
+        XCTAssertEqual(store.read(), .found("second-key-0123456789"), "a new key replaces the old")
         var query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
                                     kSecAttrService as String: KeychainInboxKey.service,
                                     kSecAttrAccount as String: store.account,
@@ -361,6 +398,143 @@ final class StreamInboxTests: XCTestCase {
         XCTAssertEqual(accessible, kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String)
         XCTAssertNotEqual(KeychainInboxKey().account, store.account, "each store's key is its own")
         store.remove()
-        XCTAssertNil(store.read())
+        XCTAssertEqual(store.read(), .notFound)
+        XCTAssertEqual(StreamInboxKeyRead(status: errSecInteractionNotAllowed, data: nil), .unavailable(errSecInteractionNotAllowed),
+                       "a locked Keychain is not a missing key")
+    }
+
+    // MARK: Review of 18e36cb8
+
+    /// Finding 1: a capture said at 22:30 and taken at 07:45 means "tomorrow" as of 22:30.
+    func testACaptureIsReadAsOfWhenItWasSaid() async throws {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let lastNight = today.addingTimeInterval(-90 * 60)
+        relay.add("late", "Call the dentist tomorrow at 9am", said: lastNight)
+        relay.add("ahead", "Buy milk tomorrow", said: Date().addingTimeInterval(3 * 86_400))
+        let inbox = try await connected()
+        await inbox.check(.checkNow)
+        XCTAssertEqual(try task("Call the dentist").dueDate, calendar.date(bySettingHour: 9, minute: 0, second: 0, of: today),
+                       "tomorrow, as of the evening it was said: today")
+        XCTAssertEqual(try task("Buy milk").dueDate.map(calendar.startOfDay), calendar.date(byAdding: .day, value: 1, to: today),
+                       "a time ahead of now is read as now")
+    }
+
+    /// Finding 3: the relay's own trouble (an answer it couldn't read, a webhook body it couldn't read, a sign-in it can't
+    /// renew) is said on the status line while connected, not only behind the gesture.
+    func testTheRelaysTroubleIsSaidOnTheStatusLine() async throws {
+        let inbox = try await connected()
+        XCTAssertNil(inbox.relayTrouble)
+        relay.setStream(connected: true, approvedAt: Date(), lastPollAt: Date(),
+                        lastError: "Stream's answer couldn't be read: the relay found no list of interactions in it.")
+        await inbox.refreshStatus()
+        let trouble = try XCTUnwrap(inbox.relayTrouble)
+        XCTAssertTrue(trouble.contains("couldn't be read"), trouble)
+        let line = StreamRingWords.status(problem: nil, relayTrouble: trouble, source: .everyMinute, lastCapture: nil,
+                                          addedToday: 0, wake: nil, now: Date())
+        XCTAssertTrue(line.contains("couldn't be read"), line)
+        relay.setStream(connected: true, approvedAt: Date(), lastPollAt: Date(), lastError: nil, refreshable: false)
+        await inbox.refreshStatus()
+        XCTAssertEqual(inbox.relayTrouble, StreamRingWords.notRenewable)
+        relay.setStream(connected: false, approvedAt: Date(), lastPollAt: Date())
+        relay.setWebhook(result: "invalid")
+        await inbox.refreshStatus()
+        XCTAssertEqual(inbox.relayTrouble, StreamRingWords.webhookUnreadable)
+    }
+
+    /// Finding 8: the rule is the relay's, one for every device; the switch writes it there, and every claim brings it.
+    func testTheRuleLivesOnTheRelayForEveryDevice() async throws {
+        let mac = try await connected()
+        let otherDefaults = try XCTUnwrap(UserDefaults(suiteName: suite + ".phone"))
+        defer { otherDefaults.removePersistentDomain(forName: suite + ".phone") }
+        let otherContainer = ModelContainerFactory.preview()
+        let phone = StreamInbox(container: otherContainer, defaults: otherDefaults, keyStore: MemoryInboxKey(),
+                                client: relay.client, storeIsReal: { true }, log: { _, _ in })
+        _ = await phone.connect(linkText: relay.link, checkAfter: false)
+        let written = await mac.setOnlyStartingWithTask(true)
+        XCTAssertNil(written)
+        XCTAssertTrue(mac.onlyStartingWithTask)
+        XCTAssertEqual(relay.settings.onlyStartingWithTask, true, "kept by the relay")
+        XCTAssertFalse(phone.onlyStartingWithTask, "the iPhone hasn't asked yet")
+        relay.add("p", "Remember where I parked")
+        relay.add("t", "Task: buy stamps")
+        await phone.check(.checkNow)
+        XCTAssertTrue(phone.onlyStartingWithTask, "the claim brought the relay's rule")
+        XCTAssertEqual(try otherContainer.mainContext.fetch(FetchDescriptor<TaskItem>()).map(\.title), ["Buy stamps"],
+                       "and the iPhone follows it at once")
+    }
+
+    /// Finding 9: a Keychain that can't be read yet (before the first unlock after a restart) is not a missing key.
+    func testALockedKeychainIsNotADisconnect() async throws {
+        final class LockedOnce: StreamInboxKeyStore {
+            var locked = true
+            let key: String
+            init(_ key: String) { self.key = key }
+            func read() -> StreamInboxKeyRead { locked ? .unavailable(errSecInteractionNotAllowed) : .found(key) }
+            func save(_ key: String) throws {}
+            func remove() {}
+        }
+        let keys = LockedOnce(relay.key)
+        defaults.set("https://\(relay.host)", forKey: StreamInboxSettings.originKey)
+        let inbox = StreamInbox(container: container, defaults: defaults, keyStore: keys, client: relay.client,
+                                storeIsReal: { true }, log: { _, _ in })
+        relay.add("a", "Buy milk")
+        let locked = await inbox.check(.checkNow)
+        XCTAssertEqual(locked.problem, .keyUnavailable)
+        XCTAssertTrue(inbox.isConnected, "the relay isn't forgotten")
+        XCTAssertNotNil(defaults.string(forKey: StreamInboxSettings.originKey))
+        XCTAssertFalse(StreamInboxProblem.keyUnavailable.words.isEmpty)
+        keys.locked = false
+        let unlocked = await inbox.check(.checkNow)
+        XCTAssertEqual(unlocked.added, 1)
+    }
+
+    /// Minor: a check in the background (a cold launch for a push or a refresh) doesn't spend its seconds on the relay's
+    /// status.
+    func testABackgroundCheckDoesNotAskForTheStatus() async throws {
+        let inbox = try await connected(active: false)
+        let before = relay.requests.count
+        relay.add("a", "Buy milk")
+        await inbox.check(.launch)
+        let paths = relay.requests.dropFirst(before).map(\.path)
+        XCTAssertFalse(paths.contains(InboxAPI.Endpoint.status.rawValue), "\(paths)")
+        XCTAssertEqual(try tasks().map(\.title), ["Buy milk"])
+    }
+
+    // MARK: Wake-ups
+
+    func testThePushTokenTravelsWithEachClaim() async throws {
+        let inbox = try await connected()
+        StreamInbox.pushTokenArrived(Data([0xAB, 0x12, 0x00, 0xFF]), defaults: defaults)
+        await inbox.check(.checkNow)
+        let claim = try XCTUnwrap(relay.requests.last { $0.path == InboxAPI.Endpoint.claim.rawValue })
+        let push = try XCTUnwrap(claim.json["push"] as? [String: String])
+        XCTAssertEqual(push["token"], "ab1200ff")
+        XCTAssertEqual(push["environment"], "development", "a Debug build's token is a development one")
+        #if os(macOS)
+        XCTAssertEqual(push["platform"], "macOS")
+        #else
+        XCTAssertTrue(["iOS", "iPadOS"].contains(push["platform"] ?? ""))
+        #endif
+    }
+
+    /// A wake-up push (`{"hitlist":{"inbox":1}}`) runs one check and answers only once it has finished; a push for
+    /// anything else (CloudKit's, the engine's) isn't the inbox's.
+    func testAWakePushRunsOneCheckAndAnswersAfterIt() async throws {
+        XCTAssertTrue(StreamInbox.isWakePush(["aps": ["content-available": 1], "hitlist": ["inbox": 1]]))
+        XCTAssertFalse(StreamInbox.isWakePush(["aps": ["content-available": 1], "ck": ["ce": 1]]), "CloudKit's push")
+        XCTAssertFalse(StreamInbox.isWakePush(["aps": ["content-available": 1]]))
+        relay.add("a", "Buy milk")
+        let inbox = try await connected()
+        let claims = relay.requests.filter { $0.path == InboxAPI.Endpoint.claim.rawValue }.count
+        let first = await inbox.handleWakePush()
+        XCTAssertEqual(first, .newData)
+        XCTAssertEqual(relay.requests.filter { $0.path == InboxAPI.Endpoint.claim.rawValue }.count, claims + 1, "one check")
+        XCTAssertEqual(try tasks().map(\.title), ["Buy milk"], "made before the handler answered")
+        let second = await inbox.handleWakePush()
+        XCTAssertEqual(second, .noData, "nothing more waited")
+        relay.isDown = true
+        let third = await inbox.handleWakePush()
+        XCTAssertEqual(third, .failed)
     }
 }

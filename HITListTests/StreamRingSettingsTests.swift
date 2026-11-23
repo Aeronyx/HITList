@@ -66,6 +66,12 @@ final class StreamRingSettingsTests: XCTestCase {
                        "no captures yet")
         XCTAssertEqual(StreamRingWords.status(problem: .offline, source: .everyMinute, lastCapture: now, addedToday: 2, now: now),
                        "This device is offline. Captures wait in your relay.")
+        XCTAssertEqual(StreamRingWords.status(problem: nil, source: .pushed, lastCapture: now, addedToday: 1,
+                                              wake: StreamRingWords.wakeOn("iPhone"), now: now),
+                       "pushed by Stream · last capture just now · 1 added today · wakes this iPhone when you speak")
+        XCTAssertEqual(StreamRingWords.status(problem: nil, relayTrouble: StreamRingWords.webhookUnreadable, source: .pushed,
+                                              lastCapture: now, addedToday: 1, now: now),
+                       StreamRingWords.webhookUnreadable, "the relay's trouble before the usual line")
         // Drawn with each short part kept whole, so a line never ends in "· 3".
         XCTAssertEqual(StreamRingWords.keepingPartsWhole("pushed by Stream, and checked every minute · last capture 5 min ago · 3 added today"),
                        "pushed by Stream, and checked every minute\u{00A0}· last\u{00A0}capture\u{00A0}5\u{00A0}min\u{00A0}ago\u{00A0}· 3\u{00A0}added\u{00A0}today")
@@ -101,8 +107,8 @@ final class StreamRingSettingsTests: XCTestCase {
     func testNothingAFriendReadsSaysADevelopersWord() {
         let now = Date()
         let problems: [StreamInboxProblem] = [.notALink, .offline, .unreachable, .timedOut, .keyRefused, .notARelay,
-                                              .relayTrouble(500), .unreadable, .keychain, .storeUnavailable, .notSaved(1),
-                                              .notSaved(3)]
+                                              .relayTrouble(500), .unreadable, .keychain, .keyUnavailable, .relayTooOld,
+                                              .storeUnavailable, .notSaved(1), .notSaved(3)]
         var words = [
             StreamRingWords.title, StreamRingWords.subtitle, StreamRingWords.intro, StreamRingWords.linkPlaceholder,
             StreamRingWords.connect, StreamRingWords.connecting, StreamRingWords.connected, StreamRingWords.checkNow,
@@ -113,6 +119,8 @@ final class StreamRingSettingsTests: XCTestCase {
             StreamRingWords.streamActionSubtitle(.connect, stream: nil, now: now),
             StreamRingWords.streamActionSubtitle(.reconnect, stream: nil, now: now),
             SettingsPage.streamRing.summary, MacSettingsSection.streamRing.caption,
+            StreamRingWords.notRenewable, StreamRingWords.webhookUnreadable, StreamRingWords.wakeOn("iPhone"),
+            StreamRingWords.wakeNoToken("iPhone"), StreamRingWords.wakeTrouble("iPhone", "Apple refused a wake-up push (403)."),
         ]
         words += problems.map(\.words)
         for source in [InboxStatus.Source.everyMinute, .pushed, .both, .none] {
