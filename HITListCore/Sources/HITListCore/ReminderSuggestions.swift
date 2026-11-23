@@ -126,7 +126,8 @@ public enum ReminderSuggestions {
 
     /// The "!" word the caret is in, which the list answers.
     public struct BangWord: Equatable, Sendable {
-        /// The whole word, "!" included (UTF-16 offsets, as the text views count): what a pick replaces.
+        /// What a pick replaces (UTF-16 offsets, as the text views count): the whole word, "!" included, or the whole
+        /// reminder phrase it starts ("!10 minutes before", "!Tomorrow 9:00 AM").
         public var range: NSRange
         /// What is typed after the "!", up to the caret: what narrows the list.
         public var query: String
@@ -138,7 +139,9 @@ public enum ReminderSuggestions {
     }
 
     /// The word around `cursor` (a UTF-16 offset in `text`), when it starts with one "!" (not "!!", a priority) and the
-    /// caret is past that "!"; nil otherwise, and after a space (a space ends the word: the list closes).
+    /// caret is past that "!"; nil otherwise, and after a space (a space ends the word: the list closes). Where the word
+    /// starts a reminder phrase of several words, already lit with the caret back inside it ("!1|0 minutes before"), the
+    /// range is the whole phrase: a pick replaces all of it (the review of brief 175).
     public static func bangWord(in text: String, cursor: Int) -> BangWord? {
         let ns = text as NSString
         guard cursor > 0, cursor <= ns.length else { return nil }
@@ -153,7 +156,28 @@ public enum ReminderSuggestions {
         guard start < cursor, ns.character(at: start) == 0x21 /* ! */ else { return nil }
         if start + 1 < ns.length, ns.character(at: start + 1) == 0x21 { return nil }
         let query = ns.substring(with: NSRange(location: start + 1, length: cursor - start - 1))
-        return BangWord(range: NSRange(location: start, length: end - start), query: query)
+        return BangWord(range: NSRange(location: start, length: phraseEnd(in: ns, from: start, wordEnd: end) - start), query: query)
+    }
+
+    /// The end of the reminder phrase that starts at `start` (the "!" word, which ends at `wordEnd`): the last of the
+    /// words the parser reads as one reminder, or the word itself.
+    static func phraseEnd(in ns: NSString, from start: Int, wordEnd: Int) -> Int {
+        var words: [String] = []
+        var ends: [Int] = []
+        var index = start
+        let spaces = CharacterSet.whitespacesAndNewlines
+        func isSpace(_ i: Int) -> Bool { Unicode.Scalar(ns.character(at: i)).map(spaces.contains) ?? false }
+        // A phrase is a handful of words: "!At the time of the task" is the longest.
+        while index < ns.length, words.count < 8 {
+            var stop = index
+            while stop < ns.length, !isSpace(stop) { stop += 1 }
+            words.append(ns.substring(with: NSRange(location: index, length: stop - index)).lowercased())
+            ends.append(stop)
+            index = stop
+            while index < ns.length, isSpace(index) { index += 1 }
+        }
+        guard let (_, n) = ReminderPhrase.match(words, at: 0), n > 1, n <= ends.count else { return wordEnd }
+        return ends[n - 1]
     }
 
     /// `text` with `range` (a `BangWord`'s) replaced by `phrase` and one space after it, and where the caret goes: after

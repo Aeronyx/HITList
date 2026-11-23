@@ -186,6 +186,31 @@ final class ReminderWordsTests: XCTestCase {
         XCTAssertNil(word("Call !", 99))
     }
 
+    /// The caret inside a phrase already lit ("!1|0 minutes before"): a pick replaces the whole reminder the "!" word
+    /// starts, never only the word, which left "!10 minutes before minutes before" (the review of brief 175, finding 6).
+    func testAPickInsideALitPhraseReplacesTheWholePhrase() throws {
+        let text = "Call 5pm !10 minutes before tomorrow"
+        let word = try XCTUnwrap(ReminderSuggestions.bangWord(in: text, cursor: 11))
+        XCTAssertEqual(word.query, "1")
+        XCTAssertEqual(word.range, NSRange(location: 9, length: 18), "all of \"!10 minutes before\"")
+        let picked = ReminderSuggestions.applying("!1 hour before", to: text, replacing: word.range)
+        XCTAssertEqual(picked.text, "Call 5pm !1 hour before tomorrow")
+        XCTAssertEqual(parser.parse(picked.text).reminderOffsetMinutes, 60)
+
+        let lit = "Call 5pm !10 minutes before "
+        let again = try XCTUnwrap(ReminderSuggestions.bangWord(in: lit, cursor: 11))
+        XCTAssertEqual(ReminderSuggestions.applying("!10 minutes before", to: lit, replacing: again.range).text,
+                       "Call 5pm !10 minutes before ")
+        // "!At time of task", "!In 15 minutes", a clock with its day: each whole.
+        XCTAssertEqual(ReminderSuggestions.bangWord(in: "Call 5pm !At time of task now", cursor: 11)?.range,
+                       NSRange(location: 9, length: 16))
+        XCTAssertEqual(ReminderSuggestions.bangWord(in: "Tea !In 15 minutes", cursor: 6)?.range, NSRange(location: 4, length: 14))
+        XCTAssertEqual(ReminderSuggestions.bangWord(in: "Bins !Tomorrow 9:00 AM", cursor: 7)?.range, NSRange(location: 5, length: 17))
+        // A word that starts no phrase is the word alone, as before.
+        XCTAssertEqual(ReminderSuggestions.bangWord(in: "Buy !1 milk", cursor: 6)?.range, NSRange(location: 4, length: 2))
+        XCTAssertEqual(ReminderSuggestions.bangWord(in: "Call !10mb about", cursor: 7)?.range, NSRange(location: 5, length: 5))
+    }
+
     func testAPickReplacesTheTypedWordAndTheCaretSitsAfterASpace() {
         let picked = ReminderSuggestions.applying("!At time of task", to: "Call mom 9am !", replacing: NSRange(location: 13, length: 1))
         XCTAssertEqual(picked.text, "Call mom 9am !At time of task ")
