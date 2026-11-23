@@ -101,19 +101,14 @@ enum QuickAddGuide {
                 Example(typed: "book club every last fri", caption: "The last Friday of each month",
                         claims: [.title("book club"), .repeats("monthly;1;;;;w6#-1")]),
             ]),
-            // Brief 175: "!" opens a list (At time of task, 10 minutes before… or In 5 minutes… and Later); a pick writes
-            // its words. The words work typed or said, and the codes for those who like them.
+            // Brief 175: "!" opens a list (At time of task, 10 minutes before… or In 5 minutes… and Later) and a pick writes
+            // its words; the same words work typed or said; and a line of codes for those who like them. Two rows, as
+            // before: the page stays within two iPhone screens.
             Section(title: "Reminders", examples: [
                 Example(typed: "haircut tom 11am !30 minutes before", caption: "Type ! for a list; a pick writes this",
                         claims: [.title("haircut"), .moment(dates.at(dates.day(1), 11)), .reminderBefore(30)]),
-                Example(typed: "tea !in 10 minutes", caption: "In 10 minutes, with or without a date",
+                Example(typed: "tea remind me in 10 minutes", caption: "Or say it; codes: !10m, !1hb before",
                         claims: [.title("tea"), .noDate, .reminderIn(10)]),
-                Example(typed: "call mom tom 5pm remind me 1 hour before", caption: "Or say it in words, as to Siri",
-                        claims: [.title("call mom"), .moment(dates.at(dates.day(1), 17)), .reminderBefore(60)]),
-                Example(typed: "remind me to stretch in 1 hour", caption: "Remind me to…: at the task's time",
-                        claims: [.title("Stretch"), .moment(dates.minute.addingTimeInterval(3600)), .reminderBefore(0)]),
-                Example(typed: "bins tom 7am !15mb", caption: "Codes: !15mb before, !10m from now, !4pm",
-                        claims: [.title("bins"), .moment(dates.at(dates.day(1), 7)), .reminderBefore(15)]),
             ]),
             Section(title: "Priority, labels and Groups", examples: [
                 Example(typed: "fix the leak p1", caption: "Priority 1; p2 and p3 too",
