@@ -111,3 +111,18 @@ On the final tree (`0adbbfc4`, then documents only):
   to delete by hand.
 - A macOS privacy question from the Claude app ("bypass the system private window picker") came up while an agent
   captured its own window; it is George's to answer.
+
+## After the release: George's first real capture (2026-11-23, 20:44 EST)
+
+0.9.18 released and the relay set up (webhook and MCP, wake-ups, the "Task" rule on). His "Task, …" capture never
+became a task. The relay's status (read with the key setup.sh keeps in his login keychain, never printed) said:
+
+- **Proved**: Stream's webhook body is exactly `interaction_id` and `text`; it arrived signed and passed the Task
+  rule. **Apple took the relay's wake-up push over HTTP/2 from a Worker** (the Mac's token, production service).
+- **Why nothing took it**: HITList on the Mac had been quit (the test asked for that), and the relay knew no iPhone
+  at all: the iPhone had never claimed with its push token, so there was no device to wake. The capture waited.
+- **Stream's MCP gave nothing readable**: every poll since the approval found a list with no capture in it the relay
+  could read (`interactionFields` stayed empty), and said nothing. The relay now says so with the interactions' field
+  names and Stream's count (`stream.lastListed`), reads more names for the words, and a changed reader (`READER`)
+  starts the poller again from its next poll, so a reader that learns to read Stream's answer never takes the past
+  week's captures as new tasks (the old code failed that check). test.sh: 164.

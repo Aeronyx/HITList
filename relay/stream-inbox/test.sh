@@ -381,6 +381,43 @@ poll
 status
 check "readable again: the trouble goes" "$BODY" '.stream.lastError' 'null'
 
+echo "▸ 2026-11-23: interactions with no words the relay knows are said, with their fields, and never taken late"
+fake interactions '[{"id":"u-1","said_words":"Task: call the plumber"},{"id":"u-2","said_words":"Task: buy stamps"}]'
+poll
+status
+check "the trouble is said, with Stream's count" "$BODY" '.stream.lastError | test("listed 2 interactions, but the relay found no words in them [(]their fields: id, said_words[)]")' 'true'
+check "their fields, never their words" "$BODY" '.stream.interactionFields' '["id","said_words"]'
+check "how many Stream listed" "$BODY" '.stream.lastListed' '2'
+check "still connected" "$BODY" '.stream.connected' 'true'
+waiting=$(printf '%s' "$BODY" | jq -c .pending)
+fake interactions '[{"id":"u-1","transcription":"Task: call the plumber"},{"id":"u-2","message":{"text":"Task: buy stamps"}}]'
+poll
+status
+check "readable now: the trouble goes" "$BODY" '.stream.lastError' 'null'
+check "what couldn't be read before isn't taken late" "$BODY" '.pending' "$waiting"
+fake interactions '[{"id":"u-3","transcription":"Task: call the plumber again"},{"id":"u-4","message":{"text":"Task: post the letter"}},{"id":"u-1","transcription":"Task: call the plumber"}]'
+poll
+claim mac-test
+check "new ones are taken, their words under other names" "$BODY" '[.items[] | select(.id | startswith("u-")) | .text]' '["Task: call the plumber again","Task: post the letter"]'
+ack_claimed
+
+echo "▸ 2026-11-23: a relay that ran an older reader starts again from its next poll"
+status
+waiting=$(printf '%s' "$BODY" | jq -c .pending)
+keyed POST /__test/forget-reader
+expect "the connection as an older relay left it" 200 '.ok' 'true'
+two_days=$(iso -2d)
+fake interactions "[{\"id\":\"o-1\",\"text\":\"Task: said two days ago\",\"created_at\":\"$two_days\"},{\"id\":\"o-2\",\"text\":\"Task: said with no time\"}]"
+poll
+status
+check "nothing Stream already listed is taken" "$BODY" '.pending' "$waiting"
+check "how many Stream listed" "$BODY" '.stream.lastListed' '2'
+fake interactions "[{\"id\":\"o-3\",\"text\":\"Task: said after the new reader came\"},{\"id\":\"o-1\",\"text\":\"Task: said two days ago\",\"created_at\":\"$two_days\"},{\"id\":\"o-2\",\"text\":\"Task: said with no time\"}]"
+poll
+claim mac-test
+check "after it, every new id is taken" "$BODY" '[.items[] | select(.id | startswith("o-")) | .id]' '["o-3"]'
+ack_claimed
+
 echo "▸ review 6: the same words from both routes"
 say w-a "Buy oat milk"
 clock $((5 * 60 * 1000))

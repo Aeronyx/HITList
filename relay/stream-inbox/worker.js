@@ -59,6 +59,9 @@ const TEST_TEXT = "Test capture from your Stream ring";
 const CLIENT_NAME = "HITList inbox";
 const SCOPE = "stream";
 const TOOL = "get_recent_interactions";
+// The way Stream's answers are read. A new one starts the poller again from its first poll (`take`), so captures
+// the old reader couldn't read are never taken late as new ones.
+const READER = "2026-11-23";
 const MCP_PROTOCOL = "2025-06-18";
 const DEFAULT_MCP_URL = "https://api.sandbar.com/mcp";
 const APNS_TOPIC = "com.trammells.hitlist";
@@ -164,6 +167,12 @@ const KEYED = {
   /// test.sh only: the inbox's alarm, run now on its clock (the real alarm fires on the real one).
   async "POST /__test/alarm"(request, env) {
     return json(await inbox(env).runTimers());
+  },
+
+  /// test.sh only: the Stream connection as a relay made before `READER` left it (no reader noted), so the next poll is
+  /// the new reader's first.
+  async "POST /__test/forget-reader"(request, env) {
+    return json(await inbox(env).forgetReader());
   },
 
   /// test.sh only: signs with this key instead of APNS_KEY (`{"key": null}` goes back to it), so a key that can't be
@@ -360,6 +369,16 @@ export class StreamInbox extends DurableObject {
     }
     await this.armAlarm();
     return { offsetMs: this.testOffset };
+  }
+
+  forgetReader() {
+    if (this.env.RELAY_TEST_MODE !== "1") return { ok: false };
+    const conn = this.getMeta("stream", null);
+    if (conn) {
+      delete conn.reader;
+      this.setMeta("stream", conn);
+    }
+    return { ok: true };
   }
 
   setTestPushKey(key) {
@@ -875,6 +894,7 @@ export class StreamInbox extends DurableObject {
     const carries = previous && previous.connected && previous.baselineDone;
     this.setMeta("stream", {
       connected: true, approvedAt: now, since: carries ? previous.since : now, baselineDone: Boolean(carries),
+      reader: carries ? previous.reader || null : null, lastListed: null,
       lastPollAt: carries ? previous.lastPollAt : null, lastError: null, protocolVersion: null, sessionId: null,
       toolSchema: null, toolArguments: null, interactionFields: previous ? previous.interactionFields || null : null,
       refreshable: Boolean(tokens.refresh_token), answerShape: null,
@@ -907,6 +927,8 @@ export class StreamInbox extends DurableObject {
       refreshable: conn.refreshable === undefined ? null : Boolean(conn.refreshable),
       toolArguments: conn.toolArguments || null,
       interactionFields: conn.interactionFields || null,
+      // How many interactions Stream's last answer listed, read or not (null before the first poll of this reader).
+      lastListed: Number.isInteger(conn.lastListed) ? conn.lastListed : null,
       answerShape: conn.answerShape || null,
     };
   }
@@ -1071,17 +1093,34 @@ export class StreamInbox extends DurableObject {
 
   /// What the tool returned, taken into the inbox. The first poll after an approval takes nothing older than it (by
   /// the interactions' times when they have them, else every id it sees is kept as seen); after that every new id is
-  /// taken, whatever its time says. An answer that can't be read is said, with its shape and never its words.
+  /// taken, whatever its time says. An answer that can't be read is said, with its shape and never its words, and so is
+  /// a list whose interactions carry no words the relay knows (their field names, 2026-11-23: George's first real
+  /// capture came by the webhook while every poll found nothing to take).
+  ///
+  /// A relay whose reader changed (`READER`) starts again from this poll, as a new connection does: what Stream lists
+  /// now is kept as seen. Without that, a reader that learned to read Stream's answer would take the past week's
+  /// captures as new ones.
   async take(result, conn, now) {
     const read = interactionsFrom(result, now);
     if (read.error) return { lastError: `Stream's tool said: ${read.error}` };
     if (!read.items) {
       return { lastError: "Stream's answer couldn't be read: the relay found no list of interactions in it.", answerShape: read.shape };
     }
+    const newReader = conn.baselineDone && conn.reader !== READER;
+    const counts = { lastListed: read.listed, reader: READER };
+    // Interactions with no words the relay knows: said, and the poller waits at its first poll, from now, so the day
+    // they can be read starts from that poll and not from a week of captures it couldn't read.
+    if (read.listed > 0 && !read.items.length) {
+      return {
+        ...counts, baselineDone: false, since: now, kept: [], answerShape: null, interactionFields: read.listFields,
+        lastError: `Stream listed ${read.listed} interaction${read.listed === 1 ? "" : "s"}, but the relay found no words in them (their fields: ${read.listFields.join(", ") || "none"}).`,
+      };
+    }
     const items = read.items;
     for (const item of items) item.hash = await textHash(item.text);
     const kept = [];
-    const firstPoll = !conn.baselineDone;
+    const firstPoll = !conn.baselineDone || newReader;
+    const since = newReader ? now : conn.since;
     for (const item of items) {
       if (this.has(item.id)) {
         if (this.getMeta("idsMatch", false) === false) {
@@ -1090,7 +1129,7 @@ export class StreamInbox extends DurableObject {
         }
         continue;
       }
-      const old = firstPoll && (item.at === null || item.at < conn.since);
+      const old = firstPoll && (item.at === null || item.at < since);
       if (old || !item.text.trim()) {
         this.markSeen(item.id, "stream", this.now());
         continue;
@@ -1099,8 +1138,8 @@ export class StreamInbox extends DurableObject {
         fields: item.fields, said: item.at }) === "accepted") kept.push(item.id);
     }
     return {
-      baselineDone: true, lastError: null, kept, answerShape: null,
-      interactionFields: items.length ? items[0].fields : conn.interactionFields || null,
+      ...counts, baselineDone: true, since, lastError: null, kept, answerShape: null,
+      interactionFields: items.length ? items[0].fields : read.listFields.length ? read.listFields : conn.interactionFields || null,
     };
   }
 }
@@ -1144,7 +1183,13 @@ function interactionsFrom(result, receivedAt) {
   }
   for (const value of candidates) {
     const list = objectList(value);
-    if (list) return { items: list.map((raw) => interaction(raw, receivedAt)).filter(Boolean) };
+    if (list) {
+      return {
+        items: list.map((raw) => interaction(raw, receivedAt)).filter(Boolean),
+        listed: list.length,
+        listFields: list.length ? Object.keys(list[0]).slice(0, 64) : [],
+      };
+    }
   }
   for (const value of candidates) {
     if (isPlainObject(value) && value.error) return { error: String(value.error.message || value.error) };
@@ -1178,8 +1223,17 @@ function objectList(value, depth = 0) {
 const TIME_FIELDS = ["created_at", "createdAt", "timestamp", "time", "date", "saved_at", "savedAt", "occurred_at",
   "occurredAt", "started_at", "startedAt", "updated_at", "updatedAt"];
 
+/// Where an interaction's words may be, in this order: what the person said, under the names an API would give it. A
+/// field holding an object with its own `text` counts too (`{"message": {"text": …}}`). Never a reply's or a summary's.
+const TEXT_FIELDS = ["text", "transcript", "transcription", "content", "body", "note", "message", "value", "utterance",
+  "user_text", "userText", "said", "spoken", "input", "query", "prompt", "request"];
+
 function interaction(raw, receivedAt) {
-  const text = first(raw, ["text", "transcript", "content", "body", "note", "message", "value"], (v) => typeof v === "string");
+  let text = first(raw, TEXT_FIELDS, (v) => typeof v === "string");
+  if (typeof text !== "string") {
+    const holder = first(raw, TEXT_FIELDS, (v) => isPlainObject(v) && typeof v.text === "string");
+    text = holder ? holder.text : undefined;
+  }
   if (typeof text !== "string") return null;
   const at = parseTime(first(raw, TIME_FIELDS, (v) => parseTime(v, receivedAt) !== null), receivedAt);
   let id = interactionID(first(raw, ["interaction_id", "interactionId", "id", "uuid"], (v) => interactionID(v) !== null));
