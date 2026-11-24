@@ -169,8 +169,13 @@ final class StreamInboxFakeRelay: @unchecked Sendable {
         locked { webhook = ["lastReceivedAt": Self.iso(date), "lastResult": Self.json(result), "lastFields": ["text", "interaction_id"]] }
     }
 
-    /// The relay's rule, as a device set it.
+    /// The relay's rule and wake words, as a device set them.
     var settings: InboxSettings { locked { rule } }
+
+    /// The settings as the relay writes them (called with the lock held).
+    private var settingsJSON: [String: Any] {
+        ["onlyStartingWithTask": rule.onlyStartingWithTask, "wakeWords": rule.wakeWords.map(\.rawValue)]
+    }
 
     /// Whether this relay has an Apple push key (its wake-ups).
     var pushConfigured: Bool {
@@ -244,14 +249,24 @@ final class StreamInboxFakeRelay: @unchecked Sendable {
                                   "capturedAt": Self.iso(capture.said ?? capture.receivedAt)])
                 }
                 return reply(200, ["items": items, "lastReceivedAt": Self.json(lastReceivedAt.map(Self.iso)),
-                                   "settings": ["onlyStartingWithTask": rule.onlyStartingWithTask],
+                                   "settings": settingsJSON,
                                    "push": ["configured": pushKey, "registered": tokens[device] != nil && wake?.refused != true,
                                             "lastOkAt": Self.json(wake?.okAt.map(Self.iso)),
                                             "lastError": Self.json(wake?.error)]])
             case ("POST", InboxAPI.Endpoint.settings.rawValue):
-                guard let on = json["onlyStartingWithTask"] as? Bool else { return reply(400, ["error": "onlyStartingWithTask"]) }
-                rule = InboxSettings(onlyStartingWithTask: on)
-                return reply(200, ["settings": ["onlyStartingWithTask": on]])
+                // Either or both, as the relay takes them (2026-11-23: the wake words); what isn't sent stays.
+                let on = json["onlyStartingWithTask"]
+                let words = json["wakeWords"]
+                guard on != nil || words != nil, on == nil || on is Bool else {
+                    return reply(400, ["error": "onlyStartingWithTask"])
+                }
+                if let words {
+                    guard let names = words as? [String], !names.isEmpty,
+                          names.allSatisfy({ WakeWord(rawValue: $0) != nil }) else { return reply(400, ["error": "wakeWords"]) }
+                    rule.wakeWords = WakeWord.list(names)
+                }
+                if let on = on as? Bool { rule.onlyStartingWithTask = on }
+                return reply(200, ["settings": settingsJSON])
             case ("POST", InboxAPI.Endpoint.ack.rawValue):
                 if acksFailing { return reply(500, ["error": "The relay had a problem."]) }
                 let ids = Set(json["ids"] as? [String] ?? [])
@@ -263,7 +278,7 @@ final class StreamInboxFakeRelay: @unchecked Sendable {
                 return reply(200, ["pending": waiting.count, "lastReceivedAt": Self.json(lastReceivedAt.map(Self.iso)),
                                    "lastSource": "stream", "lastFields": ["id", "text", "created_at"],
                                    "webhook": webhook, "stream": Self.json(stream),
-                                   "settings": ["onlyStartingWithTask": rule.onlyStartingWithTask],
+                                   "settings": settingsJSON,
                                    "push": ["configured": pushKey, "devices": tokens.count, "lastSentAt": NSNull(),
                                             "lastError": NSNull()]])
             case ("POST", InboxAPI.Endpoint.test.rawValue):

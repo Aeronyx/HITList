@@ -142,16 +142,33 @@ struct StreamRingSettingsSection: View {
             }
         }
         HITGroup(footer: StreamRingWords.onlyTaskFooter) {
-            // The rule is the relay's, for every device: the switch writes it there and shows what the relay keeps.
+            // The rule and its words are the relay's, for every device: each switch writes there and shows what the
+            // relay keeps.
             Toggle(isOn: Binding(get: { inbox.onlyStartingWithTask }, set: { on in
                 run(.rule) { await inbox.setOnlyStartingWithTask(on) }
             })) {
-                HITMenuRowLabel(StreamRingWords.onlyTask, systemImage: "text.quote")
+                HITMenuRowLabel(StreamRingWords.onlyStarting(inbox.chosenWakeWords), systemImage: "text.quote")
             }
             .toggleStyle(.hit)
             .hitRowPadding()
             .disabled(working == .rule)
             .accessibilityIdentifier("stream-ring-only-task")
+            if inbox.onlyStartingWithTask {
+                // George, 2026-11-23: "Jarvis and Tars as selectable wake words instead of only Task". The last one on
+                // stays on.
+                ForEach(WakeWord.allCases, id: \.self) { word in
+                    let chosen = inbox.chosenWakeWords.contains(word)
+                    Toggle(isOn: Binding(get: { chosen }, set: { on in
+                        run(.rule) { await inbox.setWakeWord(word, on: on) }
+                    })) {
+                        HITMenuRowLabel(word.spoken, subtitle: StreamRingWords.wakeWordExample(word), systemImage: "quote.bubble")
+                    }
+                    .toggleStyle(.hit)
+                    .hitRowPadding()
+                    .disabled(working == .rule || (chosen && inbox.chosenWakeWords.count == 1))
+                    .accessibilityIdentifier("stream-ring-wake-\(word.rawValue)")
+                }
+            }
             if let ruleProblem {
                 problemRow(ruleProblem)
                     .accessibilityIdentifier("stream-ring-only-task-problem")
@@ -257,8 +274,13 @@ enum StreamRingWords {
     static let sendTest = "Send a test capture"
     static let sendTestSubtitle = "Adds “\(InboxAPI.testText)” to your Inbox"
     static let sending = "Sending…"
-    static let onlyTask = "Only captures that start with “Task”"
-    static let onlyTaskFooter = "Off: everything you say to the ring becomes a task. On: only what starts with “Task” does, and the rest stays in Stream."
+    static let onlyTaskFooter = "Off: everything you say to the ring becomes a task. On: only what starts with a word you choose does, “Hey Jarvis” too, and the rest stays in Stream."
+
+    /// The rule's switch, named with the words chosen: "Only captures that start with “Task” or “Jarvis”".
+    static func onlyStarting(_ words: [WakeWord]) -> String { "Only captures that start with \(WakeWord.quoted(words))" }
+
+    /// Under each wake word: what to say.
+    static func wakeWordExample(_ word: WakeWord) -> String { "“\(word.spoken), buy milk tomorrow”" }
     static let chatTip = "In Stream, tap the chat bubble in the Stream tab to turn Chat off, so Stream doesn't answer each capture or take a task for a question."
     static let disconnect = "Disconnect"
     static let disconnectSubtitle = "Removes the inbox key from this device only"
@@ -389,7 +411,8 @@ enum StreamRingWords {
             }
         }
         if let rule = status.settings {
-            rows.append(Row(title: "The relay's rule", value: rule.onlyStartingWithTask ? "only captures that start with Task" : "every capture"))
+            let words = rule.wakeWords.map(\.spoken).joined(separator: ", ")
+            rows.append(Row(title: "The relay's rule", value: rule.onlyStartingWithTask ? "only captures that start with \(words)" : "every capture (wake words dropped: \(words))"))
         }
         return rows
     }

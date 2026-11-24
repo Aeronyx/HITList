@@ -53,8 +53,8 @@ public enum InboxAPI {
         let push: InboxPushRegistration?
     }
 
-    public static func settings(_ settings: InboxSettings, link: InboxLink) -> URLRequest {
-        request(.settings, link: link, body: encode(settings))
+    public static func settings(_ change: InboxSettingsChange, link: InboxLink) -> URLRequest {
+        request(.settings, link: link, body: encode(change))
     }
 
     public static func ack(ids: [String], link: InboxLink) -> URLRequest {
@@ -131,12 +131,82 @@ public struct InboxItem: Decodable, Equatable, Sendable, Identifiable {
 
 /// The relay's settings, one for every device.
 public struct InboxSettings: Codable, Equatable, Sendable {
-    /// Only captures whose first word is "Task" become tasks; the relay leaves the rest out as they arrive.
+    /// Only captures that start with one of `wakeWords` become tasks; the relay leaves the rest out as they arrive. (The
+    /// relay's name for it is from when "Task" was the only word.)
     public var onlyStartingWithTask: Bool
+    /// The words a capture may start with (George, 2026-11-23): "Task" until others are chosen, never none. The relay
+    /// hands a capture that starts with one over as "Task: …", so every HITList reads it the same way.
+    public var wakeWords: [WakeWord]
 
-    public init(onlyStartingWithTask: Bool) {
+    public init(onlyStartingWithTask: Bool, wakeWords: [WakeWord] = [.task]) {
         self.onlyStartingWithTask = onlyStartingWithTask
+        self.wakeWords = WakeWord.list(wakeWords.map(\.rawValue))
     }
+
+    /// A relay from before the wake words sends only the rule: "Task", as it was. Words it doesn't know are left out.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        onlyStartingWithTask = try c.decodeIfPresent(Bool.self, forKey: .onlyStartingWithTask) ?? false
+        wakeWords = WakeWord.list(try? c.decodeIfPresent([String].self, forKey: .wakeWords))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(onlyStartingWithTask, forKey: .onlyStartingWithTask)
+        try c.encode(wakeWords.map(\.rawValue), forKey: .wakeWords)
+    }
+
+    private enum CodingKeys: String, CodingKey { case onlyStartingWithTask, wakeWords }
+}
+
+/// A word a capture to the Stream ring may start with to become a task (George, 2026-11-23: "Jarvis and Tars as
+/// selectable wake words instead of only Task"). The relay knows how speech writes each ("T.A.R.S.", "Tarz") and the
+/// "Hey" or "OK" said before one.
+public enum WakeWord: String, CaseIterable, Sendable {
+    case task, jarvis, tars
+
+    /// As the page writes it.
+    public var spoken: String {
+        switch self {
+        case .task: "Task"
+        case .jarvis: "Jarvis"
+        case .tars: "TARS"
+        }
+    }
+
+    /// The known words among `names`, once each, in this enum's order; "Task" when none is known.
+    public static func list(_ names: [String]?) -> [WakeWord] {
+        let named = Set(names ?? [])
+        let words = allCases.filter { named.contains($0.rawValue) }
+        return words.isEmpty ? [.task] : words
+    }
+
+    /// "“Task”", "“Task” or “Jarvis”", "“Task”, “Jarvis” or “TARS”".
+    public static func quoted(_ words: [WakeWord]) -> String {
+        let quoted = words.map { "“\($0.spoken)”" }
+        guard let last = quoted.last else { return "" }
+        return quoted.count == 1 ? last : quoted.dropLast().joined(separator: ", ") + " or " + last
+    }
+}
+
+/// `POST /inbox/settings`'s body: what changes, and only that, so a device never writes back another device's choice
+/// from an old copy. A relay from before the wake words takes the rule and ignores the words.
+public struct InboxSettingsChange: Encodable, Equatable, Sendable {
+    public var onlyStartingWithTask: Bool?
+    public var wakeWords: [WakeWord]?
+
+    public init(onlyStartingWithTask: Bool? = nil, wakeWords: [WakeWord]? = nil) {
+        self.onlyStartingWithTask = onlyStartingWithTask
+        self.wakeWords = wakeWords
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(onlyStartingWithTask, forKey: .onlyStartingWithTask)
+        try c.encodeIfPresent(wakeWords?.map(\.rawValue), forKey: .wakeWords)
+    }
+
+    private enum CodingKeys: String, CodingKey { case onlyStartingWithTask, wakeWords }
 }
 
 /// `POST /inbox/settings`'s answer.

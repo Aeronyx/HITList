@@ -129,12 +129,30 @@ final class InboxProtocolTests: XCTestCase {
     }
 
     func testTheRuleIsSetOnTheRelay() throws {
-        let request = InboxAPI.settings(InboxSettings(onlyStartingWithTask: true), link: link)
+        let request = InboxAPI.settings(InboxSettingsChange(onlyStartingWithTask: true), link: link)
         XCTAssertEqual(request.httpMethod, "POST")
         XCTAssertEqual(request.url?.path, "/inbox/settings")
-        XCTAssertEqual(String(decoding: try XCTUnwrap(request.httpBody), as: UTF8.self), #"{"onlyStartingWithTask":true}"#)
+        XCTAssertEqual(String(decoding: try XCTUnwrap(request.httpBody), as: UTF8.self), #"{"onlyStartingWithTask":true}"#,
+                       "only what changes: the words another device chose are never written back")
         let reply = try InboxAPI.decode(InboxSettingsReply.self, from: Data(#"{"settings":{"onlyStartingWithTask":false}}"#.utf8))
         XCTAssertEqual(reply.settings.onlyStartingWithTask, false)
+        XCTAssertEqual(reply.settings.wakeWords, [.task], "a relay from before the wake words: Task, as it was")
+    }
+
+    /// George, 2026-11-23: "Jarvis and Tars as selectable wake words instead of only Task".
+    func testWakeWordsAreChosenOnTheRelay() throws {
+        let request = InboxAPI.settings(InboxSettingsChange(wakeWords: [.jarvis, .tars]), link: link)
+        XCTAssertEqual(String(decoding: try XCTUnwrap(request.httpBody), as: UTF8.self), #"{"wakeWords":["jarvis","tars"]}"#)
+        let reply = try InboxAPI.decode(InboxSettingsReply.self, from: Data(
+            #"{"settings":{"onlyStartingWithTask":true,"wakeWords":["tars","siri","jarvis","tars"]}}"#.utf8))
+        XCTAssertEqual(reply.settings, InboxSettings(onlyStartingWithTask: true, wakeWords: [.jarvis, .tars]),
+                       "in their own order, once each, an unknown word left out")
+        let none = try InboxAPI.decode(InboxSettingsReply.self, from: Data(#"{"settings":{"onlyStartingWithTask":true,"wakeWords":[]}}"#.utf8))
+        XCTAssertEqual(none.settings.wakeWords, [.task], "never none")
+        XCTAssertEqual(InboxSettings(onlyStartingWithTask: false, wakeWords: []).wakeWords, [.task])
+        XCTAssertEqual(WakeWord.quoted([.task]), "“Task”")
+        XCTAssertEqual(WakeWord.quoted([.task, .jarvis]), "“Task” or “Jarvis”")
+        XCTAssertEqual(WakeWord.quoted(WakeWord.allCases), "“Task”, “Jarvis” or “TARS”")
     }
 
     /// Finding 3: the poller's trouble and the shape of an answer it couldn't read; finding 11: a sign-in that can't be

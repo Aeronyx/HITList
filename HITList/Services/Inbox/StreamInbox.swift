@@ -91,6 +91,9 @@ final class StreamInbox {
     private(set) var relayStatus: InboxStatus?
     /// The relay's rule, as the last claim or status said it (a cache: the relay keeps it, for every device).
     private(set) var onlyStartingWithTask: Bool
+    /// The words a capture may start with, as the relay last said them (a cache, like the rule). Not `wakeWords`, the
+    /// status line's words on wake-up pushes.
+    private(set) var chosenWakeWords: [WakeWord]
     /// Whether the relay can wake this device, as the last claim said.
     private(set) var wakeState: InboxPushState?
     let deviceID: String
@@ -149,6 +152,7 @@ final class StreamInbox {
         self.log = log
         deviceID = settings.deviceID(platform: Self.platform)
         onlyStartingWithTask = settings.onlyStartingWithTask
+        chosenWakeWords = settings.wakeWords
         lastCheckedAt = settings.lastCheckedAt
         lastCaptureAt = settings.lastCaptureAt
         addedToday = settings.addedToday(now: clock())
@@ -307,8 +311,23 @@ final class StreamInbox {
     func setOnlyStartingWithTask(_ on: Bool) async -> StreamInboxProblem? {
         guard let link else { return .notALink }
         do {
-            adopt(try await client.setSettings(InboxSettings(onlyStartingWithTask: on), link: link))
+            adopt(try await client.setSettings(InboxSettingsChange(onlyStartingWithTask: on), link: link))
             return nil
+        } catch {
+            return StreamInboxProblem(error)
+        }
+    }
+
+    /// A wake word chosen or not (George, 2026-11-23), written to the relay like the rule. The last one chosen stays:
+    /// nil, nothing sent. A relay from before the wake words keeps "Task" and says nothing of them: `relayTooOld`.
+    func setWakeWord(_ word: WakeWord, on: Bool) async -> StreamInboxProblem? {
+        let words = WakeWord.allCases.filter { $0 == word ? on : chosenWakeWords.contains($0) }
+        guard !words.isEmpty, words != chosenWakeWords else { return nil }
+        guard let link else { return .notALink }
+        do {
+            let relaySettings = try await client.setSettings(InboxSettingsChange(wakeWords: words), link: link)
+            adopt(relaySettings)
+            return relaySettings.wakeWords == words ? nil : .relayTooOld
         } catch {
             return StreamInboxProblem(error)
         }
@@ -319,6 +338,8 @@ final class StreamInbox {
         guard let relaySettings else { return }
         onlyStartingWithTask = relaySettings.onlyStartingWithTask
         settings.onlyStartingWithTask = relaySettings.onlyStartingWithTask
+        chosenWakeWords = relaySettings.wakeWords
+        settings.wakeWords = relaySettings.wakeWords
     }
 
     /// Where the key stands. Only a key that isn't on this device forgets the relay (review, finding 9): a Keychain

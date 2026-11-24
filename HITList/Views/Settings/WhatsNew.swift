@@ -20,6 +20,10 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
+        // 0.9.19 is George's own (Settings → Stream Ring's wake words), which a friend's HITList doesn't show.
+        Entry(version: "0.9.19", items: [
+            "Small improvements behind the scenes.",
+        ]),
         Entry(version: "0.9.18", items: [
             "Reminders from a list: type “!” in quick add and pick one, like “At time of task”, “30 minutes before” or “In 15 minutes”. Typing more narrows the list, and the short codes still work.",
             "Reminders and times in words: “remind me 30 minutes before”, “Remind me to call mom at 5”, “5 p.m.”, “priority 1”. With no am or pm, “at 2” now means the afternoon and “at 6” the next 6 o’clock to come; say “morning” for the morning.",

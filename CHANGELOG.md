@@ -5,6 +5,26 @@ until the version has a section here, then stamps the heading with the build num
 per release. A second build of one version (0.9.0 had builds 20 and 21) is released with `scripts/release.sh --quick`
 and needs a section headed `## X.Y.Z (N)`, which the script stamps with the date.
 
+## 0.9.19
+
+George, 2026-11-23, the evening 0.9.18 went out and his first ring captures worked: "can you add Jarvis and Tars as
+selectable wake words instead of only Task?" Only George's own devices show any of this (Settings → Stream Ring is
+listed where a device is connected); a friend's HITList is as in 0.9.18.
+
+- **Wake words.** Settings → Stream Ring: with "Only captures that start with …" on, a switch each for **Task**,
+  **Jarvis** and **TARS**, at least one on. "Jarvis, buy milk tomorrow", "Hey TARS, call mom at 5" and "Task, …" each
+  become a task; anything else stays in Stream. The choice is the relay's, the same on every device, and each switch
+  sends only what it changes, so one device never writes back another's choice.
+- **The relay does the matching** (`relay/stream-inbox`, deployed by `setup.sh`): any case, "Hey", "Hi", "OK" or
+  "Okay" before the word, the ways speech writes TARS ("T.A.R.S.", "Tarz", "Tar's"), never part of a longer word
+  ("Tasks", "Jarvisville"). It hands a capture that starts with one over as "Task: …", so 0.9.18 adds it too, with
+  the word dropped from the title. With the rule off, a chosen word is still dropped.
+- **Stream's MCP read as it answers** (deployed the same evening): its interactions carry `inputText`,
+  `outputText`, `requestReceivedAtUnix`, `noteId` and `deleted`, and no id. The relay reads his words and their time,
+  never Stream's reply, leaves out what he deleted, and matches the poll's copy of a capture to the webhook's by the
+  words and when they were said, so a capture is never two tasks. A new reader starts fresh, so the past week's
+  captures never arrive late as tasks. `relay/stream-inbox/test.sh`: 185 checks.
+
 ## 0.9.18 — build 33, 2026-11-23
 
 George, 2026-11-23, after showing HITList to a friend: "I typed `!0mb` and it didn't register that I wanted a

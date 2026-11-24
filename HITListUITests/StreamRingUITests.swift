@@ -57,6 +57,12 @@ final class StreamRingUITests: XCTestCase {
         XCTAssertTrue(rule.waitForExistence(timeout: 5))
         rule.tap()
         pause()
+        // George, 2026-11-23: the wake words, under the rule once it is on.
+        let jarvis = element("stream-ring-wake-jarvis")
+        XCTAssertTrue(jarvis.waitForExistence(timeout: 5), "the wake words show under the rule")
+        jarvis.tap()
+        XCTAssertTrue(waitForLabel(of: "stream-ring-only-task", containing: "“Task” or “Jarvis”"), "the rule names the words")
+        shot("06 Stream Ring, wake words")
         element("stream-ring-test").tap()
         XCTAssertTrue(waitForLabel(of: "stream-ring-status", containing: "2 added today"), "the test capture was added too")
         closeSettings()

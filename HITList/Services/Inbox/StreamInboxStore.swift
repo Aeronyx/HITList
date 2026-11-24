@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import HITListCore
 
 /// Where a device keeps its connection to the Stream ring's relay (brief 176). The inbox key lives in the Keychain, on
 /// this device only and readable after the first unlock (never in a backup or iCloud Keychain): each device connects on
@@ -100,6 +101,8 @@ struct StreamInboxSettings {
 
     static let originKey = "streamInbox.origin"
     static let onlyStartingWithTaskKey = "streamInbox.onlyStartingWithTask"
+    /// The relay's wake words as this device last heard them (2026-11-23).
+    static let wakeWordsKey = "streamInbox.wakeWords"
     static let deviceKey = "streamInbox.deviceID"
     /// The last `addedLimit` capture ids this device made tasks of: one is never added twice here.
     static let addedKey = "streamInbox.addedIDs"
@@ -149,6 +152,11 @@ struct StreamInboxSettings {
     var onlyStartingWithTask: Bool {
         get { defaults.bool(forKey: Self.onlyStartingWithTaskKey) }
         nonmutating set { defaults.set(newValue, forKey: Self.onlyStartingWithTaskKey) }
+    }
+
+    var wakeWords: [WakeWord] {
+        get { WakeWord.list(defaults.stringArray(forKey: Self.wakeWordsKey)) }
+        nonmutating set { defaults.set(newValue.map(\.rawValue), forKey: Self.wakeWordsKey) }
     }
 
     /// This device's id for the relay's claims: made once, "Mac-1A2B3C4D".

@@ -138,13 +138,25 @@ const KEYED = {
     return json(await inbox(env).status());
   },
 
-  /// The relay's own settings, the same for every device: the "starts with Task" rule.
+  /// The relay's own settings, the same for every device: the rule (`onlyStartingWithTask`: only captures that start
+  /// with a wake word become tasks) and the wake words (`wakeWords`, one or more of WAKE_WORDS' names). Either or both;
+  /// what isn't sent stays as it is (HITList 0.9.18 sends only the rule).
   async "POST /inbox/settings"(request, env) {
     const body = await readJSON(request);
-    if (!body || typeof body.onlyStartingWithTask !== "boolean") {
-      return json({ error: "Send onlyStartingWithTask, true or false." }, 400);
+    const change = {};
+    if (isPlainObject(body) && "onlyStartingWithTask" in body) {
+      if (typeof body.onlyStartingWithTask !== "boolean") return json({ error: "Send onlyStartingWithTask, true or false." }, 400);
+      change.onlyStartingWithTask = body.onlyStartingWithTask;
     }
-    return json(await inbox(env).setSettings({ onlyStartingWithTask: body.onlyStartingWithTask }));
+    if (isPlainObject(body) && "wakeWords" in body) {
+      const words = wakeWordList(body.wakeWords);
+      if (!words) return json({ error: `Send wakeWords: one or more of ${Object.keys(WAKE_WORDS).join(", ")}.` }, 400);
+      change.wakeWords = words;
+    }
+    if (!Object.keys(change).length) {
+      return json({ error: "Send onlyStartingWithTask (true or false), wakeWords, or both." }, 400);
+    }
+    return json(await inbox(env).setSettings(change));
   },
 
   async "POST /inbox/test"(request, env) {
@@ -265,12 +277,52 @@ function isMac(platform) {
   return platform === "macOS";
 }
 
-/// Whether a capture's first word is "Task" (any case, with or without the mark after it): HITList's `SpokenTask`.
-function startsWithTask(text) {
+// MARK: - Wake words
+
+/// The words a capture may start with to become a task (George, 2026-11-23: "Jarvis and Tars as selectable wake words
+/// instead of only Task"), each with the ways speech may write it. One or more are chosen (`settings().wakeWords`).
+const WAKE_WORDS = {
+  task: ["task"],
+  jarvis: ["jarvis"],
+  tars: ["t.a.r.s.", "t.a.r.s", "tar's", "tar’s", "tars", "tarz"],
+};
+/// Said before a wake word, and dropped with it: "Hey Jarvis, …", "OK TARS …".
+const WAKE_LEADS = ["okay", "hey", "ok", "hi"];
+
+const WAKE_PATTERN = (() => {
+  const escape = (word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const spellings = Object.values(WAKE_WORDS).flat().sort((a, b) => b.length - a.length).map(escape);
+  return new RegExp(`^(?:(${WAKE_LEADS.join("|")})[\\s,]+)?(${spellings.join("|")})(?![\\p{L}\\p{N}'’])`, "iu");
+})();
+
+/// The chosen words from a request or the kept settings, in WAKE_WORDS' order; null when the list is empty, isn't a
+/// list, or names a word the relay doesn't know.
+function wakeWordList(value) {
+  if (!Array.isArray(value) || !value.length || value.length > 16) return null;
+  const known = Object.keys(WAKE_WORDS);
+  if (!value.every((word) => typeof word === "string" && known.includes(word))) return null;
+  return known.filter((word) => value.includes(word));
+}
+
+/// The chosen wake word a capture starts with: `{word, rest, lead}`, the rest being what follows the word, its mark
+/// (":", ",", ".", ";" or a dash) and spaces; null when it starts with none of them. Any case; the first word, or the
+/// one after "Hey", "OK", "Okay" or "Hi"; never part of a longer word ("Tasks", "Taskbar", "Task's", "Jarvisville").
+function wakeWordAt(text, chosen) {
   const trimmed = String(text || "").trimStart();
-  if (trimmed.slice(0, 4).toLowerCase() !== "task") return false;
-  const next = trimmed.charAt(4);
-  return !next || !/[\p{L}\p{N}'’]/u.test(next);
+  const match = WAKE_PATTERN.exec(trimmed);
+  if (!match) return null;
+  const spelled = match[2].toLowerCase();
+  const word = Object.keys(WAKE_WORDS).find((name) => WAKE_WORDS[name].includes(spelled));
+  if (!word || !chosen.includes(word)) return null;
+  const rest = trimmed.slice(match[0].length).replace(/^\s*[:,.;\-–—]?\s*/u, "");
+  return { word, rest, lead: Boolean(match[1]) };
+}
+
+/// What a device is handed for a capture that starts with a wake word: "Task: " and the rest, which every HITList
+/// reads as a task (0.9.18's rule wants "Task" first, and drops it), for any word but a plain "Task", which stays as it
+/// was said. The hash that matches the two routes is of the words as said, never of this.
+function handedText(text, wake) {
+  return wake && (wake.word !== "task" || wake.lead) ? `Task: ${wake.rest}` : text;
 }
 
 // MARK: - Connecting Stream's MCP
@@ -392,8 +444,8 @@ export class StreamInbox extends DurableObject {
   // MARK: What waits
 
   /// A capture from either route. `duplicate` when its id was seen in the last 30 days, or the same words came by the
-  /// other route moments ago while the routes haven't shown they share ids; `skipped` when the "starts with Task" rule
-  /// leaves it out (it is then kept as seen, never handed over).
+  /// other route moments ago while the routes haven't shown they share ids; `skipped` when the rule leaves it out (it
+  /// starts with none of the chosen wake words: it is then kept as seen, never handed over).
   keep({ id, text, body, hash, source, fields, said }) {
     const now = this.now();
     const existing = this.sql.exec("SELECT source FROM captures WHERE id = ? LIMIT 1", id).toArray()[0];
@@ -404,7 +456,9 @@ export class StreamInbox extends DurableObject {
       }
       return "duplicate";
     }
-    if (this.settings().onlyStartingWithTask && !startsWithTask(text)) {
+    const settings = this.settings();
+    const wake = wakeWordAt(text, settings.wakeWords);
+    if (settings.onlyStartingWithTask && !wake) {
       this.markSeen(id, source, now);
       return "skipped";
     }
@@ -424,7 +478,7 @@ export class StreamInbox extends DurableObject {
     }
     this.sql.exec(
       "INSERT INTO captures (id, source, text, body, text_hash, received_at, captured_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      id, source, text, body, hash, now, Number.isFinite(said) ? said : now);
+      id, source, handedText(text, wake), body, hash, now, Number.isFinite(said) ? said : now);
     this.setMeta("last", { at: now, source, fields });
     return "accepted";
   }
@@ -509,8 +563,10 @@ export class StreamInbox extends DurableObject {
     return { acked };
   }
 
+  /// The rule and the wake words, for every device: off, and "task", until chosen.
   settings() {
-    return { onlyStartingWithTask: false, ...this.getMeta("settings", {}) };
+    const kept = this.getMeta("settings", {});
+    return { onlyStartingWithTask: kept.onlyStartingWithTask === true, wakeWords: wakeWordList(kept.wakeWords) || ["task"] };
   }
 
   setSettings(settings) {

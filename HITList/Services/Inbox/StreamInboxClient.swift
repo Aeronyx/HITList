@@ -20,10 +20,11 @@ struct StreamInboxClient {
         try await send(InboxAPI.claim(device: device, push: push, link: link), as: InboxClaimReply.self)
     }
 
-    /// The relay's rule, for every device. A relay from before the rule moved to it answers 404: `relayTooOld`.
-    func setSettings(_ settings: InboxSettings, link: InboxLink) async throws -> InboxSettings {
+    /// The relay's rule and wake words, for every device: only what changes is sent. A relay from before the rule moved
+    /// to it answers 404: `relayTooOld`.
+    func setSettings(_ change: InboxSettingsChange, link: InboxLink) async throws -> InboxSettings {
         do {
-            return try await send(InboxAPI.settings(settings, link: link), as: InboxSettingsReply.self).settings
+            return try await send(InboxAPI.settings(change, link: link), as: InboxSettingsReply.self).settings
         } catch StreamInboxProblem.notARelay {
             throw StreamInboxProblem.relayTooOld
         }

@@ -497,6 +497,41 @@ expect "the rule is turned off" 200 '.settings.onlyStartingWithTask' 'false'
 keyed POST /inbox/settings -d '{"onlyStartingWithTask":"yes"}'
 expect "a rule that isn't true or false: 400" 400
 
+echo "▸ 2026-11-23: wake words (Task, Jarvis, TARS), chosen on the relay"
+status
+check "Task until others are chosen" "$BODY" '.settings.wakeWords' '["task"]'
+keyed POST /inbox/settings -d '{"onlyStartingWithTask":true,"wakeWords":["tars","jarvis"]}'
+expect "the rule and the words are set, in their own order" 200 '.settings' '{"onlyStartingWithTask":true,"wakeWords":["jarvis","tars"]}'
+keyed POST /inbox/settings -d '{"onlyStartingWithTask":true}'
+expect "the rule alone, as HITList 0.9.18 sends it, keeps the words" 200 '.settings.wakeWords' '["jarvis","tars"]'
+say k-1 "Jarvis, buy milk tomorrow."
+expect "Jarvis: kept" 202 '.status' '"accepted"'
+say k-2 "Hey TARS call mom at 5"
+expect "Hey TARS: kept" 202 '.status' '"accepted"'
+say k-3 "T.A.R.S., feed the cat"
+expect "T.A.R.S.: kept" 202 '.status' '"accepted"'
+say k-4 "Task, water the plants"
+expect "Task, not chosen now: left in Stream" 200 '.status' '"skipped"'
+say k-5 "Jarvisville road trip"
+expect "a longer word isn't Jarvis" 200 '.status' '"skipped"'
+claim mac-test
+check "handed over as Task: and the rest, which every HITList reads" "$BODY" '[.items[] | select(.id | startswith("k-")) | .text]' '["Task: buy milk tomorrow.","Task: call mom at 5","Task: feed the cat"]'
+ack_claimed
+keyed POST /inbox/settings -d '{"onlyStartingWithTask":false}'
+say k-6 "Jarvis, call Sam"
+say k-7 "Remember where I parked the car"
+claim mac-test
+check "rule off: every capture, and a chosen word still goes" "$BODY" '[.items[] | select(.id | startswith("k-")) | .text]' '["Task: call Sam","Remember where I parked the car"]'
+ack_claimed
+keyed POST /inbox/settings -d '{"wakeWords":[]}'
+expect "no word: 400" 400
+keyed POST /inbox/settings -d '{"wakeWords":["siri"]}'
+expect "a word the relay doesn't know: 400" 400
+keyed POST /inbox/settings -d '{}'
+expect "nothing to set: 400" 400
+keyed POST /inbox/settings -d '{"wakeWords":["task"]}'
+expect "back to Task" 200 '.settings' '{"onlyStartingWithTask":false,"wakeWords":["task"]}'
+
 echo "▸ review 11: a server that differs"
 mode '{"clientSecret":true,"noRefreshToken":true}'
 connect

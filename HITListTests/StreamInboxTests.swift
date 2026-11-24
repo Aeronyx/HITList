@@ -571,6 +571,33 @@ final class StreamInboxTests: XCTestCase {
                        "and the iPhone follows it at once")
     }
 
+    /// George, 2026-11-23: "Jarvis and Tars as selectable wake words instead of only Task". Chosen on the relay, for every
+    /// device; the last one stays; the rule's switch never writes the words back; and what the relay hands over for
+    /// "TARS, water the ferns" ("Task: water the ferns") is added under the rule.
+    func testWakeWordsAreChosenOnTheRelay() async throws {
+        let inbox = try await connected()
+        XCTAssertEqual(inbox.chosenWakeWords, [.task], "Task until others are chosen")
+        let jarvis = await inbox.setWakeWord(.jarvis, on: true)
+        let tars = await inbox.setWakeWord(.tars, on: true)
+        let task = await inbox.setWakeWord(.task, on: false)
+        XCTAssertNil(jarvis ?? tars ?? task)
+        XCTAssertEqual(inbox.chosenWakeWords, [.jarvis, .tars])
+        XCTAssertEqual(relay.settings.wakeWords, [.jarvis, .tars], "kept by the relay")
+        XCTAssertEqual(StreamInboxSettings(defaults: defaults).wakeWords, [.jarvis, .tars], "and remembered here")
+        _ = await inbox.setWakeWord(.jarvis, on: false)
+        let last = await inbox.setWakeWord(.tars, on: false)
+        XCTAssertNil(last)
+        XCTAssertEqual(relay.settings.wakeWords, [.tars], "the last word stays")
+        XCTAssertEqual(inbox.chosenWakeWords, [.tars])
+        _ = await inbox.setOnlyStartingWithTask(true)
+        XCTAssertEqual(relay.settings, InboxSettings(onlyStartingWithTask: true, wakeWords: [.tars]),
+                       "the rule's switch sends the rule only")
+        relay.add("w", "Task: water the ferns")
+        relay.add("p", "Remember where I parked")
+        await inbox.check(.checkNow)
+        XCTAssertEqual(try tasks().map(\.title), ["Water the ferns"])
+    }
+
     /// Finding 9: a Keychain that can't be read yet (before the first unlock after a restart) is not a missing key.
     func testALockedKeychainIsNotADisconnect() async throws {
         final class LockedOnce: StreamInboxKeyStore {
