@@ -517,7 +517,9 @@ final class StreamInboxTests: XCTestCase {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         let lastNight = today.addingTimeInterval(-90 * 60)
-        relay.add("late", "Call the dentist tomorrow at 9am", said: lastNight)
+        // Taken at 07:45, whenever the test runs: a time said more than a day before it reached the relay isn't believed
+        // (`InboxItem.saidWithin`), so an arrival of "now" failed this test every evening after 22:30 (2026-11-23).
+        relay.add("late", "Call the dentist tomorrow at 9am", at: today.addingTimeInterval(7.75 * 3_600), said: lastNight)
         relay.add("ahead", "Buy milk tomorrow", said: Date().addingTimeInterval(3 * 86_400))
         let inbox = try await connected()
         await inbox.check(.checkNow)

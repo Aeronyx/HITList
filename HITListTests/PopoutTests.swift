@@ -843,7 +843,9 @@ final class PopoutTests: XCTestCase {
         let context = container.mainContext
         let due = Calendar.current.startOfDay(for: Date())
         let task = TaskItem(title: "Water plants", dueDate: due, recurrence: .daily)
-        let reminder = Date().addingTimeInterval(3_600)
+        // Today's 08:00, whatever the hour: an hour from now is tomorrow after 23:00, and round 36's roll-over rightly
+        // keeps a reminder on the new day (2026-11-23, the 0.9.19 preflight at 23:02).
+        let reminder = due.addingTimeInterval(8 * 3_600)
         task.reminderDate = reminder
         context.insert(task)
         let ticked = try TaskActions.addSubtask("Ferns", to: task, in: context)
