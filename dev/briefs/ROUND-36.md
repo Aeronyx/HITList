@@ -133,4 +133,10 @@ became a task. The relay's status (read with the key setup.sh keeps in his login
   and punctuation aside) and compared by **when each was said**, not when it arrived, so a poll that finds a capture
   twenty minutes late still knows the webhook brought it (the arrival-time match failed that check). test.sh: 171.
 - The iPhone's Stream Ring page is listed only after the seven taps (About → Version) until it is connected; George
-  hadn't known the iPhone needed connecting too.
+  hadn't known the iPhone needed connecting too. Connected at 21:22, it took the waiting capture at once; the
+  redeployed poller started fresh (none of the 24 listed interactions became a task).
+- **The pocket test passed (21:23:50)**: Mac quit, iPhone locked. The webhook brought "Task, …"; the Mac's push went
+  (no app to take it); 30 s on, the relay woke the iPhone, Apple took the push at 21:24:20.850, and the locked iPhone
+  claimed it **2.1 s later** (21:24:22.965) and acked. The poll at 21:24:29 listed the same capture and the match by
+  words and time kept it from becoming a second task (`idsMatch` false). Proven now: APNs to a locked iPhone from the
+  Worker, the background claim, save and ack, and the two routes' match on real data.
