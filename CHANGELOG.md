@@ -5,7 +5,7 @@ until the version has a section here, then stamps the heading with the build num
 per release. A second build of one version (0.9.0 had builds 20 and 21) is released with `scripts/release.sh --quick`
 and needs a section headed `## X.Y.Z (N)`, which the script stamps with the date.
 
-## 0.9.18
+## 0.9.18 — build 33, 2026-11-23
 
 George, 2026-11-23, after showing HITList to a friend: "I typed `!0mb` and it didn't register that I wanted a
 reminder, nor did spelling out anything about a reminder … Todoist handles this better; when the user types an
