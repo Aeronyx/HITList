@@ -126,3 +126,11 @@ became a task. The relay's status (read with the key setup.sh keeps in his login
   names and Stream's count (`stream.lastListed`), reads more names for the words, and a changed reader (`READER`)
   starts the poller again from its next poll, so a reader that learns to read Stream's answer never takes the past
   week's captures as new tasks (the old code failed that check). test.sh: 164.
+- **Deployed by George at 21:00, the relay said what Stream's MCP sends**: 24 interactions, each
+  `requestReceivedAtUnix`, `inputText` (his words), `outputText` (Stream's reply), `noteId`, `deleted`, and **no id**.
+  The relay now reads `inputText` and that time, never `outputText`, drops a deleted one, and makes the id from the
+  words and the time. With no id shared by the routes, the words are the only match: they are folded (case, spaces
+  and punctuation aside) and compared by **when each was said**, not when it arrived, so a poll that finds a capture
+  twenty minutes late still knows the webhook brought it (the arrival-time match failed that check). test.sh: 171.
+- The iPhone's Stream Ring page is listed only after the seven taps (About → Version) until it is connected; George
+  hadn't known the iPhone needed connecting too.

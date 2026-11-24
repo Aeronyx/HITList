@@ -418,6 +418,35 @@ claim mac-test
 check "after it, every new id is taken" "$BODY" '[.items[] | select(.id | startswith("o-")) | .id]' '["o-3"]'
 ack_claimed
 
+echo "▸ 2026-11-23: Stream's own shape (inputText, outputText, requestReceivedAtUnix, noteId, deleted; no id)"
+said_s=$(date +%s)
+say s-1 "Task, buy oat milk."
+status
+waiting=$(printf '%s' "$BODY" | jq -c .pending)
+stream_shape="[{\"requestReceivedAtUnix\":$said_s,\"inputText\":\"Task buy oat milk\",\"outputText\":\"Added.\",\"noteId\":\"n-1\",\"deleted\":false},{\"requestReceivedAtUnix\":$said_s,\"inputText\":\"Task, water the ferns\",\"outputText\":\"Noted: water the ferns.\",\"noteId\":\"n-2\",\"deleted\":false},{\"requestReceivedAtUnix\":$said_s,\"inputText\":\"Task, a capture deleted in Stream\",\"outputText\":\"\",\"noteId\":null,\"deleted\":true}]"
+fake interactions "$stream_shape"
+poll
+status
+check "the webhook's capture isn't taken again, punctuation aside; the new one is; the deleted one isn't" "$BODY" '.pending' "$((waiting + 1))"
+check "no trouble" "$BODY" '.stream.lastError' 'null'
+check "Stream's fields" "$BODY" '.stream.interactionFields' '["requestReceivedAtUnix","inputText","outputText","noteId","deleted"]'
+poll
+status
+check "polled again: the same ids, nothing new" "$BODY" '.pending' "$((waiting + 1))"
+claim mac-test
+check "his words, never Stream's reply" "$BODY" '[.items[] | select(.text | test("ferns")) | .text]' '["Task, water the ferns"]'
+check "when he said it, from Stream" "$BODY" "[.items[] | select(.text | test(\"ferns\")) | .capturedAt | sub(\"\\\\.[0-9]+Z$\"; \"Z\")]" "[\"$(date -u -r "$said_s" +%Y-%m-%dT%H:%M:%SZ)\"]"
+ack_claimed
+say s-2 "Task, call the vet"
+clock $((20 * 60 * 1000))
+late="[{\"requestReceivedAtUnix\":$(date +%s),\"inputText\":\"Task call the vet\",\"outputText\":\"\",\"noteId\":\"n-3\",\"deleted\":false}]"
+fake interactions "$late"
+poll
+claim mac-test
+check "found by a poll twenty minutes late, still the webhook's capture" "$BODY" '[.items[] | select(.text | test("vet")) | .id]' '["s-2"]'
+ack_claimed
+clock 0
+
 echo "▸ review 6: the same words from both routes"
 say w-a "Buy oat milk"
 clock $((5 * 60 * 1000))
@@ -442,6 +471,7 @@ check "the relay knows the routes share ids" "$BODY" '.idsMatch' 'true'
 claim mac-test
 keyed POST /inbox/ack -d "{\"ids\":$(printf '%s' "$BODY" | jq -c '[.items[].id]')}"
 clock 0
+
 
 echo "▸ review 8: one \"starts with Task\" rule, kept by the relay"
 keyed POST /inbox/settings -d '{"onlyStartingWithTask":true}'

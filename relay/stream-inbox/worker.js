@@ -36,8 +36,9 @@ const MAX_ID = 256;
 const MAX_DEVICE = 128;
 const ONCE_MS = 10 * MINUTE_MS;
 const CONNECTION_MS = 90 * DAY_MS;
-// The same words from the other route within this time are the same capture, until the two routes have shown they
-// share ids (then never: matching ids say it). A one-way hash of the words is kept an hour, then only the id.
+// The same words from the other route, said within this time of each other, are the same capture, until the two
+// routes have shown they share ids (then never: matching ids say it). A one-way hash of the words is kept an hour, then
+// only the id.
 const TWIN_MS = 3 * MINUTE_MS;
 const HASH_KEPT_MS = 60 * MINUTE_MS;
 const REFRESH_EARLY_MS = 5 * MINUTE_MS;
@@ -61,7 +62,7 @@ const SCOPE = "stream";
 const TOOL = "get_recent_interactions";
 // The way Stream's answers are read. A new one starts the poller again from its first poll (`take`), so captures
 // the old reader couldn't read are never taken late as new ones.
-const READER = "2026-11-23";
+const READER = "2026-11-23.2";
 const MCP_PROTOCOL = "2025-06-18";
 const DEFAULT_MCP_URL = "https://api.sandbar.com/mcp";
 const APNS_TOPIC = "com.trammells.hitlist";
@@ -407,10 +408,15 @@ export class StreamInbox extends DurableObject {
       this.markSeen(id, source, now);
       return "skipped";
     }
+    // The same words by the other route, said within three minutes of these: by when each was said (Stream's own time
+    // for a poll's capture, the arrival for the webhook's, which Stream sends as it saves), so a poll that finds a
+    // capture late still knows the webhook brought it (2026-11-23: Stream's MCP sends no id, so this is the only match).
     if (hash && !this.getMeta("idsMatch", false)) {
+      const when = Number.isFinite(said) ? said : now;
       const twin = this.sql.exec(
-        "SELECT 1 FROM captures WHERE text_hash = ? AND source != ? AND source != 'test' AND received_at > ? LIMIT 1",
-        hash, source, now - TWIN_MS).toArray();
+        `SELECT 1 FROM captures WHERE text_hash = ? AND source != ? AND source != 'test'
+           AND ABS(COALESCE(captured_at, received_at) - ?) <= ? LIMIT 1`,
+        hash, source, when, TWIN_MS).toArray();
       if (twin.length) {
         this.markSeen(id, source, now);
         return "duplicate";
@@ -1130,7 +1136,7 @@ export class StreamInbox extends DurableObject {
         continue;
       }
       const old = firstPoll && (item.at === null || item.at < since);
-      if (old || !item.text.trim()) {
+      if (old || item.deleted || !item.text.trim()) {
         this.markSeen(item.id, "stream", this.now());
         continue;
       }
@@ -1220,13 +1226,15 @@ function objectList(value, depth = 0) {
   return null;
 }
 
-const TIME_FIELDS = ["created_at", "createdAt", "timestamp", "time", "date", "saved_at", "savedAt", "occurred_at",
-  "occurredAt", "started_at", "startedAt", "updated_at", "updatedAt"];
+const TIME_FIELDS = ["requestReceivedAtUnix", "requestReceivedAt", "created_at", "createdAt", "timestamp", "time", "date",
+  "saved_at", "savedAt", "occurred_at", "occurredAt", "started_at", "startedAt", "updated_at", "updatedAt"];
 
 /// Where an interaction's words may be, in this order: what the person said, under the names an API would give it. A
 /// field holding an object with its own `text` counts too (`{"message": {"text": …}}`). Never a reply's or a summary's.
-const TEXT_FIELDS = ["text", "transcript", "transcription", "content", "body", "note", "message", "value", "utterance",
-  "user_text", "userText", "said", "spoken", "input", "query", "prompt", "request"];
+/// Stream's own (2026-11-23, George's relay): `requestReceivedAtUnix`, `inputText` (his words), `outputText` (Stream's
+/// reply, never read), `noteId`, `deleted`, and no id: the id is made from the words and the time.
+const TEXT_FIELDS = ["inputText", "input_text", "text", "transcript", "transcription", "content", "body", "note",
+  "message", "value", "utterance", "user_text", "userText", "said", "spoken", "input", "query", "prompt", "request"];
 
 function interaction(raw, receivedAt) {
   let text = first(raw, TEXT_FIELDS, (v) => typeof v === "string");
@@ -1238,7 +1246,9 @@ function interaction(raw, receivedAt) {
   const at = parseTime(first(raw, TIME_FIELDS, (v) => parseTime(v, receivedAt) !== null), receivedAt);
   let id = interactionID(first(raw, ["interaction_id", "interactionId", "id", "uuid"], (v) => interactionID(v) !== null));
   if (!id) id = `words-${simpleHash(`${text}|${at || ""}`)}`;
-  return { id, text, at: at === undefined ? null : at, raw, fields: Object.keys(raw).slice(0, 64) };
+  // Deleted in Stream: never a task.
+  const deleted = raw.deleted === true || raw.isDeleted === true;
+  return { id, text, at: at === undefined ? null : at, deleted, raw, fields: Object.keys(raw).slice(0, 64) };
 }
 
 function first(object, keys, accept) {
@@ -1507,8 +1517,10 @@ async function digest(text) {
 }
 
 /// The words, lowered and with their spaces folded, hashed: how the two routes' copies of one capture are matched.
+/// The words folded for matching the two routes: case, spaces and punctuation aside ("Task, buy milk." is "task buy
+/// milk"), so a route that writes the same words a little differently still matches.
 async function textHash(text) {
-  const folded = String(text || "").trim().toLowerCase().replace(/\s+/g, " ");
+  const folded = String(text || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
   return folded ? hex(await digest(folded)) : null;
 }
 
