@@ -80,7 +80,20 @@ keeps an explicit 0 (asking to be reminded at a time is asking for that time, as
 
 ## Proof
 
-(Filled in at the end of the round: the suites, the UI suite, the package proof.)
+On the final tree (`0adbbfc4`, then documents only):
+
+- **Suites**: core 1,156, Mac 2,490, iPhone 2,450 (an iPhone 17 simulator of the supervisor's own), no failures.
+  Round 35 ended at 1,100, 2,428 and 2,388.
+- **The UI suite, two lanes** (one `build-for-testing`, two `test-without-building` on two iPhone 17 simulators):
+  126 passed, 75 on demand, one failed: `CalendarEventsUITests.testRefusingAccessSaysWhyAndOffersSettings` (the
+  system's calendar prompt, answered while the other lane drove its own simulator). Alone it passed twice; no
+  calendar code changed this round.
+- **The relay**: `relay/stream-inbox/test.sh` 153 checks and `test/setup-dry.sh` 16, each run twice from clean by
+  the agent; nothing deployed.
+- **Package proof**: `scripts/release.sh --no-upload --no-bump --skip-tests --skip-schema-check`: both platforms
+  archive, export and pass the entitlement checks (iOS 20,951,428 bytes, macOS 42,801,177 bytes).
+- **Pictures**: the agents' own, read by them and by the supervisor's reviewers, in the notes folder under
+  `round-36/175/` (29) and `round-36/176/` (12).
 
 ## Left open
 
